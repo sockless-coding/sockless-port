@@ -1,0 +1,144 @@
+{
+    "LayersSize": 6779622,
+    "Images": [
+        {
+            "Containers": 2,
+            "Created": 1727386302,
+            "Id": "sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec",
+            "Labels": {},
+            "ParentId": "",
+            "Descriptor": {
+                "mediaType": "application/vnd.oci.image.index.v1+json",
+                "digest": "sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec",
+                "size": 9535
+            },
+            "RepoDigests": [
+                "busybox@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec"
+            ],
+            "RepoTags": [
+                "busybox:1.37"
+            ],
+            "SharedSize": 0,
+            "Size": 6770087
+        }
+    ],
+    "Containers": [
+        {
+            "Id": "8c20be1011f96c5824e861d255494de1577b8c69653f5edd56f85b30167006c7",
+            "Names": [
+                "/fixture-done"
+            ],
+            "Image": "busybox:1.37",
+            "ImageID": "sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec",
+            "Command": "true",
+            "Created": 1795291412,
+            "Ports": [],
+            "SizeRw": 4096,
+            "SizeRootFs": 4587520,
+            "Labels": {},
+            "State": "exited",
+            "Status": "Exited (0) Less than a second ago",
+            "HostConfig": {
+                "NetworkMode": "bridge"
+            },
+            "Health": {
+                "Status": "none",
+                "FailingStreak": 0
+            },
+            "NetworkSettings": {
+                "Networks": {
+                    "bridge": {
+                        "IPAMConfig": null,
+                        "Links": null,
+                        "Aliases": null,
+                        "DriverOpts": null,
+                        "GwPriority": 0,
+                        "NetworkID": "563c0854261ea986dfb50447b0d80d13fe5ef0710c99d1c02b655e2bed4c3760",
+                        "EndpointID": "",
+                        "Gateway": "",
+                        "IPAddress": "",
+                        "MacAddress": "",
+                        "IPPrefixLen": 0,
+                        "IPv6Gateway": "",
+                        "GlobalIPv6Address": "",
+                        "GlobalIPv6PrefixLen": 0,
+                        "DNSNames": null
+                    }
+                }
+            },
+            "Mounts": []
+        },
+        {
+            "Id": "c0412de27e27e2559cc3888bbb189e7eaad0576450bd48bfdac66bbc5f0ed657",
+            "Names": [
+                "/fixture-web"
+            ],
+            "Image": "busybox:1.37",
+            "ImageID": "sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec",
+            "Command": "sleep 3600",
+            "Created": 1795291411,
+            "Ports": [],
+            "SizeRw": 8192,
+            "SizeRootFs": 4591616,
+            "Labels": {},
+            "State": "running",
+            "Status": "Up 1 second",
+            "HostConfig": {
+                "NetworkMode": "bridge"
+            },
+            "Health": {
+                "Status": "none",
+                "FailingStreak": 0
+            },
+            "NetworkSettings": {
+                "Networks": {
+                    "bridge": {
+                        "IPAMConfig": null,
+                        "Links": null,
+                        "Aliases": null,
+                        "DriverOpts": null,
+                        "GwPriority": 0,
+                        "NetworkID": "563c0854261ea986dfb50447b0d80d13fe5ef0710c99d1c02b655e2bed4c3760",
+                        "EndpointID": "d04ffd315084bf57283847c80510e51b8d1fa74715d1b7fa077f7d77c024c622",
+                        "Gateway": "172.18.0.1",
+                        "IPAddress": "172.18.0.2",
+                        "MacAddress": "a6:0b:d9:08:4b:8a",
+                        "IPPrefixLen": 16,
+                        "IPv6Gateway": "",
+                        "GlobalIPv6Address": "",
+                        "GlobalIPv6PrefixLen": 0,
+                        "DNSNames": null
+                    }
+                }
+            },
+            "Mounts": [
+                {
+                    "Type": "volume",
+                    "Name": "fixture-data",
+                    "Source": "/var/lib/docker/volumes/fixture-data/_data",
+                    "Destination": "/data",
+                    "Driver": "local",
+                    "Mode": "z",
+                    "RW": true,
+                    "Propagation": ""
+                }
+            ]
+        }
+    ],
+    "Volumes": [
+        {
+            "CreatedAt": "2026-11-21T20:03:27Z",
+            "Driver": "local",
+            "Labels": null,
+            "Mountpoint": "/var/lib/docker/volumes/fixture-data/_data",
+            "Name": "fixture-data",
+            "Options": null,
+            "Scope": "local",
+            "UsageData": {
+                "RefCount": 1,
+                "Size": 0
+            }
+        }
+    ],
+    "BuildCache": []
+}

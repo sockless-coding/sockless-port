@@ -16,11 +16,13 @@ services:
       - "9000:8080"
     volumes:
       - port-data:/data
-      # Engine access (used from the next release). Whoever controls this socket controls
-      # the host, so keep Sockless Port behind authentication and off the public internet.
+      # Engine access. Whoever controls this socket controls the host, so keep Sockless Port
+      # behind authentication and off the public internet. For Podman, mount its socket here
+      # instead (see README).
       - /var/run/docker.sock:/var/run/docker.sock
     group_add:
-      # Group that owns the socket on the host, so the non-root app user can use it.
+      # Group that owns the socket, so the non-root app user can use it.
+      # Linux: stat -c %g /var/run/docker.sock. Docker Desktop: 0.
       - "${DOCKER_GID:-999}"
     environment:
       # Set to true when running behind a reverse proxy that sets X-Forwarded-* headers.

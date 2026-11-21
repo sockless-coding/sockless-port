@@ -1,0 +1,53 @@
+@* Top bar, right side: endpoint switcher and the current endpoint's live status. Refreshed on any endpoint state change. *@
+@model Sockless.Port.Web.Infrastructure.TopBarView
+@using Sockless.Port.Engines
+@{
+    var current = Model.Current;
+}
+<div id="topbar-status" class="flex items-center gap-3"
+     hx-get="@Url.Page("/Endpoints/TopBar", new { current = current?.Id })"
+     hx-trigger="endpoints-changed from:body" hx-swap="outerHTML">
+    @if (current is not null)
+    {
+        @switch (current.State)
+        {
+            case EndpointOnline:
+                <span class="live-indicator">Engine online</span>
+                break;
+            case EndpointConnecting:
+                <span class="live-indicator" data-state="warning">Connecting…</span>
+                break;
+            case EndpointOffline:
+                <span class="live-indicator" data-state="danger">Engine offline</span>
+                break;
+        }
+
+        <details class="menu" data-menu>
+            <summary class="menu-button" aria-label="Switch endpoint, current: @current.Name">
+                <icon name="server-stack" class="h-4 w-4" />
+                <span class="max-w-[12rem] truncate">@current.Name</span>
+                <icon name="chevron-down" class="h-4 w-4" />
+            </summary>
+            <div class="menu-panel">
+                <p class="label-caps px-3 pb-1 pt-2">Endpoints</p>
+                <ul>
+                    @foreach (var endpoint in Model.All)
+                    {
+                        <li>
+                            <a asp-page="/Engine/Index" asp-route-endpointId="@endpoint.Id" class="menu-item"
+                               aria-current="@(endpoint.Id == current.Id ? "true" : null)">
+                                <span class="flex min-w-0 flex-col">
+                                    <span class="truncate">@endpoint.Name</span>
+                                    <span class="truncate text-xs text-secondary">@(endpoint.Engine?.DisplayName ?? endpoint.Address.ToString())</span>
+                                </span>
+                                <partial name="_EndpointStateBadge" model="endpoint.State" />
+                            </a>
+                        </li>
+                    }
+                </ul>
+                <hr class="my-1 border-line" />
+                <a asp-page="/Endpoints/Index" class="menu-item">Manage endpoints</a>
+            </div>
+        </details>
+    }
+</div>

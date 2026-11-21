@@ -63,7 +63,7 @@ public sealed class SetupAndAuthTests : IDisposable
     {
         var browser = await _factory.CreateSignedInBrowserAsync();
 
-        var dashboard = await browser.GetAsync("/", TestContext.Current.CancellationToken);
+        var dashboard = await browser.GetAsync("/endpoints/1", TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, dashboard.StatusCode);
         var html = await dashboard.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
@@ -124,9 +124,9 @@ public sealed class SetupAndAuthTests : IDisposable
             ["Input.Password"] = PortFactory.AdminPassword,
         }), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Redirect, login.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/", TestContext.Current.CancellationToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/endpoints/1", TestContext.Current.CancellationToken)).StatusCode);
 
-        var logoutToken = await PortFactory.GetAntiforgeryTokenAsync(browser, "/");
+        var logoutToken = await PortFactory.GetAntiforgeryTokenAsync(browser, "/endpoints/1");
         var logout = await browser.PostAsync("/account/logout", PortFactory.Form(logoutToken, []), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Redirect, logout.StatusCode);
 
@@ -156,7 +156,7 @@ public sealed class SetupAndAuthTests : IDisposable
 
         await browser.GetAsync("/account/logout", TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/", TestContext.Current.CancellationToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/endpoints/1", TestContext.Current.CancellationToken)).StatusCode);
     }
 
     [Fact]

@@ -5,7 +5,10 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Sockless.Port.Docker;
+using Sockless.Port.Engines;
 using Microsoft.Extensions.Options;
 using Sockless.Port.Data;
 using Sockless.Port.Setup;
@@ -52,6 +55,12 @@ public static class ServiceCollectionExtensions
             .AddDefaultTokenProviders();
 
         services.AddSingleton<SetupState>();
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<EngineConnections>();
+        services.AddSingleton<LocalEngineDetector>();
+        services.TryAddSingleton<IEngineEventSink, NullEngineEventSink>();
+        services.AddHostedService<EngineMonitor>();
         return services;
     }
 
@@ -66,5 +75,33 @@ public static class ServiceCollectionExtensions
         var db = scope.ServiceProvider.GetRequiredService<PortDbContext>();
         await db.Database.MigrateAsync(cancellationToken);
         await services.GetRequiredService<SetupState>().InitializeAsync(db, cancellationToken);
+        await RegisterEndpointsAsync(db, port, services, cancellationToken);
+    }
+
+    /// <summary>
+    /// Makes sure the local endpoint exists (detecting its address on first start), then
+    /// registers every stored endpoint so the monitor connects to it.
+    /// </summary>
+    private static async Task RegisterEndpointsAsync(PortDbContext db, PortOptions port, IServiceProvider services, CancellationToken cancellationToken)
+    {
+        var local = await db.Endpoints.FirstOrDefaultAsync(e => e.IsLocal, cancellationToken);
+        if (local is null || !string.IsNullOrWhiteSpace(port.LocalEngine))
+        {
+            var address = await services.GetRequiredService<LocalEngineDetector>().DetectAsync(port.LocalEngine, cancellationToken);
+            if (local is null)
+                db.Endpoints.Add(new EngineEndpoint { Name = "local", Address = address.ToString(), IsLocal = true });
+            else
+                local.Address = address.ToString();
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        var connections = services.GetRequiredService<EngineConnections>();
+        var time = services.GetRequiredService<TimeProvider>();
+        foreach (var endpoint in await db.Endpoints.AsNoTracking().OrderBy(e => e.Id).ToListAsync(cancellationToken))
+        {
+            if (!DockerAddress.TryParse(endpoint.Address, out var address))
+                throw new InvalidDataException($"Endpoint '{endpoint.Name}' has an invalid address '{endpoint.Address}'.");
+            connections.Add(new EngineConnection(endpoint.Id, endpoint.Name, address, endpoint.IsLocal, time));
+        }
     }
 }

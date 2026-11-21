@@ -2,7 +2,7 @@
 
 Self-hosted container management for Docker, Docker Swarm and Podman. Sockless Port runs as a container and manages containers, stacks, images, volumes and networks on the local engine. A lightweight agent will let it manage remote engines too.
 
-> **Status:** early development (Phase 0: foundations). The roadmap is in [docs/plan.md](docs/plan.md).
+> **Status:** early development. Phase 1 is done: it connects to the local engine and shows a live dashboard. The roadmap is in [docs/plan.md](docs/plan.md).
 
 ## Run it
 
@@ -14,6 +14,12 @@ docker logs sockless-port      # copy the setup token
 Open <http://localhost:9000>, enter the setup token and create the first administrator. The token is printed to the log on every start until an account exists, and stops working once setup is complete.
 
 Data (the SQLite database and encryption keys) is kept in the `port-data` volume, mounted at `/data`.
+
+The app runs as a non-root user, so it needs the group that owns the engine socket. `DOCKER_GID` sets it: on Linux, `stat -c %g /var/run/docker.sock` prints it. On Docker Desktop the socket inside containers belongs to group `0`, so use `DOCKER_GID=0`. Without the group the dashboard shows the endpoint as offline with "Permission denied" and says what to change.
+
+### Which engine it manages
+
+On first start Sockless Port looks for an engine in this order: `DOCKER_HOST`, `/var/run/docker.sock`, `/run/podman/podman.sock`, `$XDG_RUNTIME_DIR/podman/podman.sock`. It uses the first that answers. To choose one explicitly, set `Port__LocalEngine` (for example `unix:///run/podman/podman.sock` or `tcp://10.0.0.5:2375`). That setting also replaces the stored address on every start.
 
 ### Podman
 

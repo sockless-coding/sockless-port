@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
+using Sockless.Port.Engines;
 using Sockless.Port.Setup;
 
 namespace Sockless.Port.Web.Tests;
@@ -14,12 +15,34 @@ public sealed partial class PortFactory : WebApplicationFactory<Program>
     public const string AdminUser = "admin";
     public const string AdminPassword = "correct horse battery";
 
+    /// <summary>An address where no engine listens, so tests never touch the developer's engine.</summary>
+    public const string UnreachableEngine = "unix:///nonexistent/sockless-port-test.sock";
+
     private readonly string _dataPath = Path.Combine(Path.GetTempPath(), "sockless-port-tests", Guid.NewGuid().ToString("n"));
+    private readonly string _engine;
+
+    public PortFactory(string engine = UnreachableEngine) => _engine = engine;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
         builder.UseSetting("Port:DataPath", _dataPath);
+        builder.UseSetting("Port:LocalEngine", _engine);
+    }
+
+    public EngineConnection LocalEndpoint => Services.GetRequiredService<EngineConnections>().All.Single(c => c.IsLocal);
+
+    /// <summary>Waits until the local endpoint's state matches, e.g. offline after the first failed connect.</summary>
+    public async Task<TState> WaitForStateAsync<TState>(TimeSpan? timeout = null) where TState : EndpointState
+    {
+        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(15));
+        while (DateTime.UtcNow < deadline)
+        {
+            if (LocalEndpoint.State is TState state)
+                return state;
+            await Task.Delay(50, TestContext.Current.CancellationToken);
+        }
+        throw new TimeoutException($"Endpoint stayed {LocalEndpoint.State.GetType().Name}, expected {typeof(TState).Name}.");
     }
 
     public string? SetupToken => Services.GetRequiredService<SetupState>().Token;

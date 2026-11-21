@@ -15,4 +15,13 @@ public sealed class NavigationTests
     {
         Assert.Equal(expected, Navigation.IsActive(new NavItem("x", itemPage, "home"), currentPage));
     }
+
+    [Fact]
+    public void Items_that_do_not_match_sub_pages_stay_inactive_on_siblings()
+    {
+        var dashboard = new NavItem("Dashboard", "/Engine/Index", "home", NavScope.Endpoint, MatchSubPages: false);
+
+        Assert.True(Navigation.IsActive(dashboard, "/Engine/Index"));
+        Assert.False(Navigation.IsActive(dashboard, "/Engine/Containers/Index"));
+    }
 }

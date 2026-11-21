@@ -1,0 +1,24 @@
+@page "/endpoints/{endpointId:int}"
+@model Sockless.Port.Web.Pages.Engine.IndexModel
+@{
+    ViewData["Title"] = "Dashboard";
+    var engine = Model.Connection.Engine;
+}
+
+<div data-endpoint-id="@Model.Connection.Id">
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <h2 class="page-title">@Model.Connection.Name</h2>
+            <p class="mt-1 font-mono text-xs text-secondary">@Model.Connection.Address</p>
+        </div>
+    </div>
+
+    <partial name="_Overview" model="Model" />
+
+    <section id="disk-usage" class="card mt-6" aria-labelledby="disk-usage-title"
+             hx-get="@Url.Page("/Engine/Index", "DiskUsage", new { endpointId = Model.Connection.Id })"
+             hx-trigger="load, endpoint-state from:body" hx-swap="outerHTML">
+        <h3 id="disk-usage-title" class="section-title">Disk usage</h3>
+        <p class="text-secondary">@(engine is null ? "Available once the engine is connected." : "Calculating disk usage…")</p>
+    </section>
+</div>

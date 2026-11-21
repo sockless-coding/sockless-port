@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Thin, typed client for the Docker Engine API (and Podman's Docker-compatible API).
+    No ASP.NET dependencies and AOT-compatible, because the agent (Phase 6) shares it.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Sockless.Port.Docker</RootNamespace>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Sockless.Port.Docker.Tests" />
+  </ItemGroup>
+</Project>

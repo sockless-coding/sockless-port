@@ -1,0 +1,14 @@
+@model Sockless.Port.Engines.EndpointState
+@using Sockless.Port.Engines
+@switch (Model)
+{
+    case EndpointOnline:
+        <span class="badge success">Online</span>
+        break;
+    case EndpointConnecting:
+        <span class="badge warning">Connecting…</span>
+        break;
+    case EndpointOffline:
+        <span class="badge danger">Offline</span>
+        break;
+}

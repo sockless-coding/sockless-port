@@ -1,0 +1,50 @@
+@model IReadOnlyList<Sockless.Port.Engines.EngineConnection>
+@using Sockless.Port.Engines
+<div id="endpoint-table" class="table-wrap"
+     hx-get="@Url.Page("/Endpoints/Index", "Table")" hx-trigger="endpoints-changed from:body" hx-swap="outerHTML">
+    <table class="table">
+        <caption class="sr-only">Endpoints</caption>
+        <thead>
+            <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Address</th>
+                <th scope="col">Engine</th>
+                <th scope="col">Status</th>
+                <th scope="col">Since</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var endpoint in Model)
+            {
+                <tr>
+                    <th scope="row">
+                        <a asp-page="/Engine/Index" asp-route-endpointId="@endpoint.Id" class="font-semibold hover:underline">@endpoint.Name</a>
+                        @if (endpoint.IsLocal)
+                        {
+                            <span class="badge-stat ml-1">Local</span>
+                        }
+                    </th>
+                    <td class="break-all font-mono text-xs">@endpoint.Address</td>
+                    <td>
+                        @if (endpoint.Engine is { } engine)
+                        {
+                            <partial name="_EngineBadges" model="engine" />
+                        }
+                        else
+                        {
+                            <span class="text-secondary">—</span>
+                        }
+                    </td>
+                    <td>
+                        <partial name="_EndpointStateBadge" model="endpoint.State" />
+                        @if (endpoint.State is EndpointOffline offline)
+                        {
+                            <p class="mt-1 max-w-xs text-xs text-secondary">@offline.Reason</p>
+                        }
+                    </td>
+                    <td class="whitespace-nowrap font-mono text-xs text-secondary">@Format.Timestamp(endpoint.State.Since)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

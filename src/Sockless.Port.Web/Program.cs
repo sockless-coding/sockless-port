@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Sockless.Port;
 using Sockless.Port.Data;
+using Sockless.Port.Engines;
+using Sockless.Port.Web.Hubs;
 using Sockless.Port.Web.Infrastructure;
 
 // `dotnet Sockless.Port.Web.dll healthcheck` probes /healthz for the container HEALTHCHECK,
@@ -11,7 +13,10 @@ if (args is ["healthcheck", ..])
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Registered before AddPortCore, which only adds a no-op sink when none exists.
+builder.Services.AddSingleton<IEngineEventSink, SignalREngineEventSink>();
 builder.Services.AddPortCore(builder.Configuration);
+builder.Services.AddSignalR();
 
 builder.Services
     .AddAuthentication(IdentityConstants.ApplicationScheme)
@@ -26,6 +31,7 @@ builder.Services
         options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         options.ExpireTimeSpan = TimeSpan.FromHours(12);
         options.SlidingExpiration = true;
+        options.Events.OnRedirectToLogin = AuthRedirects.ToLoginAsync;
     }));
 
 // Everything requires a signed-in user unless it opts out with [AllowAnonymous].
@@ -67,6 +73,7 @@ app.UseAuthorization();
 
 app.MapStaticAssets().AllowAnonymous();
 app.MapRazorPages().WithStaticAssets();
+app.MapHub<EngineHub>(EngineHub.Path);
 app.MapHealthChecks("/healthz").AllowAnonymous().DisableHttpMetrics();
 
 await app.RunAsync();

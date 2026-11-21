@@ -1,18 +1,2 @@
 @page
 @model IndexModel
-@{
-    ViewData["Title"] = "Dashboard";
-}
-
-<div class="mb-6">
-    <h2 class="page-title">Dashboard</h2>
-    <p class="mt-1 text-secondary">Containers, stacks, images, volumes and networks across your endpoints.</p>
-</div>
-
-<section class="card" aria-labelledby="no-endpoints">
-    <div class="empty-state">
-        <icon name="server-stack" class="h-12 w-12" stroke-width="1.5" />
-        <p id="no-endpoints" class="text-base text-heading">No endpoints connected yet</p>
-        <p class="text-secondary">Connecting to the local Docker or Podman engine arrives in the next release.</p>
-    </div>
-</section>

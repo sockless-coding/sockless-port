@@ -1,0 +1,66 @@
+@model Sockless.Port.Web.Pages.Engine.DiskUsageView
+@{
+    var url = Url.Page("/Engine/Index", "DiskUsage", new { endpointId = Model.Connection.Id });
+}
+<section id="disk-usage" class="card mt-6" aria-labelledby="disk-usage-title"
+         hx-get="@url" hx-trigger="endpoint-state from:body" hx-swap="outerHTML">
+    <div class="mb-4 flex items-center justify-between gap-4">
+        <h3 id="disk-usage-title" class="section-title mb-0">Disk usage</h3>
+        @if (Model.Summary is not null)
+        {
+            <button type="button" class="btn-soft" hx-get="@url" hx-target="#disk-usage" hx-swap="outerHTML">
+                <icon name="arrow-path" class="h-4 w-4" />
+                Refresh
+            </button>
+        }
+    </div>
+
+    @if (Model.Error is not null)
+    {
+        <div class="callout danger" role="alert">
+            <icon name="exclamation-triangle" class="h-5 w-5" />
+            <p>@Model.Error</p>
+        </div>
+    }
+    else if (Model.Summary is not { } summary)
+    {
+        <p class="text-secondary">Available once the engine is connected.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Type</th>
+                        <th scope="col" class="num">Total</th>
+                        <th scope="col" class="num">In use</th>
+                        <th scope="col" class="num">Size</th>
+                        <th scope="col" class="num">Reclaimable</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in summary.Rows)
+                    {
+                        <tr>
+                            <th scope="row">@row.Kind</th>
+                            <td class="num font-mono">@Format.Count(row.Total)</td>
+                            <td class="num font-mono">@Format.Count(row.Active)</td>
+                            <td class="num font-mono">@Format.Bytes(row.Size)</td>
+                            <td class="num font-mono">@Format.Bytes(row.Reclaimable)</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <th scope="row">Total</th>
+                        <td></td>
+                        <td></td>
+                        <td class="num font-mono">@Format.Bytes(summary.TotalSize)</td>
+                        <td class="num font-mono">@Format.Bytes(summary.TotalReclaimable)</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    }
+</section>

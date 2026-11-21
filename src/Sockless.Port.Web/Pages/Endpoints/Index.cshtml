@@ -1,0 +1,12 @@
+@page "/endpoints"
+@model Sockless.Port.Web.Pages.Endpoints.IndexModel
+@{
+    ViewData["Title"] = "Endpoints";
+}
+
+<div class="mb-6">
+    <h2 class="page-title">Endpoints</h2>
+    <p class="mt-1 text-secondary">The engines Sockless Port manages. Remote endpoints arrive with the agent.</p>
+</div>
+
+<partial name="_EndpointTable" model="Model.Connections" />

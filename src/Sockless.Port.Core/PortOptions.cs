@@ -11,6 +11,13 @@ public sealed class PortOptions
     /// </summary>
     public string DataPath { get; set; } = "/data";
 
+    /// <summary>
+    /// Address of the local engine, e.g. <c>unix:///run/podman/podman.sock</c>. When empty, the
+    /// address is detected on first start (<c>DOCKER_HOST</c>, then the well-known sockets). When
+    /// set, it also replaces the stored local endpoint's address on every start.
+    /// </summary>
+    public string? LocalEngine { get; set; }
+
     public string DatabasePath => Path.Combine(DataPath, "port.db");
 
     public string KeysPath => Path.Combine(DataPath, "keys");

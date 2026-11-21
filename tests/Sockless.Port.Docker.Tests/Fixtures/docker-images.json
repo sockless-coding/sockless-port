@@ -1,0 +1,22 @@
+[
+    {
+        "Containers": 2,
+        "Created": 1727386302,
+        "Id": "sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec",
+        "Labels": {},
+        "ParentId": "",
+        "Descriptor": {
+            "mediaType": "application/vnd.oci.image.index.v1+json",
+            "digest": "sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec",
+            "size": 9535
+        },
+        "RepoDigests": [
+            "busybox@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec"
+        ],
+        "RepoTags": [
+            "busybox:1.37"
+        ],
+        "SharedSize": -1,
+        "Size": 6770087
+    }
+]

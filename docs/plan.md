@@ -105,6 +105,14 @@ Each phase can ship on its own and ends with a working, containerised build.
 - Dashboard: engine info, counts (containers running/stopped, images, volumes, networks), disk usage (`/system/df`).
 - Docker events stream → SignalR → live refresh of lists.
 
+**Status: done.** Notes:
+- **API versions:** the minimum is **1.41**, not 1.44, so Podman's compatible API works across versions. Ubuntu 24.04 ships Podman 4.9, which reports 1.41; Podman 6.2 reports 1.44. Requests use at most 1.51, and newer engines are asked for 1.51.
+- **Endpoints** are stored in SQLite. The local endpoint is detected on first start (`DOCKER_HOST`, then the well-known Docker and Podman sockets, then named pipes on Windows); `Port:LocalEngine` overrides detection. Pages live under `/endpoints/{id}`, and the last endpoint visited is remembered in a cookie.
+- **The monitor** keeps each endpoint connected with exponential backoff (1 s to 30 s), streams events, and pings every 30 s so a silently dead connection is noticed. Endpoint state is a `closed` hierarchy: Connecting, Online or Offline. Offline carries a reason that says what to check (e.g. the missing `group_add`).
+- **Podman differences** found by the integration tests: volume events have an empty `Actor.ID`, and removal is reported as `remove` instead of `destroy`. Both are normalised in the client.
+- **Disk usage** loads separately (it can be slow) with its own refresh button. Podman reports no build cache, so that row is hidden.
+- **Not yet built:** adding or removing endpoints in the UI. Remote endpoints arrive with the agent in Phase 6; until then the only endpoint is the configured or detected local one.
+
 ### Phase 2: Containers
 
 - List with filters (state, name, label, stack) and bulk start/stop/restart/remove.

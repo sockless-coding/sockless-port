@@ -70,6 +70,8 @@
     font-family: var(--sl-font-body);
     font-size: 0.875rem;
     line-height: 1.5;
+    /* Raleway defaults to old-style figures, where 0 reads as o. Data needs lining figures. */
+    font-variant-numeric: lining-nums;
   }
 
   /* Brushed metal overlay: barely visible, never interactive. */
@@ -190,6 +192,9 @@
     height: 8px;
     border-radius: var(--sl-radius-pill);
     background: currentColor;
+  }
+  /* Only a live connection pulses; warning and danger states hold still. */
+  .live-indicator:not([data-state])::before {
     animation: sl-pulse 2s ease-in-out infinite;
   }
   .live-indicator[data-state='warning'] {
@@ -356,6 +361,171 @@
   .badge.warning { --badge-rgb: var(--sl-warning-rgb); }
   .badge.danger { --badge-rgb: var(--sl-danger-rgb); }
   .badge.info { --badge-rgb: var(--sl-info-rgb); }
+
+  /* Stat badge (guideline: badges): versions, kinds, counts. Neutral, never a status. */
+  .badge-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.5rem;
+    border: 1px solid var(--sl-border);
+    border-radius: var(--sl-radius-sm);
+    background: var(--sl-raised);
+    color: var(--sl-text-secondary);
+    font-family: var(--sl-font-mono);
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+
+  /* ---------- Headings inside cards ---------- */
+  .section-title {
+    margin-bottom: var(--sl-space-md);
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--sl-text-heading);
+  }
+
+  /* ---------- Stat cards ---------- */
+  .stat-card {
+    padding: 1.25rem;
+  }
+  .stat-value {
+    margin-top: 0.25rem;
+    font-family: var(--sl-font-mono);
+    font-size: 1.875rem;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--sl-text-heading);
+  }
+  .stat-meta {
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--sl-text-secondary);
+  }
+
+  /* ---------- Definition lists ---------- */
+  .details {
+    display: grid;
+    grid-template-columns: minmax(8rem, max-content) 1fr;
+    gap: 0.5rem 1.5rem;
+  }
+  .details dt {
+    color: var(--sl-text-secondary);
+  }
+  .details dd {
+    min-width: 0;
+    color: var(--sl-text);
+  }
+
+  /* ---------- Tables ---------- */
+  .table-wrap {
+    overflow-x: auto;
+    background: var(--sl-card);
+    border: 1px solid var(--sl-border);
+    border-radius: var(--sl-radius-md);
+  }
+  .card .table-wrap {
+    border-radius: var(--sl-radius-sm);
+  }
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+  .table thead th {
+    padding: 0.75rem 1rem;
+    background: var(--sl-surface);
+    border-bottom: 1px solid var(--sl-border);
+    color: var(--sl-text-secondary);
+    font-weight: 500;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .table tbody th,
+  .table tbody td,
+  .table tfoot th,
+  .table tfoot td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid rgb(var(--sl-accent-rgb) / 0.06);
+    text-align: left;
+    vertical-align: top;
+  }
+  .table tbody th,
+  .table tfoot th {
+    font-weight: 500;
+    color: var(--sl-text);
+  }
+  .table tbody tr:hover {
+    background: rgb(var(--sl-accent-rgb) / 0.04);
+  }
+  .table tfoot th,
+  .table tfoot td {
+    border-bottom: 0;
+    border-top: 1px solid var(--sl-border);
+    font-weight: 600;
+  }
+  .table .num {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  /* ---------- Menus (details/summary dropdowns) ---------- */
+  .menu {
+    position: relative;
+  }
+  .menu > summary {
+    list-style: none;
+  }
+  .menu > summary::-webkit-details-marker {
+    display: none;
+  }
+  .menu-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.75rem;
+    border: 1px solid var(--sl-border);
+    border-radius: var(--sl-radius-sm);
+    background: var(--sl-card);
+    color: var(--sl-text);
+    cursor: pointer;
+    transition: border-color var(--sl-duration-fast) var(--sl-ease);
+  }
+  .menu-button:hover,
+  .menu[open] > .menu-button {
+    border-color: var(--sl-accent-line);
+  }
+  .menu-panel {
+    position: absolute;
+    right: 0;
+    z-index: 40;
+    margin-top: 0.375rem;
+    min-width: 18rem;
+    max-width: 24rem;
+    padding: 0.25rem;
+    background: var(--sl-surface);
+    border: 1px solid var(--sl-border);
+    border-top: 2px solid var(--sl-border-accent);
+    border-radius: var(--sl-radius-md);
+    box-shadow: var(--sl-shadow-menu);
+  }
+  .menu-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--sl-radius-sm);
+    color: var(--sl-text);
+  }
+  .menu-item:hover {
+    background: rgb(var(--sl-accent-rgb) / 0.08);
+    color: var(--sl-text-heading);
+  }
+  .menu-item[aria-current='true'] {
+    background: rgb(var(--sl-accent-rgb) / 0.1);
+    color: var(--sl-accent);
+  }
 
   /* ---------- Empty state ---------- */
   .empty-state {

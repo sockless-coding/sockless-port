@@ -13,6 +13,7 @@ WORKDIR /src
 # Restore first so the layer is cached until a project or package version changes.
 COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY build/ build/
+COPY src/Sockless.Port.Docker/Sockless.Port.Docker.csproj src/Sockless.Port.Docker/
 COPY src/Sockless.Port.Core/Sockless.Port.Core.csproj src/Sockless.Port.Core/
 COPY src/Sockless.Port.Web/Sockless.Port.Web.csproj src/Sockless.Port.Web/
 RUN dotnet restore src/Sockless.Port.Web/Sockless.Port.Web.csproj -a $TARGETARCH

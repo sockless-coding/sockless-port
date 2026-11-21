@@ -1,0 +1,134 @@
+@model Sockless.Port.Web.Pages.Engine.IndexModel
+@using Sockless.Port.Docker.Engine
+@{
+    var overview = Model.Overview;
+}
+<div id="engine-overview"
+     hx-get="@Url.Page("/Engine/Index", "Overview", new { endpointId = Model.Connection.Id })"
+     hx-trigger="engine-changed from:body, endpoint-state from:body" hx-swap="outerHTML">
+
+    @if (overview is null)
+    {
+        @if (Model.Error is not null)
+        {
+            <div class="callout danger" role="alert">
+                <icon name="exclamation-triangle" class="h-5 w-5" />
+                <p>@Model.Error</p>
+            </div>
+        }
+        else
+        {
+            <partial name="_EndpointStateCallout" model="Model.Connection" />
+        }
+    }
+    else
+    {
+        var info = overview.Info;
+        var engine = overview.Engine;
+
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <section class="card stat-card" aria-label="Containers">
+                <p class="label-caps">Containers</p>
+                <p class="stat-value">@Format.Count(info.Containers)</p>
+                <p class="stat-meta">
+                    <span class="text-success">@Format.Count(info.ContainersRunning) running</span> ·
+                    @Format.Count(info.ContainersStopped) stopped
+                    @if (info.ContainersPaused > 0)
+                    {
+                        <span>· <span class="text-warning">@Format.Count(info.ContainersPaused) paused</span></span>
+                    }
+                </p>
+            </section>
+            <section class="card stat-card" aria-label="Images">
+                <p class="label-caps">Images</p>
+                <p class="stat-value">@Format.Count(info.Images)</p>
+                <p class="stat-meta">On this engine</p>
+            </section>
+            <section class="card stat-card" aria-label="Volumes">
+                <p class="label-caps">Volumes</p>
+                <p class="stat-value">@Format.Count(overview.Volumes)</p>
+                <p class="stat-meta">Named and anonymous</p>
+            </section>
+            <section class="card stat-card" aria-label="Networks">
+                <p class="label-caps">Networks</p>
+                <p class="stat-value">@Format.Count(overview.Networks)</p>
+                <p class="stat-meta">Including built-in</p>
+            </section>
+        </div>
+
+        @if (info.Warnings is { Count: > 0 } warnings)
+        {
+            <div class="callout warning mt-6">
+                <icon name="exclamation-triangle" class="h-5 w-5" />
+                <div>
+                    <p class="font-semibold">The engine reports @(warnings.Count == 1 ? "a warning" : $"{warnings.Count} warnings")</p>
+                    <ul class="mt-1 list-disc space-y-1 pl-5 text-secondary">
+                        @foreach (var warning in warnings)
+                        {
+                            <li>@warning</li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+
+        <div class="mt-6 grid grid-cols-1 gap-6 @(engine.Has(EngineCapabilities.Swarm) ? "lg:grid-cols-2" : "")">
+            <section class="card" aria-labelledby="engine-title">
+                <h3 id="engine-title" class="section-title">Engine</h3>
+                <dl class="details">
+                    <dt>Engine</dt>
+                    <dd><partial name="_EngineBadges" model="engine" /></dd>
+                    <dt>API version</dt>
+                    <dd class="font-mono">@engine.ApiVersion</dd>
+                    <dt>Platform</dt>
+                    <dd class="font-mono">@(engine.Platform ?? "—")</dd>
+                    <dt>Operating system</dt>
+                    <dd>@(info.OperatingSystem ?? "—")</dd>
+                    <dt>Kernel</dt>
+                    <dd class="font-mono">@(info.KernelVersion ?? "—")</dd>
+                    <dt>Host name</dt>
+                    <dd class="font-mono">@(info.Name ?? "—")</dd>
+                    <dt>CPUs</dt>
+                    <dd class="font-mono">@info.NCpu</dd>
+                    <dt>Memory</dt>
+                    <dd class="font-mono">@Format.BinaryBytes(info.MemTotal)</dd>
+                    <dt>Storage driver</dt>
+                    <dd class="font-mono">@(info.Driver ?? "—")</dd>
+                    <dt>Cgroups</dt>
+                    <dd class="font-mono">@(info.CgroupVersion is { } cgroup ? $"v{cgroup}" : "—")@(info.CgroupDriver is { } driver ? $" ({driver})" : "")</dd>
+                    <dt>Root directory</dt>
+                    <dd class="break-all font-mono">@(info.DockerRootDir ?? "—")</dd>
+                </dl>
+            </section>
+
+            @if (engine.Has(EngineCapabilities.Swarm) && info.Swarm is { } swarm)
+            {
+                <section class="card" aria-labelledby="swarm-title">
+                    <h3 id="swarm-title" class="section-title">Swarm</h3>
+                    <dl class="details">
+                        <dt>This node</dt>
+                        <dd>@(engine.Has(EngineCapabilities.SwarmManager) ? "Manager" : "Worker")</dd>
+                        <dt>Node state</dt>
+                        <dd><span class="badge success">Active</span></dd>
+                        @if (swarm.Nodes is { } nodes)
+                        {
+                            <dt>Nodes</dt>
+                            <dd class="font-mono">@nodes</dd>
+                        }
+                        @if (swarm.Managers is { } managers)
+                        {
+                            <dt>Managers</dt>
+                            <dd class="font-mono">@managers</dd>
+                        }
+                        <dt>Node ID</dt>
+                        <dd class="break-all font-mono">@(swarm.NodeId ?? "—")</dd>
+                    </dl>
+                    @if (!engine.Has(EngineCapabilities.SwarmManager))
+                    {
+                        <p class="mt-4 text-secondary">This node is a worker. Connect to a manager to manage services and the cluster.</p>
+                    }
+                </section>
+            }
+        </div>
+    }
+</div>

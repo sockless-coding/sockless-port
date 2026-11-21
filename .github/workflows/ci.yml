@@ -34,9 +34,68 @@ jobs:
       - name: Test
         run: dotnet test --no-build -c Release
 
-  image:
+  # The client and dashboard against each kind of engine (tests with Category=Integration).
+  integration:
     runs-on: ubuntu-latest
     needs: build-test
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [docker, swarm, podman-rootful, podman-rootless]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Cache Tailwind CLI
+        uses: actions/cache@v4
+        with:
+          path: .tools
+          key: tools-${{ runner.os }}-${{ hashFiles('build/Tailwind.targets') }}
+
+      - name: Start engine
+        run: |
+          case "${{ matrix.engine }}" in
+            docker)
+              echo "SOCKLESS_PORT_TEST_ENGINE=unix:///var/run/docker.sock" >> "$GITHUB_ENV"
+              echo "SOCKLESS_PORT_TEST_EXPECT=docker" >> "$GITHUB_ENV"
+              ;;
+            swarm)
+              docker swarm init
+              echo "SOCKLESS_PORT_TEST_ENGINE=unix:///var/run/docker.sock" >> "$GITHUB_ENV"
+              echo "SOCKLESS_PORT_TEST_EXPECT=swarm" >> "$GITHUB_ENV"
+              ;;
+            podman-rootful)
+              sudo mkdir -p /run/podman
+              sudo sh -c 'nohup podman system service --time=0 unix:///run/podman/podman.sock > /tmp/podman.log 2>&1 &'
+              for i in $(seq 1 30); do sudo test -S /run/podman/podman.sock && break; sleep 1; done
+              # The tests run as the runner user; open the socket to it as group_add would in production.
+              sudo chmod 666 /run/podman/podman.sock
+              echo "SOCKLESS_PORT_TEST_ENGINE=unix:///run/podman/podman.sock" >> "$GITHUB_ENV"
+              echo "SOCKLESS_PORT_TEST_EXPECT=podman" >> "$GITHUB_ENV"
+              ;;
+            podman-rootless)
+              SOCK="$XDG_RUNTIME_DIR/podman/podman.sock"
+              mkdir -p "$(dirname "$SOCK")"
+              nohup podman system service --time=0 "unix://$SOCK" > /tmp/podman.log 2>&1 &
+              for i in $(seq 1 30); do test -S "$SOCK" && break; sleep 1; done
+              echo "SOCKLESS_PORT_TEST_ENGINE=unix://$SOCK" >> "$GITHUB_ENV"
+              echo "SOCKLESS_PORT_TEST_EXPECT=podman" >> "$GITHUB_ENV"
+              ;;
+          esac
+
+      - name: Integration tests
+        run: dotnet test -c Release -- --filter-trait "Category=Integration"
+
+      - name: Engine log
+        if: failure() && startsWith(matrix.engine, 'podman')
+        run: cat /tmp/podman.log || true
+
+  image:
+    runs-on: ubuntu-latest
+    needs: [build-test, integration]
     permissions:
       contents: read
       packages: write

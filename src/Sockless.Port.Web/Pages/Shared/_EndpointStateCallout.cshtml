@@ -1,0 +1,22 @@
+@* Explains an endpoint that isn't online. Model: the connection. *@
+@model Sockless.Port.Engines.EngineConnection
+@using Sockless.Port.Engines
+@switch (Model.State)
+{
+    case EndpointConnecting:
+        <div class="callout warning" role="status">
+            <icon name="arrow-path" class="h-5 w-5" />
+            <p>Connecting to the engine at <span class="font-mono">@Model.Address</span>…</p>
+        </div>
+        break;
+    case EndpointOffline offline:
+        <div class="callout danger" role="alert">
+            <icon name="signal-slash" class="h-5 w-5" />
+            <div>
+                <p class="font-semibold">The engine is offline</p>
+                <p class="mt-1">@offline.Reason</p>
+                <p class="mt-1 text-secondary">Offline since @Format.Timestamp(offline.Since). Sockless Port keeps retrying and updates this page when it reconnects.</p>
+            </div>
+        </div>
+        break;
+}

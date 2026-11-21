@@ -1,0 +1,247 @@
+using System.Globalization;
+using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
+using Sockless.Port.Docker.Models;
+using Sockless.Port.Docker.Streams;
+
+namespace Sockless.Port.Docker;
+
+public sealed class DockerClientOptions
+{
+    /// <summary>Timeout for ordinary requests. Streaming requests (events, logs) have none.</summary>
+    public TimeSpan RequestTimeout { get; init; } = TimeSpan.FromSeconds(30);
+}
+
+/// <summary>
+/// A connection to one engine, pinned to the API version negotiated in <see cref="ConnectAsync"/>.
+/// Thread-safe; keep one per endpoint.
+/// </summary>
+public sealed class DockerClient : IDisposable
+{
+    /// <summary>Oldest API version supported. 1.41 is what Podman's compatible API reports.</summary>
+    public static readonly Version MinimumApiVersion = new(1, 41);
+
+    /// <summary>Newest API version requested. Engines that support more are asked for this one.</summary>
+    public static readonly Version MaximumApiVersion = new(1, 51);
+
+    private static readonly DockerJsonContext Json = DockerJsonContext.Default;
+
+    private readonly HttpClient _http;
+    private readonly TimeSpan _requestTimeout;
+    private readonly string _prefix;
+
+    private DockerClient(HttpClient http, DockerAddress address, Version apiVersion, VersionResponse version, TimeSpan requestTimeout)
+    {
+        _http = http;
+        _requestTimeout = requestTimeout;
+        Address = address;
+        ApiVersion = apiVersion;
+        ServerVersion = version;
+        _prefix = $"/v{apiVersion.Major.ToString(CultureInfo.InvariantCulture)}.{apiVersion.Minor.ToString(CultureInfo.InvariantCulture)}";
+    }
+
+    public DockerAddress Address { get; }
+
+    /// <summary>The API version every request uses.</summary>
+    public Version ApiVersion { get; }
+
+    /// <summary>The engine's <c>/version</c> response at connect time.</summary>
+    public VersionResponse ServerVersion { get; }
+
+    /// <summary>Connects, reads <c>/version</c> and negotiates the API version.</summary>
+    public static Task<DockerClient> ConnectAsync(DockerAddress address, DockerClientOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        var (handler, baseAddress) = DockerTransport.Create(address);
+        return ConnectAsync(handler, baseAddress, address, options, cancellationToken);
+    }
+
+    /// <summary>Connects over a caller-supplied handler. Used by tests and, later, the agent tunnel.</summary>
+    internal static async Task<DockerClient> ConnectAsync(
+        HttpMessageHandler handler, Uri baseAddress, DockerAddress address, DockerClientOptions? options, CancellationToken cancellationToken)
+    {
+        options ??= new DockerClientOptions();
+        var http = new HttpClient(handler, disposeHandler: true)
+        {
+            BaseAddress = baseAddress,
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("sockless-port");
+
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(options.RequestTimeout);
+
+            // Unversioned: the engine answers with its own newest version.
+            using var response = await http.GetAsync("/version", timeout.Token);
+            await EnsureSuccessAsync(response, "/version", timeout.Token);
+            var version = await response.Content.ReadFromJsonAsync(Json.VersionResponse, timeout.Token)
+                          ?? throw new InvalidDataException("The engine returned an empty /version response.");
+
+            return new DockerClient(http, address, Negotiate(version), version, options.RequestTimeout);
+        }
+        catch
+        {
+            http.Dispose();
+            throw;
+        }
+    }
+
+    internal static Version Negotiate(VersionResponse version)
+    {
+        if (!System.Version.TryParse(version.ApiVersion, out var server))
+            throw new InvalidDataException($"The engine reported an unreadable API version '{version.ApiVersion}'.");
+        if (server < MinimumApiVersion)
+            throw new DockerApiVersionException(server);
+
+        return server < MaximumApiVersion ? new Version(server.Major, server.Minor) : MaximumApiVersion;
+    }
+
+    // ---------------------------------------------------------------- system
+
+    public Task<VersionResponse> GetVersionAsync(CancellationToken cancellationToken = default) =>
+        GetAsync("/version", Json.VersionResponse, cancellationToken);
+
+    public Task<SystemInfo> GetInfoAsync(CancellationToken cancellationToken = default) =>
+        GetAsync("/info", Json.SystemInfo, cancellationToken);
+
+    /// <summary>Disk usage. Can take several seconds on engines with many images or volumes.</summary>
+    public Task<DiskUsage> GetDiskUsageAsync(CancellationToken cancellationToken = default) =>
+        GetAsync("/system/df", Json.DiskUsage, cancellationToken, timeout: TimeSpan.FromTicks(_requestTimeout.Ticks * 4));
+
+    /// <summary>
+    /// Streams engine events until <paramref name="cancellationToken"/> fires or the engine closes
+    /// the stream (e.g. on restart).
+    /// </summary>
+    public async IAsyncEnumerable<DockerEvent> MonitorEventsAsync(
+        IReadOnlyDictionary<string, string[]>? filters = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, Path("/events", Query(("filters", Filters(filters)))));
+        using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        await EnsureSuccessAsync(response, "/events", cancellationToken);
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        await foreach (var item in JsonLines.ReadAsync(stream, Json.DockerEvent, cancellationToken))
+            yield return EventNormalizer.Normalize(item);
+    }
+
+    // ---------------------------------------------------------------- resources
+
+    public async Task<IReadOnlyList<ContainerSummary>> ListContainersAsync(bool all = true, CancellationToken cancellationToken = default) =>
+        await GetAsync(Path("/containers/json", Query(("all", all ? "true" : "false"))), Json.ListContainerSummary, cancellationToken);
+
+    public async Task<IReadOnlyList<ImageSummary>> ListImagesAsync(CancellationToken cancellationToken = default) =>
+        await GetAsync("/images/json", Json.ListImageSummary, cancellationToken);
+
+    public async Task<IReadOnlyList<VolumeSummary>> ListVolumesAsync(CancellationToken cancellationToken = default) =>
+        (await GetAsync("/volumes", Json.VolumeListResponse, cancellationToken)).Volumes ?? [];
+
+    public Task<VolumeSummary> CreateVolumeAsync(VolumeCreateRequest request, CancellationToken cancellationToken = default) =>
+        SendAsync(HttpMethod.Post, "/volumes/create", JsonContent.Create(request, Json.VolumeCreateRequest), Json.VolumeSummary, cancellationToken);
+
+    public Task RemoveVolumeAsync(string name, bool force = false, CancellationToken cancellationToken = default) =>
+        SendAsync(HttpMethod.Delete, Path($"/volumes/{Uri.EscapeDataString(name)}", Query(("force", force ? "true" : null))), content: null, cancellationToken);
+
+    public async Task<IReadOnlyList<NetworkSummary>> ListNetworksAsync(CancellationToken cancellationToken = default) =>
+        await GetAsync("/networks", Json.ListNetworkSummary, cancellationToken);
+
+    // ---------------------------------------------------------------- plumbing
+
+    private Task<T> GetAsync<T>(string pathAndQuery, JsonTypeInfo<T> typeInfo, CancellationToken cancellationToken, TimeSpan? timeout = null) =>
+        SendAsync(HttpMethod.Get, pathAndQuery, content: null, typeInfo, cancellationToken, timeout);
+
+    private async Task<T> SendAsync<T>(
+        HttpMethod method, string pathAndQuery, HttpContent? content, JsonTypeInfo<T> typeInfo, CancellationToken cancellationToken, TimeSpan? timeout = null)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(timeout ?? _requestTimeout);
+        using var response = await SendCoreAsync(method, pathAndQuery, content, cts.Token);
+        return await response.Content.ReadFromJsonAsync(typeInfo, cts.Token)
+               ?? throw new InvalidDataException($"The engine returned an empty response for {StripQuery(pathAndQuery)}.");
+    }
+
+    private async Task SendAsync(HttpMethod method, string pathAndQuery, HttpContent? content, CancellationToken cancellationToken)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(_requestTimeout);
+        using var response = await SendCoreAsync(method, pathAndQuery, content, cts.Token);
+    }
+
+    private async Task<HttpResponseMessage> SendCoreAsync(HttpMethod method, string pathAndQuery, HttpContent? content, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(method, pathAndQuery.StartsWith(_prefix, StringComparison.Ordinal) ? pathAndQuery : _prefix + pathAndQuery)
+        {
+            Content = content,
+        };
+        var response = await _http.SendAsync(request, cancellationToken);
+        try
+        {
+            await EnsureSuccessAsync(response, StripQuery(pathAndQuery), cancellationToken);
+            return response;
+        }
+        catch
+        {
+            response.Dispose();
+            throw;
+        }
+    }
+
+    private static async Task EnsureSuccessAsync(HttpResponseMessage response, string path, CancellationToken cancellationToken)
+    {
+        if (response.IsSuccessStatusCode)
+            return;
+
+        string message;
+        try
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            message = TryReadMessage(body) ?? (string.IsNullOrWhiteSpace(body) ? response.ReasonPhrase ?? "Request failed." : body.Trim());
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException)
+        {
+            message = response.ReasonPhrase ?? "Request failed.";
+        }
+
+        throw new DockerApiException(response.StatusCode, message, path);
+    }
+
+    private static string? TryReadMessage(string body)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize(body, Json.ErrorResponse)?.Message;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private string Path(string path, string query) => _prefix + path + query;
+
+    private static string Query(params ReadOnlySpan<(string Name, string? Value)> parameters)
+    {
+        var parts = new List<string>(parameters.Length);
+        foreach (var (name, value) in parameters)
+        {
+            if (value is not null)
+                parts.Add($"{name}={Uri.EscapeDataString(value)}");
+        }
+        return parts.Count == 0 ? "" : "?" + string.Join('&', parts);
+    }
+
+    internal static string? Filters(IReadOnlyDictionary<string, string[]>? filters) =>
+        filters is null || filters.Count == 0
+            ? null
+            : JsonSerializer.Serialize(new Dictionary<string, string[]>(filters), Json.DictionaryStringStringArray);
+
+    private static string StripQuery(string pathAndQuery)
+    {
+        var index = pathAndQuery.IndexOf('?', StringComparison.Ordinal);
+        return index < 0 ? pathAndQuery : pathAndQuery[..index];
+    }
+
+    public void Dispose() => _http.Dispose();
+}

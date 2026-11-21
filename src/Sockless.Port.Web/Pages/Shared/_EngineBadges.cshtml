@@ -1,0 +1,14 @@
+@* Word badges for an engine: kind and version, plus its swarm role. Never colour alone. *@
+@model Sockless.Port.Docker.Engine.EngineDescriptor
+@using Sockless.Port.Docker.Engine
+<span class="inline-flex flex-wrap items-center gap-1">
+    <span class="badge-stat">@Model.DisplayName</span>
+    @if (Model.Has(EngineCapabilities.SwarmManager))
+    {
+        <span class="badge-stat">Swarm manager</span>
+    }
+    else if (Model.Has(EngineCapabilities.Swarm))
+    {
+        <span class="badge-stat">Swarm worker</span>
+    }
+</span>

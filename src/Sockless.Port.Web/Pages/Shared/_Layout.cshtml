@@ -1,6 +1,8 @@
 @inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@inject Sockless.Port.Engines.EngineConnections Connections
 @{
     var currentPage = ViewContext.RouteData.Values["page"] as string;
+    var topBar = TopBarView.For(Context, Connections);
     var csrfHeader = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string?>
     {
         ["RequestVerificationToken"] = Antiforgery.GetAndStoreTokens(Context).RequestToken,
@@ -9,6 +11,10 @@
         .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
         .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
         .FirstOrDefault()?.InformationalVersion.Split('+')[0];
+
+    IEnumerable<NavItem> Visible(IEnumerable<NavItem> items) =>
+        items.Where(i => i.Scope == NavScope.Global || topBar.Current is not null);
+    object? RouteId(NavItem item) => item.Scope == NavScope.Endpoint ? topBar.Current?.Id : null;
 }
 <!DOCTYPE html>
 <html lang="en" class="dark h-full">
@@ -32,24 +38,26 @@
 
             <nav aria-label="Main" class="flex-1 overflow-y-auto px-3 py-4">
                 <ul class="space-y-1">
-                    @foreach (var item in Navigation.Main)
+                    @foreach (var item in Visible(Navigation.Main))
                     {
                         <li>
-                            <a asp-page="@item.Page" class="nav-item" aria-current="@(Navigation.IsActive(item, currentPage) ? "page" : null)">
+                            <a asp-page="@item.Page" asp-route-endpointId="@RouteId(item)" class="nav-item"
+                               aria-current="@(Navigation.IsActive(item, currentPage) ? "page" : null)">
                                 <icon name="@item.Icon" class="h-5 w-5" />
                                 <span>@item.Label</span>
                             </a>
                         </li>
                     }
                 </ul>
-                @if (Navigation.Admin.Count > 0)
+                @if (Visible(Navigation.Admin).Any())
                 {
                     <hr class="my-4 border-line" />
                     <ul class="space-y-1">
-                        @foreach (var item in Navigation.Admin)
+                        @foreach (var item in Visible(Navigation.Admin))
                         {
                             <li>
-                                <a asp-page="@item.Page" class="nav-item" aria-current="@(Navigation.IsActive(item, currentPage) ? "page" : null)">
+                                <a asp-page="@item.Page" asp-route-endpointId="@RouteId(item)" class="nav-item"
+                                   aria-current="@(Navigation.IsActive(item, currentPage) ? "page" : null)">
                                     <icon name="@item.Icon" class="h-5 w-5" />
                                     <span>@item.Label</span>
                                 </a>
@@ -59,24 +67,27 @@
                 }
             </nav>
 
-            <div class="flex flex-none items-center justify-between gap-2 border-t border-accent/10 px-4 py-3">
-                <span class="truncate text-secondary" title="Signed in as @User.Identity?.Name">@User.Identity?.Name</span>
-                <form method="post" asp-page="/Account/Logout">
-                    <button type="submit" class="btn-soft">
-                        <icon name="arrow-right-start-on-rectangle" class="h-4 w-4" />
-                        Sign out
-                    </button>
-                </form>
+            <div class="flex-none border-t border-accent/10 px-4 py-3">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="truncate text-secondary" title="Signed in as @User.Identity?.Name">@User.Identity?.Name</span>
+                    <form method="post" asp-page="/Account/Logout">
+                        <button type="submit" class="btn-soft">
+                            <icon name="arrow-right-start-on-rectangle" class="h-4 w-4" />
+                            Sign out
+                        </button>
+                    </form>
+                </div>
+                @if (version is not null)
+                {
+                    <p class="mt-2 font-mono text-xs text-secondary">Sockless Port v@(version)</p>
+                }
             </div>
         </aside>
 
         <div class="flex min-w-0 flex-1 flex-col">
-            <header class="flex h-16 flex-none items-center justify-between border-b border-accent/10 bg-surface px-6">
-                <h1 class="text-xl font-semibold">@ViewData["Title"]</h1>
-                @if (version is not null)
-                {
-                    <span class="font-mono text-xs text-secondary">v@(version)</span>
-                }
+            <header class="flex h-16 flex-none items-center justify-between gap-4 border-b border-accent/10 bg-surface px-6">
+                <h1 class="truncate text-xl font-semibold">@ViewData["Title"]</h1>
+                <partial name="_TopBarStatus" model="topBar" />
             </header>
 
             <main id="main-content" tabindex="-1" class="flex-1 overflow-y-auto p-6 focus:outline-none">
@@ -87,6 +98,8 @@
         </div>
     </div>
 
+    <script src="~/lib/signalr/signalr.min.js" defer></script>
+    <script src="~/js/site.js" defer></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

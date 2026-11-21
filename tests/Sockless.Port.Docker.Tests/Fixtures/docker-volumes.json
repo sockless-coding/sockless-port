@@ -1,0 +1,14 @@
+{
+    "Volumes": [
+        {
+            "CreatedAt": "2026-11-21T20:03:27Z",
+            "Driver": "local",
+            "Labels": null,
+            "Mountpoint": "/var/lib/docker/volumes/fixture-data/_data",
+            "Name": "fixture-data",
+            "Options": null,
+            "Scope": "local"
+        }
+    ],
+    "Warnings": null
+}
