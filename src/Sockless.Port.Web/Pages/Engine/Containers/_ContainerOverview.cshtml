@@ -13,6 +13,21 @@
         var restart = c.HostConfig?.RestartPolicy;
         var command = Sockless.Port.Containers.ContainerSpecBuilder.JoinShellWords(new[] { c.Path }.Concat(c.Args ?? []).Where(s => !string.IsNullOrEmpty(s)).Select(s => s!));
 
+        @if (Model.ImageUpdate is Sockless.Port.Images.UpdateAvailable && Model.SwarmService is null)
+        {
+            <div class="callout warning mb-6">
+                <icon name="arrow-up-circle" class="h-5 w-5" />
+                <p>
+                    The registry has a newer image for <span class="font-mono">@c.Config?.Image</span>.
+                    To update, use <span class="font-semibold">Recreate</span> under More with “Pull the image first” checked.
+                    @if (c.Image is { } imageId)
+                    {
+                        <a asp-page="/Engine/Images/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@ImagePageModel.RouteId(imageId)" class="hover:underline">See the image</a>
+                    }
+                </p>
+            </div>
+        }
+
         <div class="grid grid-cols-1 gap-6">
             <section class="card" aria-labelledby="summary-title">
                 <h3 id="summary-title" class="section-title">Summary</h3>
@@ -20,7 +35,16 @@
                     <dt>Image</dt>
                     <dd class="break-all font-mono">@(c.Config?.Image ?? "—")</dd>
                     <dt>Image ID</dt>
-                    <dd class="break-all font-mono text-xs text-secondary">@(c.Image ?? "—")</dd>
+                    <dd class="break-all font-mono text-xs text-secondary">
+                        @if (c.Image is { } id)
+                        {
+                            <a asp-page="/Engine/Images/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@ImagePageModel.RouteId(id)" class="hover:underline">@id</a>
+                        }
+                        else
+                        {
+                            @:—
+                        }
+                    </dd>
                     <dt>Command</dt>
                     <dd class="break-all font-mono">@(command.Length > 0 ? command : "—")</dd>
                     <dt>Created</dt>

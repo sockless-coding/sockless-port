@@ -1,0 +1,27 @@
+@* Pulls and builds on this endpoint, running or recently finished. Refreshed when a job starts in the background. *@
+@model Sockless.Port.Web.Pages.Engine.Images.IndexModel
+@{
+    var jobs = Model.Jobs;
+}
+<div id="image-jobs" hx-get="@Url.Page("/Engine/Images/Index", "Jobs", new { endpointId = Model.EndpointId })"
+     hx-trigger="image-jobs-changed from:body, engine-changed from:body" hx-swap="outerHTML">
+    @if (jobs.Count > 0)
+    {
+        <section class="card mb-6" aria-labelledby="jobs-title">
+            <h3 id="jobs-title" class="section-title">Pulls and builds</h3>
+            <ul class="space-y-4">
+                @foreach (var job in jobs)
+                {
+                    <li>
+                        <partial name="_ImageJob" model="job.View()" />
+                        @if (job.Kind == Sockless.Port.Images.ImageJobKind.Build)
+                        {
+                            <a asp-page="/Engine/Images/Build" asp-route-endpointId="@Model.EndpointId" asp-route-job="@job.Id" class="text-xs hover:underline">Open the build</a>
+                        }
+                    </li>
+                }
+            </ul>
+            <p class="mt-4 text-xs text-secondary">Finished jobs are listed for @((int)Sockless.Port.Images.ImageJobs.Retention.TotalMinutes) minutes.</p>
+        </section>
+    }
+</div>

@@ -1,0 +1,10 @@
+@page "/endpoints/{endpointId:int}/images/{imageId}"
+@model Sockless.Port.Web.Pages.Engine.Images.DetailModel
+@{
+    ViewData["Title"] = Model.DisplayName;
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <partial name="_ImageHeader" model="Model" />
+    <partial name="_ImageOverview" model="Model" />
+</div>

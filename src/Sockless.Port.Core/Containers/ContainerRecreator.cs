@@ -11,8 +11,10 @@ namespace Sockless.Port.Containers;
 /// </summary>
 public static class ContainerRecreator
 {
+    /// <param name="registryAuth">Finds the <c>X-Registry-Auth</c> header for the image, for private registries.</param>
     /// <returns>The new container's id.</returns>
-    public static async Task<string> RecreateAsync(DockerClient client, string id, bool pull, CancellationToken cancellationToken = default)
+    public static async Task<string> RecreateAsync(DockerClient client, string id, bool pull, CancellationToken cancellationToken = default,
+        Func<string, CancellationToken, Task<string?>>? registryAuth = null)
     {
         var (container, json) = await client.InspectContainerAsync(id, cancellationToken);
         var inspect = JsonNode.Parse(json)!.AsObject();
@@ -22,7 +24,8 @@ public static class ContainerRecreator
 
         if (pull && body["Image"]?.GetValue<string>() is { } image && !image.StartsWith("sha256:", StringComparison.Ordinal))
         {
-            await foreach (var _ in client.PullImageAsync(image, cancellationToken: cancellationToken)) { }
+            var auth = registryAuth is null ? null : await registryAuth(image, cancellationToken);
+            await foreach (var _ in client.PullImageAsync(image, auth, cancellationToken)) { }
         }
 
         // From here on, any failure puts the original back.

@@ -39,7 +39,10 @@ else
         </div>
     }
 
-    <form method="post" class="space-y-6" novalidate>
+    @* images.js pulls the image first with live progress (data-pull-before-submit), then sets Pulled. *@
+    <form method="post" class="space-y-6" novalidate data-pull-before-submit data-endpoint="@Model.EndpointId"
+          data-pull-image="#Input_Image" data-pull-mode="input[name=Pull]:checked">
+        <input type="hidden" name="Pulled" value="false" data-pulled />
         <section class="card space-y-4" aria-labelledby="create-basics">
             <h3 id="create-basics" class="section-title">Container</h3>
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">

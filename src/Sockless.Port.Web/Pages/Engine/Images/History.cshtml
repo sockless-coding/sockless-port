@@ -1,0 +1,50 @@
+@page "/endpoints/{endpointId:int}/images/{imageId}/history"
+@model Sockless.Port.Web.Pages.Engine.Images.HistoryModel
+@{
+    ViewData["Title"] = $"{Model.DisplayName} history";
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <partial name="_ImageHeader" model="Model" />
+
+    @if (Model.HistoryError is not null)
+    {
+        <div class="callout danger" role="alert">
+            <icon name="exclamation-triangle" class="h-5 w-5" />
+            <p>@Model.HistoryError</p>
+        </div>
+    }
+    else if (Model.Image is not null)
+    {
+        <p class="mb-3 text-secondary">The steps that built the image, newest first. Steps without a size only changed settings.</p>
+        <div class="table-wrap">
+            <table class="table">
+                <caption class="sr-only">Build steps</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Step</th>
+                        <th scope="col" class="num">Size</th>
+                        <th scope="col">Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var layer in Model.Layers)
+                    {
+                        var created = Format.FromUnix(layer.Created);
+                        <tr>
+                            <td class="break-all font-mono text-xs">
+                                @HistoryModel.Instruction(layer.CreatedBy)
+                                @if (!string.IsNullOrEmpty(layer.Comment))
+                                {
+                                    <span class="mt-1 block font-sans text-secondary">@layer.Comment</span>
+                                }
+                            </td>
+                            <td class="num font-mono text-xs">@(layer.Size > 0 ? Format.Bytes(layer.Size) : "—")</td>
+                            <td class="whitespace-nowrap text-secondary" title="@(layer.Created > 0 ? Format.Timestamp(created) : "")">@(layer.Created > 0 ? Format.Relative(created) : "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

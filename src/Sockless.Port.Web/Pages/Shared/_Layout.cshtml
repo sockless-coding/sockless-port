@@ -111,6 +111,17 @@
         </form>
     </dialog>
 
+    @* Live progress of a pull started from a page; filled in by images.js. *@
+    <dialog id="job-dialog" class="dialog dialog-wide" aria-labelledby="job-dialog-title">
+        <h2 id="job-dialog-title" class="dialog-title">Pulling</h2>
+        <div data-job-dialog-body></div>
+        <div class="mt-6 flex justify-end gap-2">
+            <button type="button" class="btn-soft" data-job-dialog-background>Continue in background</button>
+            <button type="button" class="btn-soft danger" data-job-dialog-cancel>Cancel pull</button>
+            <button type="button" class="btn-soft" data-job-dialog-close hidden>Close</button>
+        </div>
+    </dialog>
+
     @* Libraries load once here, not per page, so boosted navigation doesn't race script loading. *@
     <script src="~/lib/signalr/signalr.min.js" defer></script>
     <script src="~/lib/chartjs/chart.umd.min.js" defer></script>
@@ -120,6 +131,7 @@
     <script src="~/js/logs.js" defer></script>
     <script src="~/js/stats.js" defer></script>
     <script src="~/js/terminal.js" defer></script>
+    <script src="~/js/images.js" defer></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

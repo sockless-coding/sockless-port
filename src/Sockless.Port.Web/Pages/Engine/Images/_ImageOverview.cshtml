@@ -1,0 +1,184 @@
+@model Sockless.Port.Web.Pages.Engine.Images.DetailModel
+@using Sockless.Port.Containers
+@{
+    var image = Model.Image;
+}
+<div id="image-overview" hx-get="@Url.Page("/Engine/Images/Detail", "Overview", new { endpointId = Model.EndpointId, imageId = Model.ImageId })"
+     hx-trigger="engine-changed from:body, endpoint-state from:body" hx-swap="outerHTML">
+    @if (image is not null)
+    {
+        var config = image.Config;
+        var created = Format.EngineTime(image.Created);
+        var platform = string.Join("/", new[] { image.Os, image.Architecture, image.Variant }.Where(p => !string.IsNullOrEmpty(p)));
+        string Words(IReadOnlyList<string>? words) => words is { Count: > 0 } ? ContainerSpecBuilder.JoinShellWords(words) : "—";
+
+        <div class="grid grid-cols-1 gap-6">
+            <section class="card" aria-labelledby="tags-title">
+                <h3 id="tags-title" class="section-title">Tags</h3>
+                @if (Model.Tags.Count == 0)
+                {
+                    <p class="text-secondary">No tag points at this image. Add one from More, or remove it with a dangling prune.</p>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="table">
+                            <caption class="sr-only">Tags</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Tag</th>
+                                    <th scope="col">Registry update</th>
+                                    <th scope="col" class="num"><span class="sr-only">Actions</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var tag in Model.Tags)
+                                {
+                                    <tr>
+                                        <th scope="row" class="break-all font-mono text-xs">@tag</th>
+                                        <td>
+                                            @if (Model.UpdateFor(tag) is { } status)
+                                            {
+                                                <partial name="_UpdateBadge" model="status" />
+                                            }
+                                            else
+                                            {
+                                                <span class="text-secondary">Not checked</span>
+                                            }
+                                        </td>
+                                        <td class="num">
+                                            <form method="post" asp-page="/Engine/Images/Detail" asp-page-handler="Untag"
+                                                  asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId">
+                                                <input type="hidden" name="tag" value="@tag" />
+                                                <button type="submit" class="btn-soft danger" aria-label="Remove the tag @tag"
+                                                        data-confirm="Remove the tag @tag?@(Model.Tags.Count == 1 ? " It's the last one, so the image is removed too unless containers use it." : "")">
+                                                    Remove tag
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+
+            <section class="card" aria-labelledby="summary-title">
+                <h3 id="summary-title" class="section-title">Summary</h3>
+                <dl class="details">
+                    <dt>ID</dt>
+                    <dd class="break-all font-mono text-xs">@image.Id</dd>
+                    <dt>Created</dt>
+                    <dd>@(created is { } cr ? $"{Format.Relative(cr)} ({Format.Timestamp(cr)})" : "—")</dd>
+                    <dt>Size</dt>
+                    <dd class="font-mono">@Format.Bytes(image.Size)</dd>
+                    <dt>Platform</dt>
+                    <dd class="font-mono">@(platform.Length > 0 ? platform : "—")</dd>
+                    <dt>Layers</dt>
+                    <dd class="font-mono">@(image.RootFS?.Layers?.Count ?? 0)</dd>
+                    @if (!string.IsNullOrEmpty(image.Author))
+                    {
+                        <dt>Author</dt>
+                        <dd>@image.Author</dd>
+                    }
+                    <dt>Digests</dt>
+                    <dd>
+                        @if (image.RepoDigests is { Count: > 0 } digests)
+                        {
+                            @foreach (var digest in digests)
+                            {
+                                <span class="block break-all font-mono text-xs">@digest</span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="text-secondary">None: built locally or never pulled from a registry.</span>
+                        }
+                    </dd>
+                </dl>
+            </section>
+
+            <section class="card" aria-labelledby="config-title">
+                <h3 id="config-title" class="section-title">Configuration</h3>
+                <p class="mb-3 text-secondary">The defaults a container gets from this image.</p>
+                <dl class="details">
+                    <dt>Entrypoint</dt>
+                    <dd class="break-all font-mono">@Words(config?.Entrypoint)</dd>
+                    <dt>Command</dt>
+                    <dd class="break-all font-mono">@Words(config?.Cmd)</dd>
+                    <dt>Working directory</dt>
+                    <dd class="font-mono">@(string.IsNullOrEmpty(config?.WorkingDir) ? "—" : config.WorkingDir)</dd>
+                    <dt>User</dt>
+                    <dd class="font-mono">@(string.IsNullOrEmpty(config?.User) ? "root (default)" : config.User)</dd>
+                    <dt>Exposed ports</dt>
+                    <dd class="font-mono">@(config?.ExposedPorts is { Count: > 0 } ports ? string.Join(", ", ports.Keys.Order(StringComparer.Ordinal)) : "—")</dd>
+                    <dt>Volumes</dt>
+                    <dd class="font-mono">@(config?.Volumes is { Count: > 0 } volumes ? string.Join(", ", volumes.Keys.Order(StringComparer.Ordinal)) : "—")</dd>
+                    @if (!string.IsNullOrEmpty(config?.StopSignal))
+                    {
+                        <dt>Stop signal</dt>
+                        <dd class="font-mono">@config.StopSignal</dd>
+                    }
+                </dl>
+            </section>
+
+            <section class="card" aria-labelledby="usedby-title">
+                <h3 id="usedby-title" class="section-title">Used by</h3>
+                @if (Model.UsedBy.Count == 0)
+                {
+                    <p class="text-secondary">No container uses this image.</p>
+                }
+                else
+                {
+                    <ul class="space-y-2">
+                        @foreach (var container in Model.UsedBy)
+                        {
+                            var (badge, _) = Sockless.Port.Web.Infrastructure.ContainerStatus.FromSummary(container);
+                            <li class="flex flex-wrap items-center gap-2">
+                                <a asp-page="/Engine/Containers/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-containerId="@container.Id"
+                                   class="font-mono hover:underline">@container.DisplayName</a>
+                                <partial name="_StatusBadge" model="badge" />
+                            </li>
+                        }
+                    </ul>
+                }
+            </section>
+
+            <section class="card" aria-labelledby="env-title">
+                <h3 id="env-title" class="section-title">Environment</h3>
+                @if (config?.Env is { Count: > 0 } env)
+                {
+                    <ul class="space-y-1 font-mono text-xs">
+                        @foreach (var variable in env)
+                        {
+                            <li class="break-all">@variable</li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p class="text-secondary">None.</p>
+                }
+            </section>
+
+            <section class="card" aria-labelledby="labels-title">
+                <h3 id="labels-title" class="section-title">Labels</h3>
+                @if (config?.Labels is { Count: > 0 } labels)
+                {
+                    <dl class="details">
+                        @foreach (var (key, value) in labels.OrderBy(l => l.Key, StringComparer.Ordinal))
+                        {
+                            <dt class="break-all font-mono text-xs">@key</dt>
+                            <dd class="break-all font-mono text-xs">@value</dd>
+                        }
+                    </dl>
+                }
+                else
+                {
+                    <p class="text-secondary">None.</p>
+                }
+            </section>
+        </div>
+    }
+</div>

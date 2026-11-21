@@ -34,6 +34,20 @@ public static class EngineErrors
         };
     }
 
+    /// <summary>For an engine call that failed: the engine's own message for API errors (it names the problem), a connection hint otherwise.</summary>
+    public static string ForCall(Exception exception, DockerAddress address) =>
+        exception is DockerApiException api ? Sentence(api.Message) : Describe(exception, address);
+
+    /// <summary>Engine messages are lower-case fragments ("cannot remove container …"); make them read as sentences.</summary>
+    public static string Sentence(string message)
+    {
+        message = message.Trim();
+        if (message.Length == 0)
+            return "The engine reported an error.";
+        message = char.ToUpperInvariant(message[0]) + message[1..];
+        return message.EndsWith('.') ? message : message + ".";
+    }
+
     private static T? Find<T>(Exception? exception) where T : Exception
     {
         for (var e = exception; e is not null; e = e.InnerException)

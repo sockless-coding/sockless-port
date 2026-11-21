@@ -104,6 +104,10 @@
   window.SocklessPort = {
     connection,
     ready,
+    beforeSubmit(form, hook) {
+      beforeSubmitHooks.set(form, hook);
+      return () => { if (beforeSubmitHooks.get(form) === hook) beforeSubmitHooks.delete(form); };
+    },
     component(selector, init) {
       components.push({ selector, init });
       if (document.readyState !== 'loading') mount(document.body);
@@ -156,18 +160,31 @@
     if (submitter.dataset.confirmBulk) {
       const form = submitter.form;
       const names = [...form.querySelectorAll('input[name=ids]:checked')].map((box) => box.dataset.name || box.value);
-      const list = names.length <= 5 ? names.join(', ') : `${names.length} containers`;
+      const list = names.length <= 5 ? names.join(', ') : `${names.length} ${form.dataset.bulkNoun || 'containers'}`;
       return submitter.dataset.confirmBulk.replace('{list}', list);
     }
     return null;
   }
 
+  // SocklessPort.beforeSubmit(form, async (submitter) => true | false): runs after any confirmation
+  // and before the request; false stops it. Used to pull an image with live progress first.
+  const beforeSubmitHooks = new WeakMap();
+
   document.addEventListener('htmx:confirm', (event) => {
     const submitter = event.detail.triggeringEvent?.submitter;
     const message = confirmationFor(submitter);
-    if (!message) return;
+    const form = event.detail.elt;
+    const hook = form instanceof HTMLFormElement ? beforeSubmitHooks.get(form) : undefined;
+    if (!message && !hook) return;
     event.preventDefault();
-    ask(message, submitter.textContent.trim()).then((ok) => { if (ok) event.detail.issueRequest(true); });
+    (message ? ask(message, submitter.textContent.trim()) : Promise.resolve(true))
+      .then(async (ok) => {
+        if (!ok) return;
+        // Request values are collected after this, so a hook may still change the form.
+        if (hook && !(await hook(submitter))) return;
+        event.detail.issueRequest(true);
+      })
+      .catch((err) => console.error('Sockless Port: before-submit hook failed', err));
   });
 
   // ---------------------------------------------------------------- bulk selection

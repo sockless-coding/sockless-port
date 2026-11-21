@@ -1,0 +1,98 @@
+@page "/endpoints/{endpointId:int}/images/build"
+@model Sockless.Port.Web.Pages.Engine.Images.BuildModel
+@{
+    ViewData["Title"] = "Build image";
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+        <a asp-page="/Engine/Images/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Images</a>
+        <span class="text-line-accent" aria-hidden="true">/</span>
+        <span aria-current="page">Build</span>
+    </nav>
+    <div class="mb-6">
+        <h2 class="page-title">Build image</h2>
+        <p class="mt-1 text-secondary">Build on @Model.Connection.Name from a Dockerfile, or from an uploaded build context.</p>
+    </div>
+
+    @if (Model.Client is null)
+    {
+        <partial name="_EndpointStateCallout" model="Model.Connection" />
+    }
+    else
+    {
+        @if (Model.Job is { } job)
+        {
+            <section class="card mb-6" aria-labelledby="build-output-title">
+                <h3 id="build-output-title" class="section-title">Build output</h3>
+                <partial name="_ImageJob" model="job" />
+                <p class="mt-3 text-xs text-secondary">
+                    The build goes on if you leave this page. It's listed under
+                    <a asp-page="/Engine/Images/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Images</a> while it runs.
+                </p>
+            </section>
+        }
+
+        @if (Model.Error is not null)
+        {
+            <div class="callout danger mb-4" role="alert">
+                <icon name="exclamation-triangle" class="h-5 w-5" />
+                <p>@Model.Error</p>
+            </div>
+        }
+
+        <form method="post" enctype="multipart/form-data" class="space-y-6" novalidate data-build-form>
+            <section class="card space-y-4" aria-labelledby="build-source">
+                <h3 id="build-source" class="section-title">Source</h3>
+                <fieldset>
+                    <legend class="sr-only">Build from</legend>
+                    <div class="flex flex-wrap gap-6">
+                        <label class="flex items-center gap-2"><input type="radio" asp-for="Input.Source" value="dockerfile" class="accent-accent" data-build-source /> A Dockerfile</label>
+                        <label class="flex items-center gap-2"><input type="radio" asp-for="Input.Source" value="archive" class="accent-accent" data-build-source /> An uploaded build context</label>
+                    </div>
+                </fieldset>
+
+                <div class="field" data-build-panel="dockerfile">
+                    <label asp-for="Input.Dockerfile">Dockerfile</label>
+                    <textarea asp-for="Input.Dockerfile" rows="12" class="font-mono" spellcheck="false" aria-describedby="dockerfile-hint"
+                              placeholder="FROM nginx:1.27&#10;RUN echo hello > /usr/share/nginx/html/index.html"></textarea>
+                    <p class="hint" id="dockerfile-hint">The build has no other files, so COPY and ADD can only fetch URLs. Upload a context for anything else.</p>
+                    <partial name="_FieldError" model='"Input_Dockerfile"' />
+                </div>
+
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2" data-build-panel="archive">
+                    <div class="field">
+                        <label asp-for="Input.Archive">Build context</label>
+                        <input asp-for="Input.Archive" type="file" accept=".tar,.tgz,.gz,application/x-tar,application/gzip" aria-describedby="archive-hint" />
+                        <p class="hint" id="archive-hint">A .tar or .tar.gz of the directory you would pass to <span class="font-mono">docker build</span>. Up to 2 GB.</p>
+                        <partial name="_FieldError" model='"Input_Archive"' />
+                    </div>
+                    <div class="field">
+                        <label asp-for="Input.DockerfilePath">Dockerfile path</label>
+                        <input asp-for="Input.DockerfilePath" class="font-mono" autocomplete="off" spellcheck="false" />
+                        <partial name="_FieldError" model='"Input_DockerfilePath"' />
+                    </div>
+                </div>
+            </section>
+
+            <section class="card space-y-4" aria-labelledby="build-options">
+                <h3 id="build-options" class="section-title">Result</h3>
+                <div class="field">
+                    <label asp-for="Input.Tags">Tags</label>
+                    <input asp-for="Input.Tags" class="font-mono" placeholder="app:1.2 app:latest" autocomplete="off" spellcheck="false" aria-describedby="tags-hint" />
+                    <p class="hint" id="tags-hint">Separate several with spaces. Without a tag the image is only known by its ID.</p>
+                    <partial name="_FieldError" model='"Input_Tags"' />
+                </div>
+                <div class="flex flex-wrap gap-6">
+                    <label class="flex items-center gap-2"><input type="checkbox" asp-for="Input.Pull" class="accent-accent" /> Pull newer base images</label>
+                    <label class="flex items-center gap-2"><input type="checkbox" asp-for="Input.NoCache" class="accent-accent" /> Don't use the build cache</label>
+                </div>
+                <p class="text-xs text-secondary">Base images from private registries use the credentials stored under <a asp-page="/Registries/Index" class="hover:underline">Registries</a>.</p>
+            </section>
+
+            <div class="flex justify-end">
+                <button type="submit" class="btn-primary">Build</button>
+            </div>
+        </form>
+    }
+</div>

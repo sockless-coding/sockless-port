@@ -1,0 +1,9 @@
+@* The update check's result as a badge with its explanation. Model: UpdateStatus?. *@
+@model Sockless.Port.Images.UpdateStatus?
+@if (ImageDisplay.UpdateBadge(Model) is { } badge)
+{
+    <span class="inline-flex flex-col gap-1">
+        <partial name="_StatusBadge" model="badge" />
+        <span class="text-xs text-secondary">@ImageDisplay.UpdateDetail(Model)</span>
+    </span>
+}

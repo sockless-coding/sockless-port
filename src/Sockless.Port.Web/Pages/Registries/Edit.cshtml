@@ -1,0 +1,67 @@
+@page "/registries/{id:int}"
+@model Sockless.Port.Web.Pages.Registries.EditModel
+@{
+    ViewData["Title"] = Model.Registry.Name;
+    var testEndpoint = Model.TestEndpoint;
+}
+
+<nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+    <a asp-page="/Registries/Index" class="hover:underline">Registries</a>
+    <span class="text-line-accent" aria-hidden="true">/</span>
+    <span aria-current="page">@Model.Registry.Name</span>
+</nav>
+
+<div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div>
+        <h2 class="page-title break-all">@Model.Registry.Name</h2>
+        <div class="mt-2 flex flex-wrap gap-1">
+            <span class="badge-stat">@Model.Registry.Registry</span>
+            @if (!Model.Registry.Readable)
+            {
+                <span class="badge danger">Re-enter password</span>
+            }
+        </div>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+        <form method="post" asp-page-handler="Test" asp-route-id="@Model.Registry.Id">
+            <button type="submit" class="btn-soft" disabled="@(testEndpoint?.Client is null)" aria-describedby="test-hint">
+                <icon name="check-circle" class="h-4 w-4" /> Test login
+            </button>
+        </form>
+        <form method="post" asp-page-handler="Remove" asp-route-id="@Model.Registry.Id">
+            <button type="submit" class="btn-soft danger"
+                    data-confirm="Remove the credentials @Model.Registry.Name for @Model.Registry.Registry? Private images from it can't be pulled until you add them again.">
+                <icon name="trash" class="h-4 w-4" /> Remove
+            </button>
+        </form>
+    </div>
+</div>
+
+<p id="test-hint" class="-mt-4 mb-6 text-xs text-secondary">
+    @if (testEndpoint is { Client: not null })
+    {
+        @:Test login asks the engine on @testEndpoint.Name to log in, so it also checks that the engine can reach the registry.
+    }
+    else
+    {
+        @:Test login needs an online engine.
+    }
+</p>
+
+@if (!Model.Registry.Readable)
+{
+    <div class="callout danger mb-6" role="alert">
+        <icon name="exclamation-triangle" class="h-5 w-5" />
+        <p>The stored password can't be decrypted: the Data Protection keys in the data volume changed since it was saved. Enter it again below.</p>
+    </div>
+}
+
+<section class="card" aria-labelledby="edit-title">
+    <h3 id="edit-title" class="section-title">Credentials</h3>
+    <form method="post" asp-route-id="@Model.Registry.Id" class="space-y-4" novalidate>
+        <partial name="_RegistryFields" model="Model.Form" view-data='new ViewDataDictionary(ViewData) { ["Editing"] = true }' />
+        <div class="flex justify-end">
+            <button type="submit" class="btn-primary">Save changes</button>
+        </div>
+    </form>
+</section>

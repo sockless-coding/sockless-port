@@ -13,16 +13,8 @@ public static class EngineFailures
             or System.Text.Json.JsonException;
 
     /// <summary>The engine's own message for API errors (it names the problem); a connection hint otherwise.</summary>
-    public static string Describe(Exception ex, EngineConnection connection) =>
-        ex is DockerApiException api ? Sentence(api.Message) : EngineErrors.Describe(ex, connection.Address);
+    public static string Describe(Exception ex, EngineConnection connection) => EngineErrors.ForCall(ex, connection.Address);
 
-    /// <summary>Engine messages are lower-case fragments ("cannot remove container …"); make them read as sentences.</summary>
-    public static string Sentence(string message)
-    {
-        message = message.Trim();
-        if (message.Length == 0)
-            return "The engine reported an error.";
-        message = char.ToUpperInvariant(message[0]) + message[1..];
-        return message.EndsWith('.') ? message : message + ".";
-    }
+    /// <inheritdoc cref="EngineErrors.Sentence"/>
+    public static string Sentence(string message) => EngineErrors.Sentence(message);
 }

@@ -1,0 +1,5 @@
+{"stream":"STEP 1/2: FROM busybox:1.37\n"}
+{"stream":"STEP 2/2: RUN exit 3\n"}
+{"stream":"subprocess exited with status 3\n"}
+{"stream":"subprocess exited with status 3\n"}
+{"errorDetail":{"message":"building at STEP \"RUN exit 3\": exit status 3\n"},"error":"building at STEP \"RUN exit 3\": exit status 3\n"}

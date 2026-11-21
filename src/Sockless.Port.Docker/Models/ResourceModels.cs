@@ -37,10 +37,16 @@ public sealed record ImageSummary
 
     public long Size { get; init; }
 
-    /// <summary>Containers using the image; <c>-1</c> when not computed.</summary>
+    /// <summary>Containers using the image; <c>-1</c> when not computed (Docker below API 1.51).</summary>
     public long Containers { get; init; }
 
     public IReadOnlyDictionary<string, string>? Labels { get; init; }
+
+    /// <summary>The tags that are real names: older engines list <c>&lt;none&gt;:&lt;none&gt;</c> for untagged images.</summary>
+    public IReadOnlyList<string> Tags => RepoTags is null ? [] : [.. RepoTags.Where(t => t != "<none>:<none>")];
+
+    /// <summary>No tag left: a leftover from a rebuild or re-pull, removed by a dangling prune.</summary>
+    public bool IsDangling => Tags.Count == 0;
 }
 
 /// <summary><c>GET /volumes</c>.</summary>

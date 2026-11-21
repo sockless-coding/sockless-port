@@ -42,7 +42,7 @@
             <section class="card stat-card" aria-label="Images">
                 <p class="label-caps">Images</p>
                 <p class="stat-value">@Format.Count(info.Images)</p>
-                <p class="stat-meta">On this engine</p>
+                <p class="stat-meta"><a asp-page="/Engine/Images/Index" asp-route-endpointId="@Model.Connection.Id" class="hover:underline">See images</a></p>
             </section>
             <section class="card stat-card" aria-label="Volumes">
                 <p class="label-caps">Volumes</p>

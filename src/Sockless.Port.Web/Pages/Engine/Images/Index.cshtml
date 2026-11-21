@@ -1,0 +1,101 @@
+@page "/endpoints/{endpointId:int}/images"
+@model Sockless.Port.Web.Pages.Engine.Images.IndexModel
+@{
+    ViewData["Title"] = "Images";
+    var tableUrl = Url.Page("/Engine/Images/Index", "Table", new { endpointId = Model.EndpointId });
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <h2 class="page-title">Images</h2>
+            <p class="mt-1 text-secondary">Images on @Model.Connection.Name, the containers using them, and whether their registry has something newer.</p>
+        </div>
+        @if (Model.Client is not null)
+        {
+            <div class="flex flex-wrap items-center gap-2">
+                <form method="post" asp-page="/Engine/Images/Index" asp-page-handler="CheckUpdates" asp-route-endpointId="@Model.EndpointId"
+                      asp-route-q="@Model.Q" asp-route-usage="@Model.Usage">
+                    <button type="submit" class="btn-soft" aria-describedby="update-check-hint">
+                        <icon name="arrow-up-circle" class="h-4 w-4" /> Check for updates
+                    </button>
+                </form>
+                <details class="menu" data-menu>
+                    <summary class="btn-soft danger">Prune <icon name="chevron-down" class="h-4 w-4" /></summary>
+                    <div class="menu-panel w-80 space-y-3 p-3">
+                        <form method="post" asp-page="/Engine/Images/Index" asp-page-handler="Prune" asp-route-endpointId="@Model.EndpointId">
+                            <p class="mb-2 text-xs text-secondary">Dangling images have no tag left, usually after a rebuild or re-pull. @(Model.Dangling == 1 ? "There is 1." : $"There are {Model.Dangling}.")</p>
+                            <button type="submit" class="btn-soft danger" data-confirm="Remove all dangling images on @Model.Connection.Name?">
+                                <icon name="trash" class="h-4 w-4" /> Remove dangling images
+                            </button>
+                        </form>
+                        <form method="post" asp-page="/Engine/Images/Index" asp-page-handler="Prune" asp-route-endpointId="@Model.EndpointId">
+                            <input type="hidden" name="all" value="true" />
+                            <p class="mb-2 text-xs text-secondary">Also tagged images that no container uses. They are pulled again when needed.</p>
+                            <button type="submit" class="btn-soft danger"
+                                    data-confirm="Remove every image on @Model.Connection.Name that no container uses? Stopped containers count as using their image.">
+                                <icon name="trash" class="h-4 w-4" /> Remove all unused images
+                            </button>
+                        </form>
+                    </div>
+                </details>
+                <a asp-page="/Engine/Images/Build" asp-route-endpointId="@Model.EndpointId" class="btn-soft secondary">
+                    <icon name="wrench-screwdriver" class="h-4 w-4" /> Build image
+                </a>
+            </div>
+        }
+    </div>
+
+    @if (Model.Client is null)
+    {
+        <partial name="_EndpointStateCallout" model="Model.Connection" />
+    }
+    else
+    {
+        <p id="update-check-hint" class="-mt-4 mb-6 text-xs text-secondary">
+            Checking for updates asks each image's registry for the current digest of tags in use; nothing is pulled.
+            @(Model.LastChecked is { } checkedAt ? $"Last checked {Format.Relative(checkedAt)}." : "Not checked since Sockless Port started.")
+        </p>
+
+        <section class="card mb-6" aria-labelledby="pull-title">
+            <h3 id="pull-title" class="section-title">Pull an image</h3>
+            <form method="post" asp-page="/Engine/Images/Index" asp-page-handler="Pull" asp-route-endpointId="@Model.EndpointId"
+                  asp-route-q="@Model.Q" asp-route-usage="@Model.Usage"
+                  class="flex flex-wrap items-end gap-3" data-pull-form data-endpoint="@Model.EndpointId">
+                <div class="field min-w-[16rem] flex-1">
+                    <label for="pull-reference">Image</label>
+                    <input id="pull-reference" name="reference" class="font-mono" placeholder="nginx:1.27 or ghcr.io/org/app:tag" required
+                           autocomplete="off" spellcheck="false" aria-describedby="pull-hint" />
+                </div>
+                <button type="submit" class="btn-soft secondary mb-1"><icon name="arrow-down-tray" class="h-4 w-4" /> Pull</button>
+            </form>
+            <p id="pull-hint" class="mt-2 text-xs text-secondary">
+                Without a tag, <span class="font-mono">latest</span> is pulled. Credentials stored under
+                <a asp-page="/Registries/Index" class="hover:underline">Registries</a> are used for their registry.
+            </p>
+        </section>
+
+        <partial name="_ImageJobs" model="Model" />
+
+        <form method="get" role="search" aria-label="Filter images" class="mb-4 flex flex-wrap items-end gap-3"
+              hx-get="@tableUrl" hx-target="#image-table" hx-swap="outerHTML"
+              hx-trigger="change, input changed delay:300ms from:find input[type=search], submit">
+            <div class="field min-w-[14rem] flex-1">
+                <label for="filter-q">Search</label>
+                <input id="filter-q" type="search" name="q" value="@Model.Q" placeholder="Name, tag or ID" autocomplete="off" />
+            </div>
+            <div class="field">
+                <label for="filter-usage">Show</label>
+                <select id="filter-usage" name="usage">
+                    @foreach (var (value, label) in IndexModel.Usages)
+                    {
+                        <option value="@value" selected="@(value == (Model.Usage ?? ""))">@label</option>
+                    }
+                </select>
+            </div>
+            <noscript><button type="submit" class="btn-soft">Filter</button></noscript>
+        </form>
+
+        <partial name="_ImageTable" model="Model" />
+    }
+</div>

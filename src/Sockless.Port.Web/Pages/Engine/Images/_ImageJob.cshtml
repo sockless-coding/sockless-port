@@ -1,0 +1,40 @@
+@* One pull or build, rendered now and kept live by images.js ([data-image-job]). Model: the job's view. *@
+@model Sockless.Port.Images.ImageJobView
+@using Sockless.Port.Images
+@{
+    var job = Model.Job;
+    var pull = Model.Pull;
+    var running = Model.Status is ImageJobRunning;
+    var kind = job.Kind == ImageJobKind.Pull ? "Pull" : "Build";
+    var done = Model.Status is ImageJobSucceeded;
+}
+<div class="job" data-image-job="@job.Id" data-job-kind="@kind.ToLowerInvariant()">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <p class="min-w-0 break-all"><span class="label-caps mr-2">@kind</span><span class="font-mono">@job.Target</span></p>
+        <span class="flex items-center gap-2">
+            <span data-job-badge><partial name="_StatusBadge" model="ImageDisplay.JobBadge(Model)" /></span>
+            <button type="button" class="btn-soft danger" data-job-cancel hidden="@(!running)" aria-label="Cancel the @kind.ToLowerInvariant() of @job.Target">Cancel</button>
+        </span>
+    </div>
+    @if (running && (job.Kind == ImageJobKind.Build || pull.TotalBytes == 0))
+    {
+        <progress class="progress mt-2" data-job-progress aria-label="@kind progress of @job.Target"></progress>
+    }
+    else
+    {
+        <progress class="progress mt-2" data-job-progress aria-label="@kind progress of @job.Target"
+                  max="@(done || pull.TotalBytes == 0 ? 1 : pull.TotalBytes)" value="@(done || pull.TotalBytes == 0 ? (done ? 1 : 0) : pull.DownloadedBytes)"></progress>
+    }
+    <p class="mt-1 text-xs @(Model.Status is ImageJobFailed ? "text-danger" : "text-secondary")" data-job-summary>@ImageDisplay.JobSummary(Model)</p>
+    @* Progress changes several times a second; screen readers hear only the start and the outcome. *@
+    <p class="sr-only" role="status" data-job-announce></p>
+    @if (job.Kind == ImageJobKind.Pull)
+    {
+        <ul class="job-layers" data-job-layers aria-label="Layers"></ul>
+    }
+    else
+    {
+        <div class="log-view wrap mt-3 h-80" role="log" aria-label="Build output" tabindex="0" data-job-log>@foreach (var line in Model.Log)
+            {<div class="log-line">@line</div>}</div>
+    }
+</div>

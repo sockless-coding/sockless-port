@@ -1,0 +1,38 @@
+@* The registry form's fields, bound as Form.*. Model: the form; ViewData["Editing"] when editing. *@
+@model Sockless.Port.Web.Pages.Registries.RegistryForm
+@using Sockless.Port.Web.Pages.Registries
+@{
+    // Names and ids come out as Form.Name / Form_Name, matching the page's [BindProperty] Form.
+    ViewData.TemplateInfo.HtmlFieldPrefix = "Form";
+    var editing = ViewData["Editing"] is true;
+}
+<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+    <div class="field">
+        <label asp-for="Name">Name</label>
+        <input asp-for="Name" maxlength="64" placeholder="Docker Hub" autocomplete="off" />
+        <partial name="_FieldError" model='"Form_Name"' />
+    </div>
+    <div class="field">
+        <label asp-for="Registry">Registry</label>
+        <input asp-for="Registry" class="font-mono" list="known-registries" placeholder="docker.io" autocomplete="off" spellcheck="false" aria-describedby="registry-hint" />
+        <datalist id="known-registries">
+            @foreach (var (host, label) in RegistryForm.Known)
+            {
+                <option value="@host">@label</option>
+            }
+        </datalist>
+        <p class="hint" id="registry-hint">The host in image names, with its port if it has one. Docker Hub is docker.io.</p>
+        <partial name="_FieldError" model='"Form_Registry"' />
+    </div>
+    <div class="field">
+        <label asp-for="Username">User name</label>
+        <input asp-for="Username" class="font-mono" autocomplete="off" spellcheck="false" />
+        <partial name="_FieldError" model='"Form_Username"' />
+    </div>
+    <div class="field">
+        <label asp-for="Password">@(editing ? "New password or token" : "Password or access token")</label>
+        <input asp-for="Password" type="password" autocomplete="new-password" spellcheck="false" aria-describedby="password-hint" />
+        <p class="hint" id="password-hint">@(editing ? "Leave empty to keep the stored one. " : "")Stored encrypted and never shown again. Prefer a read-only access token.</p>
+        <partial name="_FieldError" model='"Form_Password"' />
+    </div>
+</div>

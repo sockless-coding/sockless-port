@@ -168,45 +168,6 @@ public sealed partial class DockerClient
     public Task<ExecInspect> InspectExecAsync(string execId, CancellationToken cancellationToken = default) =>
         GetAsync($"/exec/{Escape(execId)}/json", Json.ExecInspect, cancellationToken);
 
-    // ---------------------------------------------------------------- images (used by create)
-
-    public async Task<bool> ImageExistsAsync(string reference, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            await SendAsync(HttpMethod.Get, $"/images/{EscapeImage(reference)}/json", content: null, cancellationToken);
-            return true;
-        }
-        catch (DockerApiException ex) when (ex.IsNotFound)
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Pulls an image, yielding progress. Pull errors arrive inside a 200 response as a progress
-    /// line with <c>error</c>; they are thrown as <see cref="DockerApiException"/>.
-    /// </summary>
-    /// <param name="registryAuth">Base64url JSON credentials for <c>X-Registry-Auth</c> (Phase 3).</param>
-    public async IAsyncEnumerable<PullProgress> PullImageAsync(string reference, string? registryAuth = null,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        var (name, tag) = ImageReference.Split(reference);
-        using var request = new HttpRequestMessage(HttpMethod.Post, Path("/images/create", Query(("fromImage", name), ("tag", tag))));
-        if (registryAuth is not null)
-            request.Headers.Add("X-Registry-Auth", registryAuth);
-
-        using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        await EnsureSuccessAsync(response, "/images/create", cancellationToken);
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        await foreach (var progress in JsonLines.ReadAsync(stream, Json.PullProgress, cancellationToken))
-        {
-            if ((progress.Error ?? progress.ErrorDetail?.Message) is { } error)
-                throw new DockerApiException(HttpStatusCode.InternalServerError, error, "/images/create");
-            yield return progress;
-        }
-    }
-
     // ---------------------------------------------------------------- helpers
 
     private static string Escape(string id) => Uri.EscapeDataString(id);

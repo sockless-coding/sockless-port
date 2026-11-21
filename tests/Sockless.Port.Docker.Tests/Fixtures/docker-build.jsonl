@@ -1,0 +1,31 @@
+{"stream":"Step 1/6 : FROM busybox:1.37"}
+{"stream":"\n"}
+{"stream":" ---\u003e a7dbc319b143\n"}
+{"stream":"Step 2/6 : LABEL org.example.note=fixture"}
+{"stream":"\n"}
+{"stream":" ---\u003e Running in 08fd9008ad50\n"}
+{"stream":" ---\u003e Removed intermediate container 08fd9008ad50\n"}
+{"stream":" ---\u003e b17d19e1f112\n"}
+{"stream":"Step 3/6 : RUN echo built \u003e /built.txt"}
+{"stream":"\n"}
+{"stream":" ---\u003e Running in e6de638e0a0c\n"}
+{"stream":" ---\u003e Removed intermediate container e6de638e0a0c\n"}
+{"stream":" ---\u003e d72c45370683\n"}
+{"stream":"Step 4/6 : EXPOSE 8080"}
+{"stream":"\n"}
+{"stream":" ---\u003e Running in a19232793e55\n"}
+{"stream":" ---\u003e Removed intermediate container a19232793e55\n"}
+{"stream":" ---\u003e ad4a54e5df84\n"}
+{"stream":"Step 5/6 : ENTRYPOINT [\"sh\",\"-c\"]"}
+{"stream":"\n"}
+{"stream":" ---\u003e Running in bd38ae2ee276\n"}
+{"stream":" ---\u003e Removed intermediate container bd38ae2ee276\n"}
+{"stream":" ---\u003e ad2a8854f6f8\n"}
+{"stream":"Step 6/6 : CMD [\"cat /built.txt\"]"}
+{"stream":"\n"}
+{"stream":" ---\u003e Running in 704b671238ec\n"}
+{"stream":" ---\u003e Removed intermediate container 704b671238ec\n"}
+{"stream":" ---\u003e 1b2635b6df79\n"}
+{"aux":{"ID":"sha256:1b2635b6df795f12f07c5f11035529b14df6f103645d71598ce5a6d6af17d0b9"}}
+{"stream":"Successfully built 1b2635b6df79\n"}
+{"stream":"Successfully tagged fixture/app:1\n"}

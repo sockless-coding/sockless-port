@@ -1,0 +1,17 @@
+{"stream":"STEP 1/6: FROM busybox:1.37\n"}
+{"stream":"STEP 2/6: LABEL org.example.note=fixture\n"}
+{"stream":"--\u003e 2cb8b6d55a16\n"}
+{"stream":"STEP 3/6: RUN echo built \u003e /built.txt\n"}
+{"stream":"--\u003e 1c29a3941003\n"}
+{"stream":"STEP 4/6: EXPOSE 8080\n"}
+{"stream":"--\u003e a148e55657a4\n"}
+{"stream":"STEP 5/6: ENTRYPOINT [\"sh\",\"-c\"]\n"}
+{"stream":"--\u003e 1c4ffefecaa8\n"}
+{"stream":"STEP 6/6: CMD [\"cat /built.txt\"]\n"}
+{"stream":"COMMIT docker.io/fixture/app:1\n"}
+{"stream":"--\u003e 0185cb05ddf0\n"}
+{"stream":"Successfully tagged docker.io/fixture/app:1\n"}
+{"stream":"0185cb05ddf0cd21ebff9cabb51d35b4a9cf9109e7ee9f3a67dcb47ccac9c624\n"}
+{"aux":{"ID":"sha256:0185cb05ddf0cd21ebff9cabb51d35b4a9cf9109e7ee9f3a67dcb47ccac9c624"}}
+{"stream":"Successfully built 0185cb05ddf0\n"}
+{"stream":"Successfully tagged fixture/app:1\n"}

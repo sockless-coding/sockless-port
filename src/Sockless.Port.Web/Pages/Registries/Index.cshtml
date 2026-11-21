@@ -1,0 +1,68 @@
+@page "/registries"
+@model Sockless.Port.Web.Pages.Registries.IndexModel
+@{
+    ViewData["Title"] = "Registries";
+}
+
+<div class="mb-6">
+    <h2 class="page-title">Registries</h2>
+    <p class="mt-1 text-secondary">Credentials for private images. Every endpoint uses them to pull and build from the matching registry.</p>
+</div>
+
+@if (Model.Registries.Count == 0)
+{
+    <section class="card mb-6">
+        <div class="empty-state">
+            <icon name="key" class="h-12 w-12" stroke-width="1.5" />
+            <p class="text-base text-heading">No registry credentials yet</p>
+            <p class="text-secondary">Public images need none. Add credentials below for private ones, or to lift Docker Hub's pull limits.</p>
+        </div>
+    </section>
+}
+else
+{
+    <div class="table-wrap mb-6">
+        <table class="table">
+            <caption class="sr-only">Registry credentials</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Registry</th>
+                    <th scope="col">User name</th>
+                    <th scope="col">Updated</th>
+                    <th scope="col" class="num"><span class="sr-only">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var registry in Model.Registries)
+                {
+                    <tr>
+                        <th scope="row">
+                            <a asp-page="/Registries/Edit" asp-route-id="@registry.Id" class="font-semibold hover:underline">@registry.Name</a>
+                            @if (!registry.Readable)
+                            {
+                                <span class="mt-1 flex"><span class="badge danger" title="The encryption keys changed since it was saved">Re-enter password</span></span>
+                            }
+                        </th>
+                        <td class="font-mono text-xs">@registry.Registry</td>
+                        <td class="font-mono text-xs">@registry.Username</td>
+                        <td class="whitespace-nowrap text-secondary" title="@Format.Timestamp(registry.UpdatedAt)">@Format.Relative(registry.UpdatedAt)</td>
+                        <td class="num">
+                            <a asp-page="/Registries/Edit" asp-route-id="@registry.Id" class="btn-soft" aria-label="Edit @registry.Name">Edit</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<section class="card" aria-labelledby="add-title">
+    <h3 id="add-title" class="section-title">Add credentials</h3>
+    <form method="post" class="space-y-4" novalidate>
+        <partial name="_RegistryFields" model="Model.Form" view-data='new ViewDataDictionary(ViewData) { ["Editing"] = false }' />
+        <div class="flex justify-end">
+            <button type="submit" class="btn-soft secondary"><icon name="plus" class="h-4 w-4" /> Add credentials</button>
+        </div>
+    </form>
+</section>

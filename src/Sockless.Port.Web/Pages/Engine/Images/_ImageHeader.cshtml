@@ -1,0 +1,109 @@
+@* Name, badges and actions of an image, and its tabs. Model: any image page. *@
+@model Sockless.Port.Web.Infrastructure.ImagePageModel
+@using Sockless.Port.Web.Pages.Engine.Images
+@{
+    var current = ViewContext.RouteData.Values["page"] as string;
+    var tab = DetailModel.Tabs.FirstOrDefault(t => t.Page == current).Tab;
+    var image = Model.Image;
+    var name = Model.DisplayName;
+    var running = Model.UsedBy.Count(c => c.State is "running");
+}
+
+<nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+    <a asp-page="/Engine/Images/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Images</a>
+    <span class="text-line-accent" aria-hidden="true">/</span>
+    <span aria-current="page">@name</span>
+</nav>
+
+<div class="mb-4 flex flex-wrap items-start justify-between gap-4">
+    <div class="min-w-0">
+        <h2 class="page-title break-all">@name</h2>
+        @if (image is not null)
+        {
+            <div class="mt-2 flex flex-wrap items-center gap-1">
+                @if (Model.Tags.Count == 0)
+                {
+                    <span class="badge-stat" title="No tag points at it any more">Dangling</span>
+                }
+                <span class="badge-stat" title="@image.Id">@Model.ShortId</span>
+                <span class="badge-stat" title="Size on disk">@Format.Bytes(image.Size)</span>
+                @if (Model.UsedBy.Count > 0)
+                {
+                    <span class="badge-stat">Used by @Model.UsedBy.Count</span>
+                }
+            </div>
+        }
+    </div>
+
+    @if (image is not null)
+    {
+        <div class="flex flex-wrap items-center gap-2">
+            @if (Model.Tags.Count > 0)
+            {
+                <a asp-page="/Engine/Containers/Create" asp-route-endpointId="@Model.EndpointId" asp-route-image="@Model.Tags[0]" class="btn-soft secondary">
+                    <icon name="plus" class="h-4 w-4" /> Create container
+                </a>
+                <form method="post" asp-page="/Engine/Images/Detail" asp-page-handler="Pull"
+                      asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId"
+                      data-pull-form data-endpoint="@Model.EndpointId">
+                    <input type="hidden" name="tab" value="@tab" />
+                    <input type="hidden" name="reference" value="@Model.Tags[0]" />
+                    <input type="hidden" name="tag" value="@Model.Tags[0]" />
+                    <button type="submit" class="btn-soft"><icon name="arrow-down-tray" class="h-4 w-4" /> Pull @Model.Tags[0]</button>
+                </form>
+                <form method="post" asp-page="/Engine/Images/Detail" asp-page-handler="CheckUpdate"
+                      asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId">
+                    <input type="hidden" name="tab" value="@tab" />
+                    <button type="submit" class="btn-soft"><icon name="arrow-up-circle" class="h-4 w-4" /> Check for update</button>
+                </form>
+            }
+            <details class="menu" data-menu>
+                <summary class="btn-soft" aria-label="More actions for @name">More <icon name="chevron-down" class="h-4 w-4" /></summary>
+                <div class="menu-panel w-80 p-3">
+                    <form method="post" asp-page="/Engine/Images/Detail" asp-page-handler="Tag"
+                          asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId" class="mb-3">
+                        <input type="hidden" name="tab" value="@tab" />
+                        <p class="label-caps mb-1">Add a tag</p>
+                        <div class="field flex gap-2">
+                            <label for="tag-reference" class="sr-only">New tag</label>
+                            <input id="tag-reference" name="reference" class="font-mono" placeholder="app:1.2" autocomplete="off" spellcheck="false" required />
+                            <button type="submit" class="btn-soft secondary"><icon name="tag" class="h-4 w-4" /> Tag</button>
+                        </div>
+                    </form>
+                    <form method="post" asp-page="/Engine/Images/Detail" asp-page-handler="Remove"
+                          asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId">
+                        <input type="hidden" name="tab" value="@tab" />
+                        <p class="label-caps mb-1">Remove</p>
+                        <label class="mb-2 flex items-center gap-2 text-secondary">
+                            <input type="checkbox" name="force" value="true" class="accent-accent" /> Even if stopped containers use it
+                        </label>
+                        <button type="submit" class="btn-soft danger"
+                                data-confirm="Remove image @name?@(Model.Tags.Count > 1 ? $" All {Model.Tags.Count} tags are removed." : "")@(running > 0 ? $" {running} running {(running == 1 ? "container uses" : "containers use")} it, so the engine will refuse." : "")">
+                            <icon name="trash" class="h-4 w-4" /> Remove image
+                        </button>
+                    </form>
+                </div>
+            </details>
+        </div>
+    }
+</div>
+
+<nav aria-label="Image" class="tabs mb-6">
+    @foreach (var (key, tabPage, label) in DetailModel.Tabs)
+    {
+        <a asp-page="@tabPage" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId"
+           class="tab" aria-current="@(key == tab ? "page" : null)">@label</a>
+    }
+</nav>
+
+@if (Model.Error is not null)
+{
+    <div class="callout danger mb-4" role="alert">
+        <icon name="exclamation-triangle" class="h-5 w-5" />
+        <p>@Model.Error</p>
+    </div>
+}
+else if (Model.Client is null)
+{
+    <div class="mb-4"><partial name="_EndpointStateCallout" model="Model.Connection" /></div>
+}

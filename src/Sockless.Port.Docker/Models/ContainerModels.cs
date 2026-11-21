@@ -278,28 +278,3 @@ public sealed record ExecInspect
     public bool Running { get; init; }
     public int? ExitCode { get; init; }
 }
-
-/// <summary>One line of pull progress (<c>POST /images/create</c>).</summary>
-public sealed record PullProgress
-{
-    public string? Status { get; init; }
-
-    /// <summary>The layer, for per-layer lines.</summary>
-    public string? Id { get; init; }
-
-    public string? Progress { get; init; }
-    public ProgressDetail? ProgressDetail { get; init; }
-    public string? Error { get; init; }
-    public ErrorDetail? ErrorDetail { get; init; }
-}
-
-public sealed record ProgressDetail
-{
-    public long Current { get; init; }
-    public long Total { get; init; }
-}
-
-public sealed record ErrorDetail
-{
-    public string? Message { get; init; }
-}

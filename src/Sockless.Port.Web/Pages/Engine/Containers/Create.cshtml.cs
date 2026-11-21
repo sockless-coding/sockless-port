@@ -2,11 +2,12 @@ using Microsoft.AspNetCore.Mvc;
 using Sockless.Port.Containers;
 using Sockless.Port.Docker;
 using Sockless.Port.Engines;
+using Sockless.Port.Registries;
 using Sockless.Port.Web.Infrastructure;
 
 namespace Sockless.Port.Web.Pages.Engine.Containers;
 
-public sealed class CreateModel(EngineConnections connections) : EndpointPageModel(connections)
+public sealed class CreateModel(EngineConnections connections, RegistryCredentials registries) : EndpointPageModel(connections)
 {
     [BindProperty]
     public ContainerSpec Input { get; set; } = new();
@@ -18,6 +19,10 @@ public sealed class CreateModel(EngineConnections connections) : EndpointPageMod
     [BindProperty]
     public bool Start { get; set; } = true;
 
+    /// <summary>Set by images.js after it pulled the image with live progress, so the post doesn't pull again.</summary>
+    [BindProperty]
+    public bool Pulled { get; set; }
+
     /// <summary>The container being duplicated, if any.</summary>
     public string? From { get; private set; }
 
@@ -25,10 +30,15 @@ public sealed class CreateModel(EngineConnections connections) : EndpointPageMod
 
     public string? Error { get; private set; }
 
-    public async Task<IActionResult> OnGetAsync(string? from, CancellationToken cancellationToken)
+    /// <param name="from">A container to duplicate.</param>
+    /// <param name="image">An image to start from (the image page's "Create container").</param>
+    public async Task<IActionResult> OnGetAsync(string? from, string? image, CancellationToken cancellationToken)
     {
         if (Client is not { } client)
             return Page();
+
+        if (!string.IsNullOrWhiteSpace(image) && string.IsNullOrWhiteSpace(from))
+            Input.Image = image.Trim();
 
         if (!string.IsNullOrWhiteSpace(from))
         {
@@ -69,9 +79,10 @@ public sealed class CreateModel(EngineConnections connections) : EndpointPageMod
         var name = string.IsNullOrWhiteSpace(Input.Name) ? null : Input.Name.Trim();
         try
         {
-            if (Pull == "always" || !await client.ImageExistsAsync(image, cancellationToken))
+            if (!Pulled && (Pull == "always" || !await client.ImageExistsAsync(image, cancellationToken)))
             {
-                await foreach (var _ in client.PullImageAsync(image, cancellationToken: cancellationToken)) { }
+                var auth = await registries.AuthHeaderForAsync(image, cancellationToken);
+                await foreach (var _ in client.PullImageAsync(image, auth, cancellationToken)) { }
             }
 
             var created = await client.CreateContainerAsync(name, body, cancellationToken);

@@ -76,7 +76,8 @@ public sealed class ContainerPagesTests : IDisposable
         var policy = response.Headers.GetValues("Content-Security-Policy").Single();
         var nonce = System.Text.RegularExpressions.Regex.Match(policy, "'nonce-([^']+)'").Groups[1].Value;
         Assert.NotEmpty(nonce);
-        Assert.Contains($"name=\"csp-style-nonce\" content=\"{nonce}\"", html);
+        // Razor encodes '+' in the base64 nonce as &#x2B;; browsers decode attributes, so compare decoded.
+        Assert.Contains($"name=\"csp-style-nonce\" content=\"{nonce}\"", System.Net.WebUtility.HtmlDecode(html));
         Assert.DoesNotContain("unsafe-inline", policy);
     }
 }

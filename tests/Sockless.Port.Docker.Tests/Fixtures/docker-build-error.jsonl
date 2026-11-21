@@ -1,0 +1,7 @@
+{"stream":"Step 1/2 : FROM busybox:1.37"}
+{"stream":"\n"}
+{"stream":" ---\u003e a7dbc319b143\n"}
+{"stream":"Step 2/2 : RUN exit 3"}
+{"stream":"\n"}
+{"stream":" ---\u003e Running in cb2e9f2b32d7\n"}
+{"error":"The command '/bin/sh -c exit 3' returned a non-zero code: 3","errorDetail":{"code":3,"message":"The command '/bin/sh -c exit 3' returned a non-zero code: 3"}}

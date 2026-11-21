@@ -2,12 +2,14 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Sockless.Port.Containers;
 using Sockless.Port.Engines;
+using Sockless.Port.Images;
+using Sockless.Port.Registries;
 using Sockless.Port.Web.Infrastructure;
 
 namespace Sockless.Port.Web.Pages.Engine.Containers;
 
 /// <summary>A container's overview, and the handler for every action taken from its pages.</summary>
-public sealed partial class DetailModel(EngineConnections connections) : ContainerPageModel(connections)
+public sealed partial class DetailModel(EngineConnections connections, RegistryCredentials registries, ImageUpdates updates) : ContainerPageModel(connections)
 {
     /// <summary>The container's tabs: route suffix → (page, label).</summary>
     public static readonly IReadOnlyList<(string Tab, string Page, string Label)> Tabs =
@@ -18,6 +20,9 @@ public sealed partial class DetailModel(EngineConnections connections) : Contain
         ("console", "/Engine/Containers/Console", "Console"),
         ("inspect", "/Engine/Containers/Inspect", "Inspect"),
     ];
+
+    /// <summary>The last update check's result for the container's image, if it was checked.</summary>
+    public UpdateStatus? ImageUpdate => Container?.Image is { } image ? updates.ForImage(EndpointId, image) : null;
 
     public void OnGet()
     {
@@ -50,7 +55,8 @@ public sealed partial class DetailModel(EngineConnections connections) : Contain
         return BackTo(tab);
     }
 
-    public async Task<IActionResult> OnPostRecreateAsync(bool pull)
+    /// <param name="pulled">images.js already pulled the image with live progress.</param>
+    public async Task<IActionResult> OnPostRecreateAsync(bool pull, bool pulled)
     {
         if (SwarmService is not null)
         {
@@ -59,8 +65,9 @@ public sealed partial class DetailModel(EngineConnections connections) : Contain
         }
 
         string? newId = null;
-        var ok = await TryEngineAsync(async client => newId = await ContainerRecreator.RecreateAsync(client, ContainerId, pull, HttpContext.RequestAborted),
-            pull ? $"Pulled the image and recreated {DisplayName}." : $"Recreated {DisplayName}.");
+        var ok = await TryEngineAsync(async client => newId = await ContainerRecreator.RecreateAsync(client, ContainerId, pull && !pulled, HttpContext.RequestAborted,
+                registries.AuthHeaderForAsync),
+            pull || pulled ? $"Pulled the image and recreated {DisplayName}." : $"Recreated {DisplayName}.");
         return ok ? RedirectToPage("/Engine/Containers/Detail", new { endpointId = EndpointId, containerId = newId }) : BackTo(null);
     }
 

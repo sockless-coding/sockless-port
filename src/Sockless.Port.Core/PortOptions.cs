@@ -21,4 +21,7 @@ public sealed class PortOptions
     public string DatabasePath => Path.Combine(DataPath, "port.db");
 
     public string KeysPath => Path.Combine(DataPath, "keys");
+
+    /// <summary>Uploaded build contexts while they're built: on the data volume, since they can be large. Emptied on start.</summary>
+    public string TempPath => Path.Combine(DataPath, "tmp");
 }

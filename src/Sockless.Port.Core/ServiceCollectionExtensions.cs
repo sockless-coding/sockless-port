@@ -11,6 +11,8 @@ using Sockless.Port.Docker;
 using Sockless.Port.Engines;
 using Microsoft.Extensions.Options;
 using Sockless.Port.Data;
+using Sockless.Port.Images;
+using Sockless.Port.Registries;
 using Sockless.Port.Setup;
 
 namespace Sockless.Port;
@@ -61,6 +63,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<LocalEngineDetector>();
         services.TryAddSingleton<IEngineEventSink, NullEngineEventSink>();
         services.AddHostedService<EngineMonitor>();
+
+        services.AddSingleton<RegistryCredentials>();
+        services.AddSingleton<ImageJobs>();
+        services.AddSingleton<ImageUpdates>();
         return services;
     }
 
@@ -70,6 +76,10 @@ public static class ServiceCollectionExtensions
         var port = services.GetRequiredService<IOptions<PortOptions>>().Value;
         Directory.CreateDirectory(port.DataPath);
         Directory.CreateDirectory(port.KeysPath);
+        // Build contexts left by a crash mid-upload or mid-build.
+        if (Directory.Exists(port.TempPath))
+            Directory.Delete(port.TempPath, recursive: true);
+        Directory.CreateDirectory(port.TempPath);
 
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<PortDbContext>();

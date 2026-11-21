@@ -1,0 +1,12 @@
+{"status":"Pulling fs layer","progressDetail":{},"id":"f7a79299dedd"}
+{"status":"Pulling fs layer","progressDetail":{},"id":"37fb86c2a767"}
+{"status":"Pulling fs layer","progressDetail":{},"id":"0069ea31add0"}
+{"status":"Pulling fs layer","progressDetail":{},"id":"faa890a31e98"}
+{"status":"Download complete","progressDetail":{},"id":"f7a79299dedd"}
+{"status":"Download complete","progressDetail":{},"id":"0069ea31add0"}
+{"status":"Download complete","progressDetail":{},"id":"faa890a31e98"}
+{"status":"Downloading","progressDetail":{"current":18120100,"total":29856132},"id":"37fb86c2a767","progress":"[==============================\u003e                    ]  18.12MB/29.86MB"}
+{"status":"Download complete","progressDetail":{},"id":"37fb86c2a767"}
+{"status":"Pulling fs layer","progressDetail":{},"id":"c0e8df938051"}
+{"status":"Download complete","progressDetail":{},"id":"c0e8df938051"}
+{"status":"Download complete","progressDetail":{},"id":"c0e8df938051"}
