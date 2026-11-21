@@ -1,0 +1,54 @@
+@page "/endpoints/{endpointId:int}/containers/{containerId}/console"
+@model Sockless.Port.Web.Pages.Engine.Containers.ConsoleModel
+@{
+    ViewData["Title"] = $"{Model.DisplayName} console";
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <partial name="_ContainerHeader" model="Model" />
+
+    @if (Model.Container is not null)
+    {
+        @if (!Model.IsRunning)
+        {
+            <section class="card">
+                <div class="empty-state">
+                    <icon name="command-line" class="h-12 w-12" stroke-width="1.5" />
+                    <p class="text-base text-heading">The container isn't running</p>
+                    <p class="text-secondary">A console runs a command inside the container, so start it first.</p>
+                </div>
+            </section>
+        }
+        else
+        {
+            <section class="card" aria-labelledby="console-title" data-terminal
+                     data-endpoint="@Model.EndpointId" data-container="@Model.Container.Id">
+                <h3 id="console-title" class="sr-only">Console</h3>
+                @* Handled by terminal.js, not submitted: opted out of hx-boost. *@
+                <form class="mb-3 flex flex-wrap items-end gap-3" hx-boost="false" data-terminal-form>
+                    <div class="field min-w-[12rem] flex-1">
+                        <label for="console-command">Command</label>
+                        <input id="console-command" list="console-shells" value="/bin/sh" class="font-mono" autocomplete="off" spellcheck="false" data-terminal-command />
+                        <datalist id="console-shells">
+                            @foreach (var shell in ConsoleModel.Shells)
+                            {
+                                <option value="@shell"></option>
+                            }
+                        </datalist>
+                    </div>
+                    <div class="field">
+                        <label for="console-user">User</label>
+                        <input id="console-user" placeholder="@(string.IsNullOrEmpty(Model.Container.Config?.User) ? "Container default" : Model.Container.Config.User)"
+                               class="font-mono" autocomplete="off" spellcheck="false" data-terminal-user />
+                    </div>
+                    <span class="flex gap-2 pb-1">
+                        <button type="submit" class="btn-soft secondary" data-terminal-connect><icon name="command-line" class="h-4 w-4" /> Connect</button>
+                        <button type="button" class="btn-soft danger" data-terminal-disconnect hidden>Disconnect</button>
+                    </span>
+                </form>
+                <div class="terminal" data-terminal-screen hidden></div>
+                <p class="mt-2 text-xs text-secondary" aria-live="polite" data-terminal-status>Not connected. The command runs inside the container with a terminal attached.</p>
+            </section>
+        }
+    }
+</div>

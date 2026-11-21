@@ -18,7 +18,7 @@ public sealed class DockerClientOptions
 /// A connection to one engine, pinned to the API version negotiated in <see cref="ConnectAsync"/>.
 /// Thread-safe; keep one per endpoint.
 /// </summary>
-public sealed class DockerClient : IDisposable
+public sealed partial class DockerClient : IDisposable
 {
     /// <summary>Oldest API version supported. 1.41 is what Podman's compatible API reports.</summary>
     public static readonly Version MinimumApiVersion = new(1, 41);
@@ -162,23 +162,27 @@ public sealed class DockerClient : IDisposable
                ?? throw new InvalidDataException($"The engine returned an empty response for {StripQuery(pathAndQuery)}.");
     }
 
-    private async Task SendAsync(HttpMethod method, string pathAndQuery, HttpContent? content, CancellationToken cancellationToken)
+    /// <param name="allowNotModified">Treat 304 as success (start/stop of a container already in that state).</param>
+    private async Task SendAsync(HttpMethod method, string pathAndQuery, HttpContent? content, CancellationToken cancellationToken,
+        TimeSpan? timeout = null, bool allowNotModified = false)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(_requestTimeout);
-        using var response = await SendCoreAsync(method, pathAndQuery, content, cts.Token);
+        cts.CancelAfter(timeout ?? _requestTimeout);
+        using var response = await SendCoreAsync(method, pathAndQuery, content, cts.Token, allowNotModified: allowNotModified);
     }
 
-    private async Task<HttpResponseMessage> SendCoreAsync(HttpMethod method, string pathAndQuery, HttpContent? content, CancellationToken cancellationToken)
+    private async Task<HttpResponseMessage> SendCoreAsync(HttpMethod method, string pathAndQuery, HttpContent? content, CancellationToken cancellationToken,
+        HttpCompletionOption completion = HttpCompletionOption.ResponseContentRead, bool allowNotModified = false)
     {
         using var request = new HttpRequestMessage(method, pathAndQuery.StartsWith(_prefix, StringComparison.Ordinal) ? pathAndQuery : _prefix + pathAndQuery)
         {
             Content = content,
         };
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await _http.SendAsync(request, completion, cancellationToken);
         try
         {
-            await EnsureSuccessAsync(response, StripQuery(pathAndQuery), cancellationToken);
+            if (!(allowNotModified && response.StatusCode == System.Net.HttpStatusCode.NotModified))
+                await EnsureSuccessAsync(response, StripQuery(pathAndQuery), cancellationToken);
             return response;
         }
         catch

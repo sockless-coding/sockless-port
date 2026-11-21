@@ -35,6 +35,8 @@ SOCKLESS_PORT_TEST_ENGINE=unix:///var/run/docker.sock SOCKLESS_PORT_TEST_EXPECT=
 - Decide what to show from `EngineDescriptor.Capabilities` (`Swarm`, `SwarmManager`, `Pods`), never from `EngineKind`.
 - Engine differences (Podman vs Docker) are handled inside `Sockless.Port.Docker` (e.g. `Streams/EventNormalizer.cs`), never in pages.
 - New API models go in `Docker/Models` and must be registered in `DockerJsonContext`. Check them against real responses: fixtures in `tests/Sockless.Port.Docker.Tests/Fixtures`, captured only from throwaway engines.
+- Container operations that need care (recreate, create bodies) live in `Core/Containers` and work on raw inspect JSON (`JsonObject`), so settings the UI doesn't model survive. Engine quirks found by the integration tests are handled there too (e.g. no `Hostname` with host networking, no `ShmSize` with host IPC).
+- Form posts that call the engine go through `EndpointPageModel.TryEngineAsync`: failures become a flash message, success a confirmation, then post/redirect/get.
 - Live updates: the monitor forwards engine events to `EngineHub`, and `site.js` turns them into the htmx body events `engine-changed` (current endpoint's resources changed), `endpoint-state` (current endpoint's connection changed) and `endpoints-changed` (any endpoint's state). Make a fragment live with `hx-get` + `hx-trigger="engine-changed from:body"`. htmx trigger filters (`[...]`) need eval, which the CSP forbids.
 
 ## UI: follow the Sockless guidelines
@@ -58,6 +60,16 @@ Rules to follow without re-reading:
 - Icons: Heroicons outline only, via `<icon name="..." />` (files in `src/Sockless.Port.Web/Icons/`, taken from `heroicons@2.2.0/24/outline`).
 - Destructive actions confirm first and name the target.
 - Self-host everything. The CSP (`Infrastructure/SecurityHeaders.cs`) allows only `'self'`: no CDNs, inline scripts, inline styles or `hx-on`/eval.
+
+## Browser code
+
+- Libraries and page scripts load once in `_Layout.cshtml`. A page's behaviour is a component: `SocklessPort.component('[data-x]', el => { …; return cleanup; })` in its own file under `wwwroot/js/`. It mounts when the element arrives (initial load or htmx swap), and its cleanup runs when the element is swapped out. Use this, not `DOMContentLoaded`, because hx-boost never reloads the page.
+- Streams (logs, stats) use `SocklessPort.connection.stream(...)`. Terminals use hub methods plus `terminalOutput`/`terminalExit` messages. Show hub errors with `SocklessPort.message(err)`.
+- Destructive buttons carry `data-confirm="Remove web?"` (or `data-confirm-bulk="Remove {list}?"` in bulk forms). `site.js` shows the styled dialog.
+- CSP: no inline `style` attributes anywhere. `<style>` elements created by libraries get the per-response nonce from `csp-nonce.js`. htmx is configured not to settle the `style` attribute.
+- Tailwind scans `wwwroot/js` too. Component classes used only from JS are kept, but only if they appear literally in a scanned file.
+- Use the `hidden` attribute to hide things. A global `[hidden] { display: none !important }` keeps component display rules from defeating it.
+- Charts: series colours are `accent` then `info` (copper-light, gaslight). That pair passes colour-vision checks; `success` is reserved for status.
 
 ## Code conventions
 

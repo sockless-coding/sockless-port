@@ -2,4 +2,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Sockless.Port.Core\Sockless.Port.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Shared with the client tests: real responses captured from throwaway engines. -->
+    <None Include="..\Sockless.Port.Docker.Tests\Fixtures\*.json" Link="Fixtures\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

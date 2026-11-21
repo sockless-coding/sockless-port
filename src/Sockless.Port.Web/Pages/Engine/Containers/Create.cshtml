@@ -1,0 +1,168 @@
+@page "/endpoints/{endpointId:int}/containers/create"
+@model Sockless.Port.Web.Pages.Engine.Containers.CreateModel
+@using Sockless.Port.Containers
+@{
+    ViewData["Title"] = "Create container";
+}
+
+<nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+    <a asp-page="/Engine/Containers/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Containers</a>
+    <span class="text-line-accent" aria-hidden="true">/</span>
+    <span aria-current="page">Create</span>
+</nav>
+
+<div class="mb-6">
+    <h2 class="page-title">Create container</h2>
+    <p class="mt-1 text-secondary">
+        @if (Model.From is not null)
+        {
+            <text>A copy of <span class="font-mono">@Model.From</span>. Change what you need; the original is left as it is.</text>
+        }
+        else
+        {
+            <text>Fields use the same formats as <span class="font-mono">docker run</span>, one entry per line.</text>
+        }
+    </p>
+</div>
+
+@if (Model.Client is null)
+{
+    <partial name="_EndpointStateCallout" model="Model.Connection" />
+}
+else
+{
+    @if (Model.Error is not null)
+    {
+        <div class="callout danger mb-4" role="alert">
+            <icon name="exclamation-triangle" class="h-5 w-5" />
+            <p>@Model.Error</p>
+        </div>
+    }
+
+    <form method="post" class="space-y-6" novalidate>
+        <section class="card space-y-4" aria-labelledby="create-basics">
+            <h3 id="create-basics" class="section-title">Container</h3>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div class="field">
+                    <label asp-for="Input.Image">Image</label>
+                    <input asp-for="Input.Image" class="font-mono" placeholder="nginx:1.27" autocomplete="off" spellcheck="false" />
+                    <partial name="_FieldError" model='"Input_Image"' />
+                </div>
+                <div class="field">
+                    <label asp-for="Input.Name">Name</label>
+                    <input asp-for="Input.Name" class="font-mono" placeholder="Generated if empty" autocomplete="off" spellcheck="false" />
+                    <partial name="_FieldError" model='"Input_Name"' />
+                </div>
+            </div>
+            <fieldset>
+                <legend class="mb-1 text-secondary">Image pull</legend>
+                <div class="flex flex-wrap gap-6">
+                    <label class="flex items-center gap-2"><input type="radio" asp-for="Pull" value="missing" class="accent-accent" /> Only if it isn't on the engine</label>
+                    <label class="flex items-center gap-2"><input type="radio" asp-for="Pull" value="always" class="accent-accent" /> Always pull the latest</label>
+                </div>
+            </fieldset>
+            <div class="field">
+                <label asp-for="Input.Command">Command</label>
+                <input asp-for="Input.Command" class="font-mono" placeholder="The image's default" autocomplete="off" spellcheck="false" aria-describedby="command-hint" />
+                <p class="hint" id="command-hint">Replaces the image's command. Quote arguments with spaces: <span class="font-mono">sh -c 'echo hello'</span></p>
+                <partial name="_FieldError" model='"Input_Command"' />
+            </div>
+        </section>
+
+        <section class="card space-y-4" aria-labelledby="create-network">
+            <h3 id="create-network" class="section-title">Network and ports</h3>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div class="field">
+                    <label asp-for="Input.Network">Network</label>
+                    <select asp-for="Input.Network">
+                        <option value="">Default (bridge)</option>
+                        @foreach (var network in Model.Networks)
+                        {
+                            <option value="@network" selected="@(network == Model.Input.Network)">@network</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label asp-for="Input.Ports">Published ports</label>
+                    <textarea asp-for="Input.Ports" class="font-mono" rows="3" placeholder="8080:80&#10;127.0.0.1:5353:53/udp" spellcheck="false" aria-describedby="ports-hint"></textarea>
+                    <p class="hint" id="ports-hint">host:container, optionally with an address and /udp. A container port alone gets a random host port.</p>
+                    <partial name="_FieldError" model='"Input_Ports"' />
+                </div>
+            </div>
+        </section>
+
+        <section class="card space-y-4" aria-labelledby="create-storage">
+            <h3 id="create-storage" class="section-title">Volumes</h3>
+            <div class="field">
+                <label asp-for="Input.Volumes">Volumes and bind mounts</label>
+                <textarea asp-for="Input.Volumes" class="font-mono" rows="3" placeholder="data:/var/lib/app&#10;/srv/config:/etc/app:ro" spellcheck="false" aria-describedby="volumes-hint"></textarea>
+                <p class="hint" id="volumes-hint">volume-name:/path, /host/path:/path, or /path alone for an anonymous volume. Add :ro for read-only.</p>
+                <partial name="_FieldError" model='"Input_Volumes"' />
+            </div>
+        </section>
+
+        <section class="card space-y-4" aria-labelledby="create-env">
+            <h3 id="create-env" class="section-title">Environment and labels</h3>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div class="field">
+                    <label asp-for="Input.Environment">Environment variables</label>
+                    <textarea asp-for="Input.Environment" class="font-mono" rows="5" placeholder="TZ=Europe/Stockholm" spellcheck="false"></textarea>
+                    <partial name="_FieldError" model='"Input_Environment"' />
+                </div>
+                <div class="field">
+                    <label asp-for="Input.Labels">Labels</label>
+                    <textarea asp-for="Input.Labels" class="font-mono" rows="5" placeholder="team=infra" spellcheck="false"></textarea>
+                    <partial name="_FieldError" model='"Input_Labels"' />
+                </div>
+            </div>
+        </section>
+
+        <section class="card space-y-4" aria-labelledby="create-runtime">
+            <h3 id="create-runtime" class="section-title">Runtime</h3>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div class="field">
+                    <label asp-for="Input.RestartPolicy">Restart policy</label>
+                    <select asp-for="Input.RestartPolicy">
+                        @foreach (var policy in ContainerSpecBuilder.RestartPolicies)
+                        {
+                            <option value="@policy" selected="@(policy == Model.Input.RestartPolicy)">@policy</option>
+                        }
+                    </select>
+                    <partial name="_FieldError" model='"Input_RestartPolicy"' />
+                </div>
+                <div class="field">
+                    <label asp-for="Input.MaxRetries">Retries (on-failure)</label>
+                    <input asp-for="Input.MaxRetries" type="number" min="0" placeholder="Unlimited" />
+                    <partial name="_FieldError" model='"Input_MaxRetries"' />
+                </div>
+                <div class="field">
+                    <label asp-for="Input.User">User</label>
+                    <input asp-for="Input.User" class="font-mono" placeholder="The image's default" autocomplete="off" />
+                </div>
+                <div class="field">
+                    <label asp-for="Input.MemoryLimit">Memory limit (MB)</label>
+                    <input asp-for="Input.MemoryLimit" type="number" min="6" placeholder="No limit" />
+                    <partial name="_FieldError" model='"Input_MemoryLimit"' />
+                </div>
+                <div class="field">
+                    <label asp-for="Input.CpuLimit">CPU limit (CPUs)</label>
+                    <input asp-for="Input.CpuLimit" type="number" min="0.01" step="0.01" placeholder="No limit" value="@ContainerSpecMapper.FormatCpus(Model.Input.CpuLimit)" />
+                    <partial name="_FieldError" model='"Input_CpuLimit"' />
+                </div>
+                <div class="field">
+                    <label asp-for="Input.WorkingDir">Working directory</label>
+                    <input asp-for="Input.WorkingDir" class="font-mono" placeholder="The image's default" autocomplete="off" />
+                </div>
+            </div>
+            <div class="flex flex-wrap gap-6">
+                <label class="flex items-center gap-2"><input asp-for="Input.Tty" class="accent-accent" /> Allocate a terminal (TTY)</label>
+                <label class="flex items-center gap-2"><input asp-for="Input.Interactive" class="accent-accent" /> Keep standard input open</label>
+            </div>
+        </section>
+
+        <div class="flex flex-wrap items-center justify-end gap-4">
+            <label class="flex items-center gap-2 text-secondary"><input asp-for="Start" class="accent-accent" /> Start it after creating</label>
+            <button type="submit" class="btn-primary">Create container</button>
+        </div>
+    </form>
+}

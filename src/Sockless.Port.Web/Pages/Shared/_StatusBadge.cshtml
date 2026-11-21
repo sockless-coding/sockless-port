@@ -1,0 +1,9 @@
+@model Sockless.Port.Web.Infrastructure.StatusBadge
+@if (Model.Kind.Length == 0)
+{
+    <span class="badge-stat">@Model.Label</span>
+}
+else
+{
+    <span class="badge @Model.Kind">@Model.Label</span>
+}

@@ -25,7 +25,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <_TailwindInputs Include="$(TailwindInput);$(TailwindConfig);Pages/**/*.cshtml;Infrastructure/**/*.cs;$(RepoRoot)build/Tailwind.targets" />
+    <_TailwindInputs Include="$(TailwindInput);$(TailwindConfig);Pages/**/*.cshtml;Infrastructure/**/*.cs;wwwroot/js/**/*.js;$(RepoRoot)build/Tailwind.targets" />
   </ItemGroup>
 
   <Target Name="EnsureTailwind" Condition="'$(SkipTailwind)' != 'true' And !Exists('$(TailwindPath)')">

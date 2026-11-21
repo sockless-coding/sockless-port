@@ -19,6 +19,10 @@ public sealed record ContainerSummary
     public string? Status { get; init; }
 
     public IReadOnlyDictionary<string, string>? Labels { get; init; }
+
+    public IReadOnlyList<ContainerPort>? Ports { get; init; }
+
+    public string DisplayName => Names is [var first, ..] && first.TrimStart('/') is { Length: > 0 } name ? name : Id[..Math.Min(12, Id.Length)];
 }
 
 /// <summary>An item of <c>GET /images/json</c>.</summary>

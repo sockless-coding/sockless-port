@@ -5,7 +5,8 @@ const rgb = (name) => `rgb(var(--sl-${name}-rgb) / <alpha-value>)`;
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ['./Pages/**/*.cshtml', './Infrastructure/**/*.cs'],
+  // Scripts too: classes only set from JS (log lines, dialog state) would otherwise be purged.
+  content: ['./Pages/**/*.cshtml', './Infrastructure/**/*.cs', './wwwroot/js/**/*.js'],
   theme: {
     extend: {
       fontFamily: {

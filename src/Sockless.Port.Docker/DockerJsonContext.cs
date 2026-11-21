@@ -23,5 +23,13 @@ namespace Sockless.Port.Docker;
 [JsonSerializable(typeof(List<NetworkSummary>))]
 [JsonSerializable(typeof(DockerEvent))]
 [JsonSerializable(typeof(ErrorResponse))]
+[JsonSerializable(typeof(ContainerInspect))]
+[JsonSerializable(typeof(ContainerCreateResponse))]
+[JsonSerializable(typeof(ContainerStats))]
+[JsonSerializable(typeof(ExecCreateRequest))]
+[JsonSerializable(typeof(ExecStartRequest))]
+[JsonSerializable(typeof(ExecInspect))]
+[JsonSerializable(typeof(IdResponse))]
+[JsonSerializable(typeof(PullProgress))]
 [JsonSerializable(typeof(Dictionary<string, string[]>))]
 internal sealed partial class DockerJsonContext : JsonSerializerContext;

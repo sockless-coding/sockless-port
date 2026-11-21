@@ -124,6 +124,16 @@ Each phase can ship on its own and ends with a working, containerised build.
 - Create/recreate container form (image, ports, env, volumes, network, restart policy, resources).
 - On Swarm, label containers that belong to a service task and link them to the service, so they aren't edited as standalone containers.
 
+**Status: done.** Notes:
+- **Pages** are `/endpoints/{id}/containers`, plus `/create`, and for each container `/{container}` (overview), `/logs`, `/stats`, `/console` and `/inspect`. Lists and overviews refresh live on engine events. A list holds its refresh while rows are selected.
+- **Create and recreate.** The create form takes `docker run`-style text (`8080:80`, `data:/data:ro`, `KEY=value`) and pulls the image when it's missing or when asked. *Duplicate* prefills the form from an existing container, without Compose or Swarm labels. *Recreate* (optionally pulling first) rebuilds the container from its raw inspect JSON, so unmodelled settings survive. It renames the old container aside, creates and starts the new one, then removes the old. On failure it puts the original back. Editing an existing container's settings in place is *Duplicate* followed by removing the old container. There's no separate edit form.
+- **Console** uses exec with a TTY over a hijacked connection (HTTP 101), bridged to xterm.js through SignalR. Sessions belong to the browser connection that opened them, close when it drops, and are capped at 8 per connection.
+- **Swarm task containers** carry a badge and a notice, and have no recreate, rename or duplicate. Changes belong on the service (Phase 7).
+- **Engine differences** found by the integration tests: Podman without cgroups (rootless without delegation, or nested) can't pause or report stats. The engine's message is shown, and the tests tolerate it. Podman's journald log driver can't follow logs without the journald events backend, and that error is shown too. Recreating under host networking or host IPC must drop `Hostname` and `ShmSize`.
+- **CSP stays strict.** xterm.js builds `<style>` elements at runtime, so pages carry a per-response style nonce that a small shim stamps on them. htmx is configured not to copy `style` attributes when it swaps content.
+- **Chart colours** are copper-light and gaslight blue, not the guideline's primary + success order. That pair fails the colour-vision check (deuteranopia ΔE 3.4), and success is a status colour. Raised as guideline feedback.
+- **Pull progress** isn't shown yet. Create and recreate wait for the pull to finish; Phase 3 adds live progress.
+
 ### Phase 3: Images and registries
 
 - List images, inspect them, view history, tag, remove, prune (dangling/unused).

@@ -59,6 +59,11 @@
 @tailwind utilities;
 
 @layer base {
+  /* Component display rules (e.g. .btn-soft's inline-flex) must not defeat the hidden attribute. */
+  [hidden] {
+    display: none !important;
+  }
+
   html {
     background: var(--sl-bg);
   }
@@ -305,6 +310,11 @@
   .field input::placeholder {
     color: var(--sl-text-muted);
   }
+  /* Identifiers, paths and ports are typed in the mono face; .field's font shorthand would win over the utility. */
+  .field .font-mono {
+    font-family: var(--sl-font-mono);
+    font-size: 0.875rem;
+  }
   .field input:focus,
   .field textarea:focus,
   .field select:focus {
@@ -525,6 +535,130 @@
   .menu-item[aria-current='true'] {
     background: rgb(var(--sl-accent-rgb) / 0.1);
     color: var(--sl-accent);
+  }
+
+  /* ---------- Tabs ---------- */
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--sl-border);
+  }
+  .tab {
+    margin-bottom: -1px;
+    padding: 0.5rem 0.875rem;
+    border-bottom: 2px solid transparent;
+    color: var(--sl-text-secondary);
+    transition: color var(--sl-duration-fast) var(--sl-ease), border-color var(--sl-duration-fast) var(--sl-ease);
+  }
+  .tab:hover {
+    color: var(--sl-accent);
+  }
+  .tab[aria-current='page'] {
+    border-bottom-color: var(--sl-accent);
+    color: var(--sl-accent);
+    font-weight: 600;
+  }
+
+  /* ---------- Code and logs ---------- */
+  .code-block {
+    overflow: auto;
+    padding: var(--sl-space-md);
+    background: var(--sl-bg);
+    border: 1px solid var(--sl-border);
+    border-radius: var(--sl-radius-sm);
+    color: var(--sl-text);
+    font-family: var(--sl-font-mono);
+    font-size: 0.75rem;
+    line-height: 1.6;
+    white-space: pre;
+  }
+
+  .log-view {
+    height: 60vh;
+    min-height: 16rem;
+    overflow: auto;
+    padding: 0.5rem 0;
+    background: var(--sl-bg);
+    border: 1px solid var(--sl-border);
+    border-radius: var(--sl-radius-sm);
+    font-family: var(--sl-font-mono);
+    font-size: 0.75rem;
+    line-height: 1.55;
+  }
+  .log-line {
+    padding: 0 var(--sl-space-md);
+    white-space: pre;
+    color: var(--sl-text);
+  }
+  .log-view.wrap .log-line {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  /* stderr is marked by a rule as well as colour, so it's never colour alone. */
+  .log-line.stderr {
+    border-left: 2px solid var(--sl-danger);
+    padding-left: calc(var(--sl-space-md) - 2px);
+    color: var(--sl-danger);
+  }
+  .log-time {
+    margin-right: 0.75rem;
+    color: var(--sl-text-secondary);
+    user-select: none;
+  }
+
+  /* ---------- Charts and terminal ---------- */
+  .chart {
+    position: relative;
+    height: 10rem;
+    margin-top: var(--sl-space-md);
+  }
+
+  .terminal {
+    height: 60vh;
+    min-height: 16rem;
+    padding: 0.5rem;
+    background: var(--sp-iron);
+    border: 1px solid var(--sl-border);
+    border-radius: var(--sl-radius-sm);
+  }
+  .terminal .xterm {
+    height: 100%;
+  }
+
+  /* ---------- Dialog ---------- */
+  .dialog {
+    width: min(32rem, calc(100vw - 2rem));
+    padding: var(--sl-space-lg);
+    background: var(--sl-surface);
+    border: 1px solid var(--sl-border);
+    border-top: 2px solid var(--sl-border-accent);
+    border-radius: var(--sl-radius-lg);
+    box-shadow: var(--sl-shadow-menu);
+    color: var(--sl-text);
+  }
+  .dialog::backdrop {
+    background: rgb(0 0 0 / 0.7);
+  }
+  .dialog-title {
+    margin-bottom: var(--sl-space-sm);
+    font-family: var(--sl-font-heading);
+    font-size: 1.125rem;
+    text-transform: uppercase;
+    letter-spacing: var(--sl-heading-tracking);
+    color: var(--sl-text-heading);
+  }
+
+  .btn-soft:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  summary.btn-soft {
+    cursor: pointer;
+    list-style: none;
+  }
+  summary.btn-soft::-webkit-details-marker {
+    display: none;
   }
 
   /* ---------- Empty state ---------- */

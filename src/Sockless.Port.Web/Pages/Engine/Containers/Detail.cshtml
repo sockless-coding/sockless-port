@@ -1,0 +1,10 @@
+@page "/endpoints/{endpointId:int}/containers/{containerId}"
+@model Sockless.Port.Web.Pages.Engine.Containers.DetailModel
+@{
+    ViewData["Title"] = Model.DisplayName;
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <partial name="_ContainerHeader" model="Model" />
+    <partial name="_ContainerOverview" model="Model" />
+</div>

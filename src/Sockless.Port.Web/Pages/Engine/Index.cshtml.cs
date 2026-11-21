@@ -35,7 +35,7 @@ public sealed class IndexModel(EngineConnections connections) : EndpointPageMode
             {
                 summary = DiskUsageSummary.From(await client.GetDiskUsageAsync(cancellationToken));
             }
-            catch (Exception ex) when (IsEngineFailure(ex, cancellationToken))
+            catch (Exception ex) when (EngineFailures.IsFailure(ex, cancellationToken))
             {
                 error = EngineErrors.Describe(ex, Connection.Address);
             }
@@ -56,16 +56,11 @@ public sealed class IndexModel(EngineConnections connections) : EndpointPageMode
             await Task.WhenAll(info, volumes, networks);
             Overview = new EngineOverview(engine, info.Result, volumes.Result.Count, networks.Result.Count);
         }
-        catch (Exception ex) when (IsEngineFailure(ex, cancellationToken))
+        catch (Exception ex) when (EngineFailures.IsFailure(ex, cancellationToken))
         {
             Error = EngineErrors.Describe(ex, Connection.Address);
         }
     }
-
-    private static bool IsEngineFailure(Exception ex, CancellationToken requestAborted) =>
-        !requestAborted.IsCancellationRequested &&
-        ex is DockerApiException or HttpRequestException or IOException or TimeoutException or TaskCanceledException
-            or ObjectDisposedException or InvalidDataException or System.Text.Json.JsonException;
 }
 
 public sealed record EngineOverview(EngineDescriptor Engine, SystemInfo Info, int Volumes, int Networks);

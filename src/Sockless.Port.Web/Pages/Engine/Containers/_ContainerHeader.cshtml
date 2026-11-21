@@ -1,0 +1,142 @@
+@* Name, state and actions of a container, and its tabs. Model: any container page. *@
+@model Sockless.Port.Web.Infrastructure.ContainerPageModel
+@using Sockless.Port.Web.Pages.Engine.Containers
+@{
+    var current = ViewContext.RouteData.Values["page"] as string;
+    var tab = DetailModel.Tabs.FirstOrDefault(t => t.Page == current).Tab;
+    var route = new { endpointId = Model.EndpointId, containerId = Model.ContainerId };
+    var container = Model.Container;
+    var state = container?.State;
+    var running = state is { Running: true, Paused: false };
+    var paused = state?.Paused == true;
+    var name = Model.DisplayName;
+}
+
+<nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+    <a asp-page="/Engine/Containers/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Containers</a>
+    <span class="text-line-accent" aria-hidden="true">/</span>
+    <span aria-current="page">@name</span>
+</nav>
+
+<div class="mb-4 flex flex-wrap items-start justify-between gap-4">
+    <div class="min-w-0">
+        <h2 class="page-title break-all">@name</h2>
+        @if (container is not null)
+        {
+            var (stateBadge, healthBadge) = ContainerStatus.FromInspect(container);
+            <div class="mt-2 flex flex-wrap items-center gap-1">
+                <partial name="_StatusBadge" model="stateBadge" />
+                @if (healthBadge is not null)
+                {
+                    <partial name="_StatusBadge" model="healthBadge" />
+                }
+                @if (Model.Stack is not null)
+                {
+                    <span class="badge-stat" title="Stack">@Model.Stack</span>
+                }
+                <span class="badge-stat" title="@container.Id">@container.Id[..12]</span>
+            </div>
+        }
+    </div>
+
+    @if (container is not null)
+    {
+        <form method="post" asp-page="/Engine/Containers/Detail" asp-page-handler="Action"
+              asp-route-endpointId="@Model.EndpointId" asp-route-containerId="@Model.ContainerId"
+              class="flex flex-wrap items-center gap-2">
+            <input type="hidden" name="tab" value="@tab" />
+            @if (!running && !paused)
+            {
+                <button type="submit" name="action" value="start" class="btn-soft"><icon name="play" class="h-4 w-4" /> Start</button>
+            }
+            @if (running)
+            {
+                <button type="submit" name="action" value="stop" class="btn-soft"><icon name="stop" class="h-4 w-4" /> Stop</button>
+                <button type="submit" name="action" value="restart" class="btn-soft"><icon name="arrow-path" class="h-4 w-4" /> Restart</button>
+                <button type="submit" name="action" value="pause" class="btn-soft">Pause</button>
+                <button type="submit" name="action" value="kill" class="btn-soft danger"
+                        data-confirm="Kill @name? It gets no chance to shut down cleanly.">Kill</button>
+            }
+            @if (paused)
+            {
+                <button type="submit" name="action" value="unpause" class="btn-soft"><icon name="play" class="h-4 w-4" /> Resume</button>
+            }
+            <details class="menu" data-menu>
+                <summary class="btn-soft" aria-label="More actions for @name">More <icon name="chevron-down" class="h-4 w-4" /></summary>
+                <div class="menu-panel w-80 p-3">
+                    @if (Model.SwarmService is null)
+                    {
+                        <div class="mb-3">
+                            <p class="label-caps mb-1">Recreate</p>
+                            <p class="mb-2 text-xs text-secondary">Replace it with a new container from the same settings. Its writable layer is lost; volumes are kept.</p>
+                            <label class="mb-2 flex items-center gap-2 text-secondary">
+                                <input type="checkbox" name="pull" value="true" form="recreate-form" class="accent-accent" checked /> Pull the image first
+                            </label>
+                            <button type="submit" form="recreate-form" class="btn-soft secondary"
+                                    data-confirm="Recreate @name? It is stopped and replaced with a new container from the same settings.">
+                                <icon name="arrow-path" class="h-4 w-4" /> Recreate
+                            </button>
+                        </div>
+                        <div class="mb-3">
+                            <p class="label-caps mb-1">Rename</p>
+                            <div class="field flex gap-2">
+                                <label for="rename-name" class="sr-only">New name</label>
+                                <input id="rename-name" name="name" form="rename-form" value="@name" class="font-mono" autocomplete="off" />
+                                <button type="submit" form="rename-form" class="btn-soft">Save</button>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <a asp-page="/Engine/Containers/Create" asp-route-endpointId="@Model.EndpointId" asp-route-from="@Model.ContainerId" class="btn-soft">
+                                <icon name="plus" class="h-4 w-4" /> Duplicate
+                            </a>
+                        </div>
+                    }
+                    <div>
+                        <p class="label-caps mb-1">Remove</p>
+                        <label class="mb-2 flex items-center gap-2 text-secondary">
+                            <input type="checkbox" name="removeVolumes" value="true" class="accent-accent" /> Also remove its anonymous volumes
+                        </label>
+                        <button type="submit" name="action" value="remove" class="btn-soft danger"
+                                data-confirm="Remove @name?@(running ? " It is running and will be stopped." : "") Named volumes are kept.">
+                            <icon name="trash" class="h-4 w-4" /> Remove
+                        </button>
+                    </div>
+                </div>
+            </details>
+        </form>
+        <form id="recreate-form" method="post" asp-page="/Engine/Containers/Detail" asp-page-handler="Recreate"
+              asp-route-endpointId="@Model.EndpointId" asp-route-containerId="@Model.ContainerId"></form>
+        <form id="rename-form" method="post" asp-page="/Engine/Containers/Detail" asp-page-handler="Rename"
+              asp-route-endpointId="@Model.EndpointId" asp-route-containerId="@Model.ContainerId">
+            <input type="hidden" name="tab" value="@tab" />
+        </form>
+    }
+</div>
+
+@if (Model.SwarmService is not null)
+{
+    <div class="callout mb-4">
+        <icon name="information-circle" class="h-5 w-5" />
+        <p>This container is a task of the swarm service <span class="font-mono">@Model.SwarmService</span>. The swarm replaces it as it sees fit, so change the service rather than the container.</p>
+    </div>
+}
+
+<nav aria-label="Container" class="tabs mb-6">
+    @foreach (var (key, tabPage, label) in DetailModel.Tabs)
+    {
+        <a asp-page="@tabPage" asp-route-endpointId="@Model.EndpointId" asp-route-containerId="@Model.ContainerId"
+           class="tab" aria-current="@(key == tab ? "page" : null)">@label</a>
+    }
+</nav>
+
+@if (Model.Error is not null)
+{
+    <div class="callout danger mb-4" role="alert">
+        <icon name="exclamation-triangle" class="h-5 w-5" />
+        <p>@Model.Error</p>
+    </div>
+}
+else if (Model.Client is null)
+{
+    <div class="mb-4"><partial name="_EndpointStateCallout" model="Model.Connection" /></div>
+}

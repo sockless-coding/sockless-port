@@ -1,0 +1,64 @@
+@page "/endpoints/{endpointId:int}/containers"
+@model Sockless.Port.Web.Pages.Engine.Containers.IndexModel
+@{
+    ViewData["Title"] = "Containers";
+    var tableUrl = Url.Page("/Engine/Containers/Index", "Table", new { endpointId = Model.EndpointId });
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <h2 class="page-title">Containers</h2>
+            <p class="mt-1 text-secondary">Everything running or stopped on @Model.Connection.Name.</p>
+        </div>
+        @if (Model.Client is not null)
+        {
+            <a asp-page="/Engine/Containers/Create" asp-route-endpointId="@Model.EndpointId" class="btn-soft secondary">
+                <icon name="plus" class="h-4 w-4" />
+                Create container
+            </a>
+        }
+    </div>
+
+    @if (Model.Client is null)
+    {
+        <partial name="_EndpointStateCallout" model="Model.Connection" />
+    }
+    else
+    {
+        <form method="get" role="search" aria-label="Filter containers" class="mb-4 flex flex-wrap items-end gap-3"
+              hx-get="@tableUrl" hx-target="#container-table" hx-swap="outerHTML"
+              hx-trigger="change, input changed delay:300ms from:find input[type=search], submit">
+            <div class="field min-w-[14rem] flex-1">
+                <label for="filter-q">Search</label>
+                <input id="filter-q" type="search" name="q" value="@Model.Q" placeholder="Name, image or ID" autocomplete="off" />
+            </div>
+            <div class="field">
+                <label for="filter-state">State</label>
+                <select id="filter-state" name="state">
+                    @foreach (var (value, label) in IndexModel.States)
+                    {
+                        <option value="@value" selected="@(value == (Model.State ?? ""))">@label</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label for="filter-stack">Stack</label>
+                <select id="filter-stack" name="stack">
+                    <option value="">All</option>
+                    @foreach (var stack in Model.Stacks)
+                    {
+                        <option value="@stack" selected="@(stack == Model.Stack)">@stack</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label for="filter-label">Label</label>
+                <input id="filter-label" name="label" value="@Model.Label" placeholder="key or key=value" class="font-mono" autocomplete="off" />
+            </div>
+            <noscript><button type="submit" class="btn-soft">Filter</button></noscript>
+        </form>
+
+        <partial name="_ContainerTable" model="Model" />
+    }
+</div>

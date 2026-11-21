@@ -2,10 +2,14 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="color-scheme" content="dark" />
+<meta name="csp-style-nonce" content="@SecurityHeaders.StyleNonce(Context)" />
 <title>@(ViewData["Title"] is string title ? $"{title} · Sockless Port" : "Sockless Port")</title>
-@* htmx must not need eval or inline styles: the CSP forbids both. *@
-<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"historyCacheSize":0}' />
+@* htmx must not need eval or inline styles: the CSP forbids both. "style" is dropped from attributesToSettle, which would otherwise setAttribute('style') on swapped elements. *@
+<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"historyCacheSize":0,"attributesToSettle":["class","width","height"]}' />
 <link rel="icon" type="image/svg+xml" href="~/favicon.svg" />
 <link rel="stylesheet" href="~/css/workshop.css" />
+<link rel="stylesheet" href="~/lib/xterm/xterm.css" />
 <link rel="stylesheet" href="~/css/app.css" />
+@* Order matters: csp-nonce.js patches createElement before any library builds <style> elements. *@
+<script src="~/js/csp-nonce.js"></script>
 <script src="~/lib/htmx/htmx.min.js" defer></script>

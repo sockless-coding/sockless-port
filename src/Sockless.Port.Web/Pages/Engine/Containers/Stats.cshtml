@@ -1,0 +1,55 @@
+@page "/endpoints/{endpointId:int}/containers/{containerId}/stats"
+@model Sockless.Port.Web.Pages.Engine.Containers.StatsModel
+@{
+    ViewData["Title"] = $"{Model.DisplayName} stats";
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <partial name="_ContainerHeader" model="Model" />
+
+    @if (Model.Container is not null)
+    {
+        @if (!Model.IsRunning)
+        {
+            <section class="card">
+                <div class="empty-state">
+                    <icon name="cpu-chip" class="h-12 w-12" stroke-width="1.5" />
+                    <p class="text-base text-heading">The container isn't running</p>
+                    <p class="text-secondary">Start it to see live CPU, memory, network and disk use.</p>
+                </div>
+            </section>
+        }
+        else
+        {
+            <div data-stats data-endpoint="@Model.EndpointId" data-container="@Model.Container.Id">
+                <p class="mb-4 text-xs text-secondary" aria-live="polite" data-stats-status>Waiting for the first reading…</p>
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <section class="card stat-card" aria-labelledby="stat-cpu">
+                        <p id="stat-cpu" class="label-caps">CPU</p>
+                        <p class="stat-value" data-stat="cpu">—</p>
+                        <p class="stat-meta">100% is one full CPU</p>
+                        <div class="chart"><canvas role="img" aria-label="CPU use over the last two minutes" data-chart="cpu"></canvas></div>
+                    </section>
+                    <section class="card stat-card" aria-labelledby="stat-memory">
+                        <p id="stat-memory" class="label-caps">Memory</p>
+                        <p class="stat-value" data-stat="memory">—</p>
+                        <p class="stat-meta" data-stat="memory-limit">&nbsp;</p>
+                        <div class="chart"><canvas role="img" aria-label="Memory use over the last two minutes" data-chart="memory"></canvas></div>
+                    </section>
+                    <section class="card stat-card" aria-labelledby="stat-network">
+                        <p id="stat-network" class="label-caps">Network</p>
+                        <p class="stat-value" data-stat="network">—</p>
+                        <p class="stat-meta">Received · sent, per second</p>
+                        <div class="chart"><canvas role="img" aria-label="Network traffic over the last two minutes" data-chart="network"></canvas></div>
+                    </section>
+                    <section class="card stat-card" aria-labelledby="stat-disk">
+                        <p id="stat-disk" class="label-caps">Disk I/O</p>
+                        <p class="stat-value" data-stat="disk">—</p>
+                        <p class="stat-meta">Read · written, per second · <span data-stat="pids">—</span> processes</p>
+                        <div class="chart"><canvas role="img" aria-label="Disk reads and writes over the last two minutes" data-chart="disk"></canvas></div>
+                    </section>
+                </div>
+            </div>
+        }
+    }
+</div>

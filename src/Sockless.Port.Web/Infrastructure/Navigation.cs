@@ -19,6 +19,7 @@ public static class Navigation
     public static IReadOnlyList<NavItem> Main { get; } =
     [
         new("Dashboard", "/Engine/Index", "home", NavScope.Endpoint, MatchSubPages: false),
+        new("Containers", "/Engine/Containers/Index", "cube", NavScope.Endpoint),
     ];
 
     /// <summary>Rarely used administration items, shown below a divider.</summary>

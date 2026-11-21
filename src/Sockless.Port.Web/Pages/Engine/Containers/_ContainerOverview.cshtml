@@ -1,0 +1,250 @@
+@model Sockless.Port.Web.Pages.Engine.Containers.DetailModel
+@{
+    var c = Model.Container;
+}
+<div id="container-overview" hx-get="@Url.Page("/Engine/Containers/Detail", "Overview", new { endpointId = Model.EndpointId, containerId = Model.ContainerId })"
+     hx-trigger="engine-changed from:body, endpoint-state from:body" hx-swap="outerHTML">
+    @if (c is not null)
+    {
+        var state = c.State;
+        var created = Format.EngineTime(c.Created);
+        var started = Format.EngineTime(state?.StartedAt);
+        var finished = Format.EngineTime(state?.FinishedAt);
+        var restart = c.HostConfig?.RestartPolicy;
+        var command = Sockless.Port.Containers.ContainerSpecBuilder.JoinShellWords(new[] { c.Path }.Concat(c.Args ?? []).Where(s => !string.IsNullOrEmpty(s)).Select(s => s!));
+
+        <div class="grid grid-cols-1 gap-6">
+            <section class="card" aria-labelledby="summary-title">
+                <h3 id="summary-title" class="section-title">Summary</h3>
+                <dl class="details">
+                    <dt>Image</dt>
+                    <dd class="break-all font-mono">@(c.Config?.Image ?? "—")</dd>
+                    <dt>Image ID</dt>
+                    <dd class="break-all font-mono text-xs text-secondary">@(c.Image ?? "—")</dd>
+                    <dt>Command</dt>
+                    <dd class="break-all font-mono">@(command.Length > 0 ? command : "—")</dd>
+                    <dt>Created</dt>
+                    <dd>@(created is { } cr ? $"{Format.Relative(cr)} ({Format.Timestamp(cr)})" : "—")</dd>
+                    @if (state?.Running == true && started is { } st)
+                    {
+                        <dt>Started</dt>
+                        <dd>@Format.Relative(st) (@Format.Timestamp(st))</dd>
+                    }
+                    else if (finished is { } fin)
+                    {
+                        <dt>Finished</dt>
+                        <dd>@Format.Relative(fin) (@Format.Timestamp(fin)), exit code <span class="font-mono">@state!.ExitCode</span>@(state.OomKilled ? ", killed for running out of memory" : "")</dd>
+                    }
+                    @if (!string.IsNullOrEmpty(state?.Error))
+                    {
+                        <dt>Error</dt>
+                        <dd class="text-danger">@state.Error</dd>
+                    }
+                    <dt>Restart policy</dt>
+                    <dd>
+                        <span class="font-mono">@(restart?.Name is { Length: > 0 } policy ? policy : "no")</span>@(restart is { Name: "on-failure", MaximumRetryCount: > 0 } ? $" (up to {restart.MaximumRetryCount} times)" : "")
+                        @if (c.RestartCount > 0)
+                        {
+                            <span class="text-secondary"> · restarted @c.RestartCount @(c.RestartCount == 1 ? "time" : "times")</span>
+                        }
+                    </dd>
+                    @if (c.HostConfig is { } host && (host.Memory > 0 || host.NanoCpus > 0))
+                    {
+                        <dt>Limits</dt>
+                        <dd class="font-mono">
+                            @(host.Memory > 0 ? $"{Format.BinaryBytes(host.Memory)} memory" : "")@(host.Memory > 0 && host.NanoCpus > 0 ? " · " : "")@(host.NanoCpus > 0 ? $"{host.NanoCpus / 1e9:0.##} CPUs" : "")
+                        </dd>
+                    }
+                    <dt>Hostname</dt>
+                    <dd class="font-mono">@(c.Config?.Hostname ?? "—")</dd>
+                    @if (!string.IsNullOrEmpty(c.Config?.User))
+                    {
+                        <dt>User</dt>
+                        <dd class="font-mono">@c.Config.User</dd>
+                    }
+                    @if (!string.IsNullOrEmpty(c.Config?.WorkingDir))
+                    {
+                        <dt>Working directory</dt>
+                        <dd class="font-mono">@c.Config.WorkingDir</dd>
+                    }
+                </dl>
+            </section>
+
+            @if (state?.Health is { } health)
+            {
+                <section class="card" aria-labelledby="health-title">
+                    <h3 id="health-title" class="section-title">Health</h3>
+                    <p class="mb-3">
+                        @if (ContainerStatus.Health(health.Status) is { } badge)
+                        {
+                            <partial name="_StatusBadge" model="badge" />
+                        }
+                        @if (health.FailingStreak > 0)
+                        {
+                            <span class="text-secondary"> · failed @health.FailingStreak @(health.FailingStreak == 1 ? "check" : "checks") in a row</span>
+                        }
+                    </p>
+                    @if (health.Log is { Count: > 0 } log)
+                    {
+                        var last = log[^1];
+                        <p class="label-caps mb-1">Last check (exit code @last.ExitCode)</p>
+                        <pre class="code-block">@(string.IsNullOrWhiteSpace(last.Output) ? "(no output)" : last.Output.Trim())</pre>
+                    }
+                </section>
+            }
+
+            <section class="card" aria-labelledby="ports-title">
+                <h3 id="ports-title" class="section-title">Ports</h3>
+                @{
+                    var ports = c.NetworkSettings?.Ports ?? new Dictionary<string, IReadOnlyList<Sockless.Port.Docker.Models.PortBinding>?>();
+                }
+                @if (ports.Count == 0)
+                {
+                    <p class="text-secondary">No ports are exposed.</p>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead><tr><th scope="col">Container port</th><th scope="col">Published on</th></tr></thead>
+                            <tbody>
+                                @foreach (var (port, bindings) in ports.OrderBy(p => p.Key, StringComparer.Ordinal))
+                                {
+                                    <tr>
+                                        <th scope="row" class="font-mono">@port</th>
+                                        <td class="font-mono">
+                                            @if (bindings is not { Count: > 0 })
+                                            {
+                                                <span class="text-secondary">Not published</span>
+                                            }
+                                            else
+                                            {
+                                                @foreach (var b in bindings)
+                                                {
+                                                    <span class="block">@(b.HostIp is { Length: > 0 } ip ? (ip.Contains(':') ? $"[{ip}]" : ip) : "*"):@b.HostPort</span>
+                                                }
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+
+            <section class="card" aria-labelledby="networks-title">
+                <h3 id="networks-title" class="section-title">Networks</h3>
+                @if (c.NetworkSettings?.Networks is not { Count: > 0 } networks)
+                {
+                    <p class="text-secondary">Not connected to any network.</p>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead><tr><th scope="col">Network</th><th scope="col">IP address</th><th scope="col">Gateway</th><th scope="col">MAC address</th><th scope="col">Aliases</th></tr></thead>
+                            <tbody>
+                                @foreach (var (network, endpoint) in networks.OrderBy(n => n.Key, StringComparer.Ordinal))
+                                {
+                                    <tr>
+                                        <th scope="row" class="font-mono">@network</th>
+                                        <td class="font-mono">@(endpoint.IpAddress is { Length: > 0 } ip ? $"{ip}/{endpoint.IpPrefixLen}" : "—")@(endpoint.GlobalIPv6Address is { Length: > 0 } v6 ? $" {v6}" : "")</td>
+                                        <td class="font-mono">@(endpoint.Gateway is { Length: > 0 } gw ? gw : "—")</td>
+                                        <td class="font-mono">@(endpoint.MacAddress is { Length: > 0 } mac ? mac : "—")</td>
+                                        <td class="font-mono text-xs">@(endpoint.Aliases is { Count: > 0 } aliases ? string.Join(", ", aliases) : "—")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+
+            <section class="card" aria-labelledby="mounts-title">
+                <h3 id="mounts-title" class="section-title">Mounts</h3>
+                @if (c.Mounts is not { Count: > 0 } mounts)
+                {
+                    <p class="text-secondary">No volumes or bind mounts.</p>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="table">
+                            <thead><tr><th scope="col">Type</th><th scope="col">Source</th><th scope="col">Destination</th><th scope="col">Access</th></tr></thead>
+                            <tbody>
+                                @foreach (var m in mounts)
+                                {
+                                    <tr>
+                                        <td><span class="badge-stat">@(m.Type ?? "—")</span></td>
+                                        <td class="break-all font-mono text-xs">@(m.Type == "volume" && m.Name is { } volume ? volume : m.Source)</td>
+                                        <th scope="row" class="break-all font-mono text-xs">@m.Destination</th>
+                                        <td>@(m.ReadWrite ? "Read-write" : "Read-only")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+
+            <section class="card" aria-labelledby="env-title">
+                <h3 id="env-title" class="section-title">Environment</h3>
+                @if (c.Config?.Env is not { Count: > 0 } env)
+                {
+                    <p class="text-secondary">No environment variables.</p>
+                }
+                else
+                {
+                    @* Collapsed: environment variables often hold secrets. *@
+                    <details>
+                        <summary class="cursor-pointer text-accent">Show @env.Count @(env.Count == 1 ? "variable" : "variables")</summary>
+                        <div class="table-wrap mt-3">
+                            <table class="table">
+                                <thead><tr><th scope="col">Name</th><th scope="col">Value</th></tr></thead>
+                                <tbody>
+                                    @foreach (var entry in env)
+                                    {
+                                        var eq = entry.IndexOf('=');
+                                        <tr>
+                                            <th scope="row" class="whitespace-nowrap font-mono text-xs">@(eq < 0 ? entry : entry[..eq])</th>
+                                            <td class="break-all font-mono text-xs">@(eq < 0 ? "" : entry[(eq + 1)..])</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>
+                }
+            </section>
+
+            <section class="card" aria-labelledby="labels-title">
+                <h3 id="labels-title" class="section-title">Labels</h3>
+                @if (c.Config?.Labels is not { Count: > 0 } labels)
+                {
+                    <p class="text-secondary">No labels.</p>
+                }
+                else
+                {
+                    <details open="@(labels.Count <= 8)">
+                        <summary class="cursor-pointer text-accent">@labels.Count @(labels.Count == 1 ? "label" : "labels")</summary>
+                        <div class="table-wrap mt-3">
+                            <table class="table">
+                                <thead><tr><th scope="col">Key</th><th scope="col">Value</th></tr></thead>
+                                <tbody>
+                                    @foreach (var (key, value) in labels.OrderBy(l => l.Key, StringComparer.Ordinal))
+                                    {
+                                        <tr>
+                                            <th scope="row" class="break-all font-mono text-xs">@key</th>
+                                            <td class="break-all font-mono text-xs">@value</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>
+                }
+            </section>
+        </div>
+    }
+</div>

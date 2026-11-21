@@ -1,0 +1,193 @@
+{
+    "Id": "1c6c59e48bffb2b1f74bd6c923d8ae5cc447c5677d47ed3f8316aaba06ee9813",
+    "Created": "2026-11-21T20:41:00.875984337Z",
+    "Path": "sh",
+    "Args": [
+        "-c",
+        "while true; do echo tick; sleep 1; done"
+    ],
+    "State": {
+        "Status": "running",
+        "Running": true,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 58,
+        "ExitCode": 0,
+        "Error": "",
+        "StartedAt": "2026-11-21T20:41:01.020765613Z",
+        "FinishedAt": "0001-01-01T00:00:00Z"
+    },
+    "Image": "sha256:30ecbe1509090b38ef3260f3609d64d8261230464eaa4d235901db496e9647fb",
+    "ResolvConfPath": "/run/containers/storage/overlay-containers/1c6c59e48bffb2b1f74bd6c923d8ae5cc447c5677d47ed3f8316aaba06ee9813/userdata/resolv.conf",
+    "HostnamePath": "/run/containers/storage/overlay-containers/1c6c59e48bffb2b1f74bd6c923d8ae5cc447c5677d47ed3f8316aaba06ee9813/userdata/hostname",
+    "HostsPath": "/run/containers/storage/overlay-containers/1c6c59e48bffb2b1f74bd6c923d8ae5cc447c5677d47ed3f8316aaba06ee9813/userdata/hosts",
+    "LogPath": "",
+    "Name": "/fixture-web",
+    "RestartCount": 0,
+    "Driver": "overlay",
+    "Platform": "linux",
+    "MountLabel": "",
+    "ProcessLabel": "",
+    "AppArmorProfile": "",
+    "ExecIDs": [],
+    "HostConfig": {
+        "Binds": [],
+        "ContainerIDFile": "",
+        "LogConfig": {
+            "Type": "journald",
+            "Config": null
+        },
+        "NetworkMode": "host",
+        "PortBindings": {},
+        "RestartPolicy": {
+            "Name": "no",
+            "MaximumRetryCount": 0
+        },
+        "AutoRemove": false,
+        "VolumeDriver": "",
+        "VolumesFrom": null,
+        "ConsoleSize": [
+            0,
+            0
+        ],
+        "Annotations": {
+            "io.container.manager": "libpod",
+            "org.opencontainers.image.stopSignal": "15",
+            "org.systemd.property.KillSignal": "15",
+            "org.systemd.property.TimeoutStopUSec": "uint64 10000000"
+        },
+        "CapAdd": [],
+        "CapDrop": [],
+        "CgroupnsMode": "host",
+        "Dns": [],
+        "DnsOptions": null,
+        "DnsSearch": null,
+        "ExtraHosts": null,
+        "GroupAdd": null,
+        "IpcMode": "host",
+        "Cgroup": "",
+        "Links": null,
+        "OomScoreAdj": 0,
+        "PidMode": "private",
+        "Privileged": false,
+        "PublishAllPorts": false,
+        "ReadonlyRootfs": false,
+        "SecurityOpt": [],
+        "UTSMode": "host",
+        "UsernsMode": "",
+        "ShmSize": 65536000,
+        "Runtime": "oci",
+        "Isolation": "",
+        "CpuShares": 0,
+        "Memory": 0,
+        "NanoCpus": 0,
+        "CgroupParent": "",
+        "BlkioWeight": 0,
+        "BlkioWeightDevice": null,
+        "BlkioDeviceReadBps": null,
+        "BlkioDeviceWriteBps": null,
+        "BlkioDeviceReadIOps": null,
+        "BlkioDeviceWriteIOps": null,
+        "CpuPeriod": 0,
+        "CpuQuota": 0,
+        "CpuRealtimePeriod": 0,
+        "CpuRealtimeRuntime": 0,
+        "CpusetCpus": "",
+        "CpusetMems": "",
+        "Devices": [],
+        "DeviceCgroupRules": null,
+        "DeviceRequests": null,
+        "MemoryReservation": 0,
+        "MemorySwap": 0,
+        "MemorySwappiness": null,
+        "OomKillDisable": false,
+        "PidsLimit": 0,
+        "Ulimits": [
+            {
+                "Name": "RLIMIT_NOFILE",
+                "Hard": 1048576,
+                "Soft": 1048576
+            },
+            {
+                "Name": "RLIMIT_NPROC",
+                "Hard": 1048576,
+                "Soft": 1048576
+            }
+        ],
+        "CpuCount": 0,
+        "CpuPercent": 0,
+        "IOMaximumIOps": 0,
+        "IOMaximumBandwidth": 0,
+        "MaskedPaths": null,
+        "ReadonlyPaths": null
+    },
+    "GraphDriver": {
+        "Data": {
+            "LowerDir": "/var/lib/containers/storage/overlay/5a9bfd996c6d49c6c3cb4ddfb76e8d09cf16b6b7cf6601d1f2dffbdbc3edb5d4/diff",
+            "MergedDir": "/var/lib/containers/storage/overlay/2574e690968eb673d8a3c3a0e85ee0621029627fb448abd688ec84a6c5a1edf1/merged",
+            "UpperDir": "/var/lib/containers/storage/overlay/2574e690968eb673d8a3c3a0e85ee0621029627fb448abd688ec84a6c5a1edf1/diff",
+            "WorkDir": "/var/lib/containers/storage/overlay/2574e690968eb673d8a3c3a0e85ee0621029627fb448abd688ec84a6c5a1edf1/work"
+        },
+        "Name": "overlay"
+    },
+    "SizeRootFs": 0,
+    "Mounts": [],
+    "NetworkSettings": {
+        "SandboxID": "",
+        "SandboxKey": "",
+        "Ports": {},
+        "Networks": {
+            "host": {
+                "IPAMConfig": null,
+                "Links": null,
+                "Aliases": null,
+                "DriverOpts": null,
+                "GwPriority": 0,
+                "NetworkID": "host",
+                "EndpointID": "",
+                "Gateway": "",
+                "IPAddress": "",
+                "MacAddress": "",
+                "IPPrefixLen": 0,
+                "IPv6Gateway": "",
+                "GlobalIPv6Address": "",
+                "GlobalIPv6PrefixLen": 0,
+                "DNSNames": null
+            }
+        }
+    },
+    "Config": {
+        "Hostname": "6804bbdfb4b6",
+        "Domainname": "",
+        "User": "",
+        "AttachStdin": false,
+        "AttachStdout": false,
+        "AttachStderr": false,
+        "Tty": false,
+        "OpenStdin": false,
+        "StdinOnce": false,
+        "Env": [
+            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            "container=podman",
+            "GREETING=hello",
+            "HOME=/root",
+            "HOSTNAME=6804bbdfb4b6"
+        ],
+        "Cmd": [
+            "sh",
+            "-c",
+            "while true; do echo tick; sleep 1; done"
+        ],
+        "Image": "docker.io/library/busybox:1.37",
+        "Volumes": null,
+        "WorkingDir": "/",
+        "Entrypoint": [],
+        "Labels": {
+            "app": "fixture"
+        },
+        "StopSignal": "15",
+        "StopTimeout": 10
+    }
+}

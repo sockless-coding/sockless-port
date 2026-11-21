@@ -31,6 +31,33 @@ public static class Format
 
     public static string Count(long value) => value.ToString("N0", CultureInfo.InvariantCulture);
 
+    /// <summary>"3 minutes ago", "2 days ago". Pair with <see cref="Timestamp"/> in a title for the exact time.</summary>
+    public static string Relative(DateTimeOffset value, DateTimeOffset? now = null)
+    {
+        var age = (now ?? DateTimeOffset.UtcNow) - value;
+        if (age < TimeSpan.Zero)
+            age = TimeSpan.Zero;
+        return age switch
+        {
+            { TotalSeconds: < 60 } => "just now",
+            { TotalMinutes: < 2 } => "a minute ago",
+            { TotalHours: < 1 } => $"{(int)age.TotalMinutes} minutes ago",
+            { TotalHours: < 2 } => "an hour ago",
+            { TotalDays: < 1 } => $"{(int)age.TotalHours} hours ago",
+            { TotalDays: < 2 } => "yesterday",
+            { TotalDays: < 60 } => $"{(int)age.TotalDays} days ago",
+            _ => $"{(int)(age.TotalDays / 30)} months ago",
+        };
+    }
+
+    public static DateTimeOffset FromUnix(long seconds) => DateTimeOffset.FromUnixTimeSeconds(seconds);
+
+    /// <summary>Parses the engine's RFC 3339 timestamps; null for the zero time it uses for "never".</summary>
+    public static DateTimeOffset? EngineTime(string? value) =>
+        DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed) && parsed.Year > 1
+            ? parsed
+            : null;
+
     /// <summary>UTC until the time-zone preference arrives (Phase 9).</summary>
     public static string Timestamp(DateTimeOffset value) =>
         value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture);
