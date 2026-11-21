@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Sockless.Port.Core\Sockless.Port.Core.csproj" />
+  </ItemGroup>
+</Project>

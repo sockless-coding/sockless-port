@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Sockless.Port.Core/Sockless.Port.Core.csproj" />
+    <Project Path="src/Sockless.Port.Web/Sockless.Port.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Sockless.Port.Core.Tests/Sockless.Port.Core.Tests.csproj" />
+    <Project Path="tests/Sockless.Port.Web.Tests/Sockless.Port.Web.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+    <File Path="build/Tailwind.targets" />
+  </Folder>
+</Solution>

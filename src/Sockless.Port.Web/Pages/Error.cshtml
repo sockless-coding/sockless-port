@@ -1,0 +1,16 @@
+@page "/error"
+@model ErrorModel
+@{
+    ViewData["Title"] = Model.Heading;
+    Layout = "_AuthLayout";
+}
+
+<section class="card card-plate" aria-labelledby="error-title">
+    <h1 id="error-title" class="mb-2 font-heading text-lg uppercase tracking-[0.08em]">@Model.Heading</h1>
+    <p class="mb-4 text-secondary">@Model.Message</p>
+    @if (Model.RequestId is not null)
+    {
+        <p class="mb-4 font-mono text-xs text-secondary">Request ID: @Model.RequestId</p>
+    }
+    <a href="/" class="btn-soft">Back to the dashboard</a>
+</section>

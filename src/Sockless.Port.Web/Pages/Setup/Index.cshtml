@@ -1,0 +1,55 @@
+@page
+@model SetupModel
+@{
+    ViewData["Title"] = "Set up";
+    Layout = "_AuthLayout";
+}
+
+<section class="card card-plate" aria-labelledby="setup-title">
+    <h1 id="setup-title" class="mb-2 font-heading text-lg uppercase tracking-[0.08em]">Create the administrator</h1>
+    <p class="mb-4 text-secondary">
+        This is a new installation. Create the first account to finish setting it up.
+    </p>
+
+    <div class="callout mb-4">
+        <icon name="information-circle" class="h-5 w-5" />
+        <p>
+            The setup token is in the container log. Run
+            <code class="whitespace-nowrap rounded bg-raised px-1 font-mono text-xs">docker logs sockless-port</code>
+            and copy the token from the setup line.
+        </p>
+    </div>
+
+    @foreach (var error in Model.Errors)
+    {
+        <div class="callout danger mb-4" role="alert">
+            <icon name="exclamation-triangle" class="h-5 w-5" />
+            <p>@error</p>
+        </div>
+    }
+
+    <form method="post" class="space-y-4" novalidate>
+        <div class="field">
+            <label asp-for="Input.SetupToken"></label>
+            <input asp-for="Input.SetupToken" class="font-mono" autocomplete="off" spellcheck="false" autofocus />
+            <partial name="_FieldError" model='"Input_SetupToken"' />
+        </div>
+        <div class="field">
+            <label asp-for="Input.UserName"></label>
+            <input asp-for="Input.UserName" autocomplete="username" />
+            <partial name="_FieldError" model='"Input_UserName"' />
+        </div>
+        <div class="field">
+            <label asp-for="Input.Password"></label>
+            <input asp-for="Input.Password" autocomplete="new-password" aria-describedby="password-hint" />
+            <p class="hint" id="password-hint">At least 12 characters. A passphrase works well.</p>
+            <partial name="_FieldError" model='"Input_Password"' />
+        </div>
+        <div class="field">
+            <label asp-for="Input.ConfirmPassword"></label>
+            <input asp-for="Input.ConfirmPassword" autocomplete="new-password" />
+            <partial name="_FieldError" model='"Input_ConfirmPassword"' />
+        </div>
+        <button type="submit" class="btn-primary w-full">Create administrator</button>
+    </form>
+</section>

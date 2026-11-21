@@ -1,0 +1,23 @@
+@* Layout for pages shown before sign-in: setup and login. *@
+<!DOCTYPE html>
+<html lang="en" class="dark h-full">
+<head>
+    <partial name="_Head" />
+</head>
+<body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <main id="main-content" tabindex="-1" class="relative z-10 flex min-h-screen items-center justify-center p-6 focus:outline-none">
+        <div class="w-full max-w-md">
+            <div class="mb-6 flex items-center justify-center gap-3">
+                <span class="text-accent-line">
+                    <partial name="_GearMark" model='"gear-spin h-9 w-9"' />
+                </span>
+                <span class="font-heading text-2xl font-semibold uppercase tracking-[0.1em]">
+                    <span class="text-heading">Sockless</span> <span class="text-accent">Port</span>
+                </span>
+            </div>
+            @RenderBody()
+        </div>
+    </main>
+</body>
+</html>
