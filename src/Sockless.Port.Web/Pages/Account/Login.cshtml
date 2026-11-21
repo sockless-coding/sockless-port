@@ -1,0 +1,37 @@
+@page
+@model LoginModel
+@{
+    ViewData["Title"] = "Sign in";
+    Layout = "_AuthLayout";
+}
+
+<section class="card card-plate" aria-labelledby="login-title">
+    <h1 id="login-title" class="mb-4 font-heading text-lg uppercase tracking-[0.08em]">Sign in</h1>
+
+    @if (Model.ErrorMessage is not null)
+    {
+        <div class="callout danger mb-4" role="alert">
+            <icon name="exclamation-triangle" class="h-5 w-5" />
+            <p>@Model.ErrorMessage</p>
+        </div>
+    }
+
+    <form method="post" class="space-y-4" novalidate>
+        <input type="hidden" asp-for="ReturnUrl" />
+        <div class="field">
+            <label asp-for="Input.UserName"></label>
+            <input asp-for="Input.UserName" autocomplete="username" autofocus />
+            <partial name="_FieldError" model='"Input_UserName"' />
+        </div>
+        <div class="field">
+            <label asp-for="Input.Password"></label>
+            <input asp-for="Input.Password" autocomplete="current-password" />
+            <partial name="_FieldError" model='"Input_Password"' />
+        </div>
+        <label class="flex items-center gap-2 text-secondary">
+            <input asp-for="Input.RememberMe" class="accent-accent" />
+            Keep me signed in
+        </label>
+        <button type="submit" class="btn-primary w-full">Sign in</button>
+    </form>
+</section>

@@ -1,0 +1,142 @@
+/* ============================================================
+   Sockless — Workshop variant tokens
+   Design doc: design/sockless/foundations/color.md (and siblings)
+   Version: see design/sockless/README.md
+
+   The Workshop variant is the flat, functional form of the theme:
+   the website, web apps/admin tools and Home Assistant.
+   Dark only. There is no light variant.
+
+   Two layers:
+     --sp-*      primitives: named materials. Never change meaning.
+     --sl-*      semantic roles: what components consume.
+   Components use --sl-* only, so a section or product can re-point
+   a role (e.g. the accent) without touching component CSS.
+   ============================================================ */
+
+:root {
+  color-scheme: dark;
+
+  /* ---------- Primitives: iron & plate (backgrounds) ---------- */
+  --sp-iron: #0d0d0d;        /* page background */
+  --sp-iron-2: #141414;      /* deepest chrome (HA sidebar) */
+  --sp-iron-3: #1a1a1a;      /* header, footer, sidebar, top bar */
+  --sp-plate: #1e1e1e;       /* cards */
+  --sp-plate-2: #242424;     /* inputs, inline code, tags */
+
+  /* ---------- Primitives: steel (lines & neutral marks) ---------- */
+  --sp-steel-dark: #2a2a2a;
+  --sp-rivet-line: #3a3a3a;  /* default border / divider */
+  --sp-steel: #4a4a4a;
+  --sp-steel-light: #6a6a6a;
+
+  /* ---------- Primitives: metals (accents) ---------- */
+  --sp-copper-dark: #8b5a2b; /* structural accent: card top plate, header rule. Never text. */
+  --sp-copper: #b87333;      /* lines, icons, gear fill. Not for small text on cards. */
+  --sp-copper-light: #cd7f32;/* primary accent: links, active nav, focus */
+  --sp-brass: #d4af37;       /* secondary accent, warning */
+  --sp-brass-light: #e6c44d; /* hover state of copper links */
+
+  /* ---------- Primitives: paper (text) ---------- */
+  --sp-ivory: #f5efe3;       /* headings */
+  --sp-parchment: #e8dcc8;   /* body text */
+  --sp-parchment-2: #b0a898; /* secondary text */
+  --sp-parchment-3: #7a7468; /* muted: large or non-essential text only */
+
+  /* ---------- Primitives: status ---------- */
+  --sp-verdigris: #4caf50;      /* oxidised copper: success, online */
+  --sp-rust: #e05d3c;           /* error, destructive */
+  --sp-gaslight: #4a90d9;       /* info; Home Assistant section accent */
+  --sp-gaslight-light: #6ab0ff;
+  --sp-verdigris-deep: #2e5c1e; /* deep tints for fills/heroes only */
+  --sp-rust-deep: #8b2500;
+  --sp-gaslight-deep: #1a3a5c;
+
+  /* ---------- Semantic: surfaces ---------- */
+  --sl-bg: var(--sp-iron);
+  --sl-surface: var(--sp-iron-3);
+  --sl-card: var(--sp-plate);
+  --sl-raised: var(--sp-plate-2);
+  --sl-border: var(--sp-rivet-line);
+  --sl-border-accent: var(--sp-copper-dark);
+
+  /* ---------- Semantic: text ---------- */
+  --sl-text-heading: var(--sp-ivory);
+  --sl-text: var(--sp-parchment);
+  --sl-text-secondary: var(--sp-parchment-2);
+  --sl-text-muted: var(--sp-parchment-3);
+
+  /* ---------- Semantic: accents & status ---------- */
+  --sl-accent: var(--sp-copper-light);
+  --sl-accent-hover: var(--sp-brass-light);
+  --sl-accent-line: var(--sp-copper);
+  --sl-accent-2: var(--sp-brass);
+  --sl-success: var(--sp-verdigris);
+  --sl-warning: var(--sp-brass);
+  --sl-danger: var(--sp-rust);
+  --sl-info: var(--sp-gaslight);
+  --sl-focus: var(--sp-copper-light);
+
+  /* RGB channels of the roles above, for rgb(var(--x) / alpha) and
+     Tailwind's <alpha-value>. Re-point these together with the role. */
+  --sl-accent-rgb: 205 127 50;
+  --sl-accent-2-rgb: 212 175 55;
+  --sl-success-rgb: 76 175 80;
+  --sl-warning-rgb: 212 175 55;
+  --sl-danger-rgb: 224 93 60;
+  --sl-info-rgb: 74 144 217;
+
+  /* ---------- Typography ---------- */
+  --sl-font-heading: 'Oswald', 'Raleway', sans-serif;
+  --sl-font-body: 'Raleway', system-ui, sans-serif;
+  --sl-font-mono: 'Roboto Mono', ui-monospace, monospace;
+  --sl-heading-tracking: 0.08em;
+  --sl-label-tracking: 0.1em;
+
+  /* ---------- Spacing ---------- */
+  --sl-space-xs: 0.25rem;
+  --sl-space-sm: 0.5rem;
+  --sl-space-md: 1rem;
+  --sl-space-lg: 1.5rem;
+  --sl-space-xl: 2rem;
+  --sl-space-2xl: 3rem;
+  --sl-space-3xl: 4rem;
+
+  /* ---------- Shape ---------- */
+  --sl-radius-xs: 2px;  /* tags */
+  --sl-radius-sm: 3px;  /* buttons, inputs, badges, code */
+  --sl-radius-md: 4px;  /* cards */
+  --sl-radius-lg: 6px;  /* dialogs */
+  --sl-radius-pill: 999px;
+
+  /* ---------- Elevation ---------- */
+  --sl-shadow-card: 0 4px 14px rgba(0, 0, 0, 0.5);
+  --sl-shadow-glow: 0 4px 20px rgba(184, 115, 51, 0.15); /* card hover */
+  --sl-shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --sl-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.1); /* top bevel on metal buttons */
+
+  /* ---------- Decoration ---------- */
+  --sl-rule: linear-gradient(90deg, transparent, var(--sp-copper), transparent);
+  --sl-rule-ornate: linear-gradient(90deg, transparent, var(--sp-copper), var(--sp-brass), var(--sp-copper), transparent);
+  --sl-metal-text: linear-gradient(180deg, var(--sp-ivory) 0%, var(--sp-copper-light) 50%, var(--sp-brass) 100%);
+  --sl-copper-fill: linear-gradient(180deg, var(--sp-copper), var(--sp-copper-dark));
+  --sl-copper-fill-hover: linear-gradient(180deg, var(--sp-copper-light), var(--sp-copper));
+  --sl-texture-glow:
+    radial-gradient(ellipse at top left, rgba(184, 115, 51, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at bottom right, rgba(212, 175, 55, 0.02) 0%, transparent 50%);
+  --sl-texture-brushed: repeating-linear-gradient(90deg, transparent 0 2px, rgba(255, 255, 255, 0.015) 2px 4px);
+
+  /* ---------- Motion ---------- */
+  --sl-duration-fast: 0.15s;
+  --sl-duration-normal: 0.3s;
+  --sl-ease: ease;
+  --sl-gear-spin-logo: 8s;
+  --sl-gear-spin-divider: 12s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --sl-duration-fast: 0s;
+    --sl-duration-normal: 0s;
+  }
+}

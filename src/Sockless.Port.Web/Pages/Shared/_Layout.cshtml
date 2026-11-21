@@ -1,0 +1,92 @@
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@{
+    var currentPage = ViewContext.RouteData.Values["page"] as string;
+    var csrfHeader = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string?>
+    {
+        ["RequestVerificationToken"] = Antiforgery.GetAndStoreTokens(Context).RequestToken,
+    });
+    var version = typeof(Program).Assembly
+        .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+        .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+        .FirstOrDefault()?.InformationalVersion.Split('+')[0];
+}
+<!DOCTYPE html>
+<html lang="en" class="dark h-full">
+<head>
+    <partial name="_Head" />
+</head>
+<body class="h-screen overflow-hidden" hx-boost="true" hx-headers="@csrfHeader">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <div class="relative z-10 flex h-full">
+        <aside class="flex w-64 flex-none flex-col border-r border-accent/10 bg-surface">
+            <div class="flex h-16 flex-none items-center gap-3 border-b border-accent/10 px-4">
+                <span class="brand-tile">
+                    <partial name="_GearMark" model='"h-6 w-6"' />
+                </span>
+                <span class="flex flex-col leading-tight">
+                    <span class="font-heading text-base font-semibold uppercase tracking-[0.1em] text-accent">Sockless</span>
+                    <span class="label-caps">Port</span>
+                </span>
+            </div>
+
+            <nav aria-label="Main" class="flex-1 overflow-y-auto px-3 py-4">
+                <ul class="space-y-1">
+                    @foreach (var item in Navigation.Main)
+                    {
+                        <li>
+                            <a asp-page="@item.Page" class="nav-item" aria-current="@(Navigation.IsActive(item, currentPage) ? "page" : null)">
+                                <icon name="@item.Icon" class="h-5 w-5" />
+                                <span>@item.Label</span>
+                            </a>
+                        </li>
+                    }
+                </ul>
+                @if (Navigation.Admin.Count > 0)
+                {
+                    <hr class="my-4 border-line" />
+                    <ul class="space-y-1">
+                        @foreach (var item in Navigation.Admin)
+                        {
+                            <li>
+                                <a asp-page="@item.Page" class="nav-item" aria-current="@(Navigation.IsActive(item, currentPage) ? "page" : null)">
+                                    <icon name="@item.Icon" class="h-5 w-5" />
+                                    <span>@item.Label</span>
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                }
+            </nav>
+
+            <div class="flex flex-none items-center justify-between gap-2 border-t border-accent/10 px-4 py-3">
+                <span class="truncate text-secondary" title="Signed in as @User.Identity?.Name">@User.Identity?.Name</span>
+                <form method="post" asp-page="/Account/Logout">
+                    <button type="submit" class="btn-soft">
+                        <icon name="arrow-right-start-on-rectangle" class="h-4 w-4" />
+                        Sign out
+                    </button>
+                </form>
+            </div>
+        </aside>
+
+        <div class="flex min-w-0 flex-1 flex-col">
+            <header class="flex h-16 flex-none items-center justify-between border-b border-accent/10 bg-surface px-6">
+                <h1 class="text-xl font-semibold">@ViewData["Title"]</h1>
+                @if (version is not null)
+                {
+                    <span class="font-mono text-xs text-secondary">v@(version)</span>
+                }
+            </header>
+
+            <main id="main-content" tabindex="-1" class="flex-1 overflow-y-auto p-6 focus:outline-none">
+                <div class="mx-auto max-w-5xl">
+                    @RenderBody()
+                </div>
+            </main>
+        </div>
+    </div>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

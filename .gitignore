@@ -55,3 +55,10 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Sockless Port
+.tools/
+/data/
+src/**/data/
+src/Sockless.Port.Web/wwwroot/css/app.css
+node_modules/

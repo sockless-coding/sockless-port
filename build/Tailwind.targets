@@ -1,0 +1,56 @@
+<Project>
+  <!--
+    Builds wwwroot/css/app.css with the Tailwind 3 standalone CLI, so neither the build nor the
+    runtime needs Node. The CLI is downloaded once per version into .tools/ at the repo root.
+
+    Properties:
+      TailwindTag   pinned CLI version
+      TailwindPath      use an existing CLI binary instead of downloading
+      SkipTailwind      true to skip (e.g. when app.css is supplied another way)
+  -->
+  <PropertyGroup>
+    <TailwindTag Condition="'$(TailwindTag)' == ''">v3.4.19</TailwindTag>
+    <TailwindInput>$(MSBuildProjectDirectory)/Styles/app.css</TailwindInput>
+    <TailwindConfig>$(MSBuildProjectDirectory)/tailwind.config.js</TailwindConfig>
+    <TailwindOutput>$(MSBuildProjectDirectory)/wwwroot/css/app.css</TailwindOutput>
+
+    <_TwOs Condition="$([MSBuild]::IsOSPlatform('Windows'))">windows</_TwOs>
+    <_TwOs Condition="$([MSBuild]::IsOSPlatform('Linux'))">linux</_TwOs>
+    <_TwOs Condition="$([MSBuild]::IsOSPlatform('OSX'))">macos</_TwOs>
+    <_TwArch>$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant())</_TwArch>
+    <_TwExt Condition="'$(_TwOs)' == 'windows'">.exe</_TwExt>
+    <_TwAsset>tailwindcss-$(_TwOs)-$(_TwArch)$(_TwExt)</_TwAsset>
+    <_TwDir>$(RepoRoot).tools/tailwind/$(TailwindTag)/</_TwDir>
+    <TailwindPath Condition="'$(TailwindPath)' == ''">$(_TwDir)$(_TwAsset)</TailwindPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <_TailwindInputs Include="$(TailwindInput);$(TailwindConfig);Pages/**/*.cshtml;Infrastructure/**/*.cs;$(RepoRoot)build/Tailwind.targets" />
+  </ItemGroup>
+
+  <Target Name="EnsureTailwind" Condition="'$(SkipTailwind)' != 'true' And !Exists('$(TailwindPath)')">
+    <Message Importance="high" Text="Downloading Tailwind CLI $(TailwindTag) ($(_TwAsset))" />
+    <DownloadFile SourceUrl="https://github.com/tailwindlabs/tailwindcss/releases/download/$(TailwindTag)/$(_TwAsset)"
+                  DestinationFolder="$(_TwDir)" Retries="3" />
+    <Exec Condition="'$(_TwOs)' != 'windows'" Command="chmod +x &quot;$(TailwindPath)&quot;" />
+  </Target>
+
+  <Target Name="BuildTailwind" DependsOnTargets="EnsureTailwind" BeforeTargets="BeforeBuild;ResolveStaticWebAssetsConfiguration"
+          Condition="'$(SkipTailwind)' != 'true'"
+          Inputs="@(_TailwindInputs)" Outputs="$(TailwindOutput)">
+    <Exec Command="&quot;$(TailwindPath)&quot; -c &quot;$(TailwindConfig)&quot; -i &quot;$(TailwindInput)&quot; -o &quot;$(TailwindOutput)&quot; --minify"
+          WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+
+  <!-- On a clean build app.css doesn't exist at evaluation time, so the wwwroot glob missed it:
+       add it to Content once it has been generated. -->
+  <PropertyGroup>
+    <_TailwindOutputExistedAtEvaluation>$([System.IO.File]::Exists('$(TailwindOutput)'))</_TailwindOutputExistedAtEvaluation>
+  </PropertyGroup>
+  <Target Name="IncludeTailwindOutput" AfterTargets="BuildTailwind" BeforeTargets="AssignTargetPaths;ResolveStaticWebAssetsConfiguration"
+          Condition="'$(_TailwindOutputExistedAtEvaluation)' != 'True'">
+    <ItemGroup>
+      <Content Include="wwwroot/css/app.css" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+</Project>

@@ -1,0 +1,11 @@
+@* The Sockless gear mark: twelve square-ended teeth around a thick ring. Coloured with currentColor. *@
+@model string
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="@Model" aria-hidden="true" focusable="false">
+    <g fill="currentColor">
+        @for (var angle = 0; angle < 360; angle += 30)
+        {
+            <rect x="45" y="2" width="10" height="16" rx="2" transform="rotate(@angle 50 50)" />
+        }
+        <circle cx="50" cy="50" r="30" fill="none" stroke="currentColor" stroke-width="8" />
+    </g>
+</svg>
