@@ -19,6 +19,17 @@ jobs:
         with:
           global-json-file: global.json
 
+      # The Compose release the image ships (docker/Dockerfile), ahead of the runner's own plugin:
+      # its messages differ between versions, and the stack validation tests check them.
+      - name: Install Compose
+        run: |
+          version=$(sed -n 's/^ARG COMPOSE_VERSION=//p' docker/Dockerfile)
+          sum=$(sed -n 's/^ARG COMPOSE_SHA256_AMD64=//p' docker/Dockerfile)
+          curl -fsSL -o "$RUNNER_TEMP/docker-compose" "https://github.com/docker/compose/releases/download/v${version}/docker-compose-linux-x86_64"
+          echo "${sum}  $RUNNER_TEMP/docker-compose" | sha256sum -c -
+          sudo install -m 755 "$RUNNER_TEMP/docker-compose" /usr/local/bin/docker-compose
+          docker-compose version
+
       - name: Cache Tailwind CLI
         uses: actions/cache@v4
         with:
@@ -48,6 +59,17 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+
+      # The Compose release the image ships (docker/Dockerfile), ahead of the runner's own plugin:
+      # its messages differ between versions, and the stack validation tests check them.
+      - name: Install Compose
+        run: |
+          version=$(sed -n 's/^ARG COMPOSE_VERSION=//p' docker/Dockerfile)
+          sum=$(sed -n 's/^ARG COMPOSE_SHA256_AMD64=//p' docker/Dockerfile)
+          curl -fsSL -o "$RUNNER_TEMP/docker-compose" "https://github.com/docker/compose/releases/download/v${version}/docker-compose-linux-x86_64"
+          echo "${sum}  $RUNNER_TEMP/docker-compose" | sha256sum -c -
+          sudo install -m 755 "$RUNNER_TEMP/docker-compose" /usr/local/bin/docker-compose
+          docker-compose version
 
       - name: Cache Tailwind CLI
         uses: actions/cache@v4
