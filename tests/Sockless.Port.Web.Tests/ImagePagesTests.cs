@@ -151,6 +151,16 @@ public sealed partial class ImagePagesTests : IDisposable
         Assert.DoesNotContain("value=\"p\"", html);
     }
 
+    [Theory]
+    [InlineData(0, 0, 0, "No image in use has a tag to check.")]
+    [InlineData(1, 0, 0, "Checked 1 tag in use: all up to date.")]
+    [InlineData(3, 0, 0, "Checked 3 tags in use: all up to date.")]
+    [InlineData(3, 1, 0, "Checked 3 tags in use: 1 with an update available, 2 up to date.")]
+    [InlineData(2, 0, 2, "Checked 2 tags in use: 2 couldn't be checked (the table says why).")]
+    [InlineData(4, 1, 1, "Checked 4 tags in use: 1 with an update available, 2 up to date, 1 couldn't be checked (the table says why).")]
+    public void Update_check_summary_counts_each_outcome(int @checked, int updates, int unknown, string expected) =>
+        Assert.Equal(expected, Pages.Engine.Images.IndexModel.Describe(new(@checked, updates, unknown)));
+
     [GeneratedRegex("href=\"(/registries/\\d+)\"")]
     private static partial Regex EditLink();
 }

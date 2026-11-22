@@ -33,7 +33,7 @@ public static class ServiceCollectionExtensions
             options.UseSqlite($"Data Source={port.DatabasePath}");
         });
 
-        // Data Protection keys encrypt auth cookies (and, later, stored secrets), so they must
+        // Data Protection keys encrypt auth cookies and registry credentials, so they must
         // survive container restarts: keep them in the data volume.
         services.AddDataProtection().SetApplicationName("Sockless.Port");
         services.AddOptions<KeyManagementOptions>()

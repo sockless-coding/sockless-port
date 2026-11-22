@@ -132,7 +132,7 @@ Each phase can ship on its own and ends with a working, containerised build.
 - **Engine differences** found by the integration tests: Podman without cgroups (rootless without delegation, or nested) can't pause or report stats. The engine's message is shown, and the tests tolerate it. Podman's journald log driver can't follow logs without the journald events backend, and that error is shown too. Recreating under host networking or host IPC must drop `Hostname` and `ShmSize`.
 - **CSP stays strict.** xterm.js builds `<style>` elements at runtime, so pages carry a per-response style nonce that a small shim stamps on them. htmx is configured not to copy `style` attributes when it swaps content.
 - **Chart colours** are copper-light and gaslight blue, not the guideline's primary + success order. That pair fails the colour-vision check (deuteranopia ΔE 3.4), and success is a status colour. Raised as guideline feedback.
-- **Pull progress** isn't shown yet. Create and recreate wait for the pull to finish; Phase 3 adds live progress.
+- **Pull progress** wasn't shown in Phase 2. Phase 3 added it to create; recreate still waits for the pull to finish.
 
 ### Phase 3: Images and registries
 
@@ -140,6 +140,14 @@ Each phase can ship on its own and ends with a working, containerised build.
 - Pull with live layer progress; build from a Dockerfile/tarball upload (stretch goal).
 - Registry credentials (Docker Hub, GHCR, private registries), stored encrypted and used for pulls.
 - "Update available" check for images in use (compare digests).
+
+**Status: done.** Notes:
+- **Pages** are `/endpoints/{id}/images`, plus `/build`, and for each image `/{image}` (overview, tags, containers using it), `/history` and `/inspect`. Registry credentials are global, at `/registries`.
+- **Pulls and builds run as background jobs** (`ImageJobs`), at most 4 at a time per endpoint, with live per-layer progress over SignalR. A second pull of the same reference joins the one already running. Finished jobs stay visible for 15 minutes, so a page opened later still shows how they ended. Docker's and Podman's pull formats differ and are both parsed in the client (`PullTracker`).
+- **Build** takes a Dockerfile typed into the form or an uploaded `.tar`/`.tar.gz` context (up to 2 GB, staged in `TempPath`, which is emptied on start), with tags, pull and no-cache options.
+- **Registry credentials** are encrypted with Data Protection (keys in the data volume) and attached to pulls, builds, recreate and update checks by matching the reference's registry. If the keys are lost, a credential is marked unreadable and must be entered again. Passwords are never shown again.
+- **Update check** asks the engine for the registry's digest (`/distribution/{name}/json`, no pull) for every tag a container uses, and compares it with the image's repo digests. Docker records the index digest, Podman the index and the platform manifest, so either one counts as a match. Results are in memory per endpoint and keyed by image ID, so a re-pulled image starts out unchecked. Tags that can't be checked (built locally, removed from the registry, credentials rejected) show the reason, and the summary counts each outcome separately.
+- **Container create** pulls with live progress. **Recreate** still pulls without showing progress.
 
 ### Phase 4: Volumes and networks
 
