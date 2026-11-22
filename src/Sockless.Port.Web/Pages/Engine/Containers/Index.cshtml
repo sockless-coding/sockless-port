@@ -52,6 +52,19 @@
                     }
                 </select>
             </div>
+            @if (Model.PodChoices.Count > 0)
+            {
+                <div class="field">
+                    <label for="filter-pod">Pod</label>
+                    <select id="filter-pod" name="pod">
+                        <option value="">All</option>
+                        @foreach (var pod in Model.PodChoices)
+                        {
+                            <option value="@pod.Id" selected="@(pod.Id == Model.Pod)">@pod.Name</option>
+                        }
+                    </select>
+                </div>
+            }
             <div class="field">
                 <label for="filter-label">Label</label>
                 <input id="filter-label" name="label" value="@Model.Label" placeholder="key or key=value" class="font-mono" autocomplete="off" />

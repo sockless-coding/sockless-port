@@ -8,7 +8,7 @@ Sockless Port is a self-hosted container management UI for Docker, Docker Swarm 
 |---|---|
 | `src/Sockless.Port.Docker` | Thin Engine API client: transports (unix socket, named pipe, TCP/TLS), version negotiation, models, streams, engine detection, and the agent's wire protocol (`Agent/AgentProtocol.cs`). No ASP.NET dependencies; AOT-compatible (the agent shares it) |
 | `src/Sockless.Port.Agent` | The remote agent: a Native AOT minimal API that relays the Engine API to its local socket over mutual TLS, plus enrolment and `/agent/info`. No Core or Web dependencies |
-| `src/Sockless.Port.Core` | Options, EF Core model (SQLite), Identity, first-run setup, endpoints (`Engines/`: connections, state, monitor, local detection, `EndpointRegistry`), agents (`Agents/`: internal CA, enrolment, install commands), and per resource: `Containers/`, `Images/`, `Volumes/` (create form, usage, file browser), `Networks/` (create form, usage), `Registries/`, `Stacks/` (files, Compose and Docker CLI runners, validation, jobs, diff, adoption), `Swarm/` (service form and spec builder, writes that pin digests, inventory, units) |
+| `src/Sockless.Port.Core` | Options, EF Core model (SQLite), Identity, first-run setup, endpoints (`Engines/`: connections, state, monitor, local detection, `EndpointRegistry`), agents (`Agents/`: internal CA, enrolment, install commands), and per resource: `Containers/`, `Images/`, `Volumes/` (create form, usage, file browser), `Networks/` (create form, usage), `Registries/`, `Stacks/` (files, Compose and Docker CLI runners, validation, jobs, diff, adoption), `Swarm/` (service form and spec builder, writes that pin digests, inventory, units), `Pods/` (actions, which pod a container is in) |
 | `src/Sockless.Port.Web` | Razor Pages UI, htmx, SignalR hub, Tailwind styles, static assets |
 | `tests/*` | xUnit v3 on Microsoft.Testing.Platform (`dotnet test`) |
 | `build/Tailwind.targets` | Downloads the pinned Tailwind 3 standalone CLI to `.tools/` and builds `wwwroot/css/app.css` |
@@ -35,7 +35,9 @@ SOCKLESS_PORT_TEST_ENGINE=unix:///var/run/docker.sock SOCKLESS_PORT_TEST_EXPECT=
 ## Engines
 
 - Every engine call goes through `DockerClient`. Pages get it from `EndpointPageModel.Connection.Client`, which is null unless the endpoint is online. Catch engine failures and show `EngineErrors.Describe(...)`.
-- Decide what to show from `EngineDescriptor.Capabilities` (`Swarm`, `SwarmManager`, `Pods`), never from `EngineKind`.
+- Decide what to show from `EngineDescriptor.Capabilities` (`Swarm`, `SwarmManager`, `Pods`, `Rootless`), never from `EngineKind`.
+- Pods use libpod's own API (`DockerClient.Pods.cs`, paths under `DockerClient.LibpodPrefix`, never through `Path()`). Docker's container list doesn't say which pod a container is in: use `PodMembership`. Containers in a pod can't be recreated through Docker's API (the new one would leave the pod).
+- Engine messages that name a known problem (rootless ports, missing cgroups, short image names) get a hint from `EngineHints`, appended by `EngineErrors.ForCall`; add new ones there, not in pages.
 - Engine differences (Podman vs Docker) are handled inside `Sockless.Port.Docker` (e.g. `Streams/EventNormalizer.cs`), never in pages.
 - New API models go in `Docker/Models` and must be registered in `DockerJsonContext`. Check them against real responses: fixtures in `tests/Sockless.Port.Docker.Tests/Fixtures`, captured only from throwaway engines.
 - Container operations that need care (recreate, create bodies) live in `Core/Containers` and work on raw inspect JSON (`JsonObject`), so settings the UI doesn't model survive. Engine quirks found by the integration tests are handled there too (e.g. no `Hostname` with host networking, no `ShmSize` with host IPC).

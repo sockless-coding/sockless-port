@@ -1,0 +1,10 @@
+@page "/endpoints/{endpointId:int}/pods/{podId}"
+@model Sockless.Port.Web.Pages.Engine.Pods.DetailModel
+@{
+    ViewData["Title"] = Model.DisplayName;
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <partial name="_PodHeader" model="Model" />
+    <partial name="_PodOverview" model="Model" />
+</div>

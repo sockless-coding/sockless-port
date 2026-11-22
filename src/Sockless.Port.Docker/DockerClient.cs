@@ -181,7 +181,8 @@ public sealed partial class DockerClient : IDisposable
     private async Task<HttpResponseMessage> SendCoreAsync(HttpMethod method, string pathAndQuery, HttpContent? content, CancellationToken cancellationToken,
         HttpCompletionOption completion = HttpCompletionOption.ResponseContentRead, bool allowNotModified = false)
     {
-        using var request = new HttpRequestMessage(method, pathAndQuery.StartsWith(_prefix, StringComparison.Ordinal) ? pathAndQuery : _prefix + pathAndQuery)
+        var versioned = pathAndQuery.StartsWith(_prefix, StringComparison.Ordinal) || pathAndQuery.StartsWith(LibpodPrefix + "/", StringComparison.Ordinal);
+        using var request = new HttpRequestMessage(method, versioned ? pathAndQuery : _prefix + pathAndQuery)
         {
             Content = content,
         };
@@ -222,7 +223,7 @@ public sealed partial class DockerClient : IDisposable
     {
         try
         {
-            return JsonSerializer.Deserialize(body, Json.ErrorResponse)?.Message;
+            return JsonSerializer.Deserialize(body, Json.ErrorResponse)?.Describe();
         }
         catch (JsonException)
         {

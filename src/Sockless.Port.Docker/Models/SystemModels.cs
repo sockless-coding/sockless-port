@@ -143,4 +143,21 @@ public sealed record DiskUsageBuildCache
 internal sealed record ErrorResponse
 {
     public string? Message { get; init; }
+
+    /// <summary>
+    /// Libpod's pod actions answer a partial failure (409) with per-container errors and no message:
+    /// strings on Podman 6. Anything other than strings is reported without detail.
+    /// </summary>
+    public IReadOnlyList<System.Text.Json.JsonElement>? Errs { get; init; }
+
+    /// <summary>The message, or else the per-container errors that are strings, joined.</summary>
+    public string? Describe()
+    {
+        if (Message is { Length: > 0 } message)
+            return message;
+        var errors = (Errs ?? []).Where(e => e.ValueKind == System.Text.Json.JsonValueKind.String).Select(e => e.GetString()).OfType<string>().ToList();
+        if (errors.Count > 0)
+            return string.Join("; ", errors);
+        return Errs is { Count: > 0 } ? "Some of the pod's containers failed; the engine didn't say why." : null;
+    }
 }

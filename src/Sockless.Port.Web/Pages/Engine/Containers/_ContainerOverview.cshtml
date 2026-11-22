@@ -19,7 +19,14 @@
                 <icon name="arrow-up-circle" class="h-5 w-5" />
                 <p>
                     The registry has a newer image for <span class="font-mono">@c.Config?.Image</span>.
-                    To update, use <span class="font-semibold">Recreate</span> under More with “Pull the image first” checked.
+                    @if (Model.Pod is { } member)
+                    {
+                        @:To update, pull it and recreate the container in its pod with <span class="font-mono">podman run --pod @member.Pod.Name</span>.
+                    }
+                    else
+                    {
+                        @:To update, use <span class="font-semibold">Recreate</span> under More with “Pull the image first” checked.
+                    }
                     @if (c.Image is { } imageId)
                     {
                         <a asp-page="/Engine/Images/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@ImagePageModel.RouteId(imageId)" class="hover:underline">See the image</a>

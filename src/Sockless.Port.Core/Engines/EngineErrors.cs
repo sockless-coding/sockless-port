@@ -34,9 +34,14 @@ public static class EngineErrors
         };
     }
 
-    /// <summary>For an engine call that failed: the engine's own message for API errors (it names the problem), a connection hint otherwise.</summary>
+    /// <summary>
+    /// For an engine call that failed: the engine's own message for API errors (it names the problem)
+    /// with what to do about known ones (<see cref="EngineHints"/>), a connection hint otherwise.
+    /// </summary>
     public static string ForCall(Exception exception, DockerAddress address) =>
-        exception is DockerApiException api ? Sentence(api.Message) : Describe(exception, address);
+        exception is DockerApiException api
+            ? string.Join(' ', [Sentence(api.Message), .. EngineHints.For(api.Message)])
+            : Describe(exception, address);
 
     /// <summary>Engine messages are lower-case fragments ("cannot remove container …"); make them read as sentences.</summary>
     public static string Sentence(string message)

@@ -53,8 +53,10 @@ public sealed class IndexModel(EngineConnections connections) : EndpointPageMode
             var info = client.GetInfoAsync(cancellationToken);
             var volumes = client.ListVolumesAsync(cancellationToken);
             var networks = client.ListNetworksAsync(cancellationToken);
-            await Task.WhenAll(info, volumes, networks);
-            Overview = new EngineOverview(engine, info.Result, volumes.Result.Count, networks.Result.Count);
+            var pods = Sockless.Port.Pods.PodMembership.LoadAsync(client, engine, cancellationToken);
+            await Task.WhenAll(info, volumes, networks, pods);
+            Overview = new EngineOverview(engine, info.Result, volumes.Result.Count, networks.Result.Count,
+                engine.Has(EngineCapabilities.Pods) ? pods.Result.Pods.Count : null);
         }
         catch (Exception ex) when (EngineFailures.IsFailure(ex, cancellationToken))
         {
@@ -63,7 +65,8 @@ public sealed class IndexModel(EngineConnections connections) : EndpointPageMode
     }
 }
 
-public sealed record EngineOverview(EngineDescriptor Engine, SystemInfo Info, int Volumes, int Networks);
+/// <param name="Pods">Podman pods; null on engines without them.</param>
+public sealed record EngineOverview(EngineDescriptor Engine, SystemInfo Info, int Volumes, int Networks, int? Pods = null);
 
 public sealed record DiskUsageView(EngineConnection Connection, DiskUsageSummary? Summary, string? Error);
 

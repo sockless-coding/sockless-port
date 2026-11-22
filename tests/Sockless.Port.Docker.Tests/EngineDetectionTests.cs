@@ -61,6 +61,21 @@ public sealed class EngineDetectionTests
     }
 
     [Fact]
+    public void Rootless_on_cgroups_v1_is_told_apart()
+    {
+        var version = Fixture.Load("podman-version.json", Json.VersionResponse);
+        var info = Fixture.Load("podman-info.json", Json.SystemInfo);
+        var rootless = info with { SecurityOptions = ["name=rootless"] };
+
+        Assert.Equal(2, EngineDescriptor.Detect(version, info, DockerClient.Negotiate(version)).CgroupVersion);
+        Assert.False(EngineDescriptor.Detect(version, rootless, DockerClient.Negotiate(version)).RootlessWithoutCgroups);
+        Assert.True(EngineDescriptor.Detect(version, rootless with { CgroupVersion = "1" }, DockerClient.Negotiate(version)).RootlessWithoutCgroups);
+        // Rootful on v1 still has cgroups.
+        Assert.False(EngineDescriptor.Detect(version, info with { CgroupVersion = "1" }, DockerClient.Negotiate(version)).RootlessWithoutCgroups);
+        Assert.Null(EngineDescriptor.Detect(version, info with { CgroupVersion = null }, DockerClient.Negotiate(version)).CgroupVersion);
+    }
+
+    [Fact]
     public void Podman_is_detected_from_its_engine_component()
     {
         var engine = Detect("podman");

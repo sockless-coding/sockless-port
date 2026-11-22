@@ -1,0 +1,80 @@
+@* Name, badges and actions of a pod, and its tabs. Model: any pod page. *@
+@model Sockless.Port.Web.Infrastructure.PodPageModel
+@using Sockless.Port.Docker.Models
+@using Sockless.Port.Web.Pages.Engine.Pods
+@{
+    var current = ViewContext.RouteData.Values["page"] as string;
+    var tab = DetailModel.Tabs.FirstOrDefault(t => t.Page == current).Tab;
+    var pod = Model.Pod;
+    var name = Model.DisplayName;
+    var active = PodStates.IsActive(pod?.State);
+    var workloads = Model.Workloads;
+}
+
+<nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+    <a asp-page="/Engine/Pods/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Pods</a>
+    <span class="text-line-accent" aria-hidden="true">/</span>
+    <span aria-current="page">@name</span>
+</nav>
+
+<div class="mb-4 flex flex-wrap items-start justify-between gap-4">
+    <div class="min-w-0">
+        <h2 class="page-title break-all">@name</h2>
+        @if (pod is not null)
+        {
+            <div class="mt-2 flex flex-wrap items-center gap-1">
+                <span title="@PodStatus.Explain(pod.State)"><partial name="_StatusBadge" model="PodStatus.State(pod.State)" /></span>
+                <span class="badge-stat">@(workloads == 0 ? "No containers" : $"{workloads} {(workloads == 1 ? "container" : "containers")}")</span>
+                @if (!pod.CreateInfra)
+                {
+                    <span class="badge-stat" title="Created without an infra container: its containers share no namespaces">No infra</span>
+                }
+                @if (Model.IsSelf)
+                {
+                    <span class="badge-stat" title="Sockless Port runs in this pod, so it can't be stopped or removed from here">Sockless Port</span>
+                }
+            </div>
+        }
+    </div>
+
+    @if (pod is not null)
+    {
+        <form method="post" asp-page="/Engine/Pods/Detail" asp-page-handler="Action"
+              asp-route-endpointId="@Model.EndpointId" asp-route-podId="@Model.PodId" class="flex flex-wrap items-center gap-2">
+            <input type="hidden" name="tab" value="@tab" />
+            @* A degraded pod is active, but start still starts the containers that aren't running. *@
+            @if (!active || pod.State == PodStates.Degraded)
+            {
+                <button type="submit" name="action" value="start" class="btn-soft secondary">
+                    <icon name="play" class="h-4 w-4" /> Start
+                </button>
+            }
+            @if (!Model.IsSelf)
+            {
+                @if (active)
+                {
+                    <button type="submit" name="action" value="stop" class="btn-soft">
+                        <icon name="stop" class="h-4 w-4" /> Stop
+                    </button>
+                }
+                <button type="submit" name="action" value="restart" class="btn-soft">
+                    <icon name="arrow-path" class="h-4 w-4" /> Restart
+                </button>
+                <button type="submit" name="action" value="remove" class="btn-soft danger"
+                        data-confirm="Remove pod @name?@(Model.Members.Count > 0 ? $" Its {Model.Members.Count} {(Model.Members.Count == 1 ? "container is" : "containers are")} stopped and removed too ({string.Join(", ", Model.Members.Select(m => m.Name))})." : "") Named volumes are kept.">
+                    <icon name="trash" class="h-4 w-4" /> Remove pod
+                </button>
+            }
+        </form>
+    }
+</div>
+
+<nav aria-label="Pod" class="tabs mb-6">
+    @foreach (var (key, tabPage, label) in DetailModel.Tabs)
+    {
+        <a asp-page="@tabPage" asp-route-endpointId="@Model.EndpointId" asp-route-podId="@Model.PodId"
+           class="tab" aria-current="@(key == tab ? "page" : null)">@label</a>
+    }
+</nav>
+
+<partial name="_PodsCallout" model="Model" />

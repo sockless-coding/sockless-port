@@ -2,11 +2,14 @@ using Microsoft.AspNetCore.Mvc;
 using Sockless.Port.Containers;
 using Sockless.Port.Docker.Models;
 using Sockless.Port.Engines;
+using Sockless.Port.Pods;
 using Sockless.Port.Web.Infrastructure;
 
 namespace Sockless.Port.Web.Pages.Engine.Containers;
 
-public sealed record ContainerRow(ContainerSummary Summary, StatusBadge State, StatusBadge? Health, string? Stack, string? SwarmService, IReadOnlyList<string> Ports)
+/// <param name="Pod">The Podman pod it's in, if any.</param>
+public sealed record ContainerRow(ContainerSummary Summary, StatusBadge State, StatusBadge? Health, string? Stack, string? SwarmService, IReadOnlyList<string> Ports,
+    PodMember? Pod = null)
 {
     public string Name => Summary.DisplayName;
     public bool Running => Summary.State is "running";
@@ -26,18 +29,25 @@ public sealed class IndexModel(EngineConnections connections) : EndpointPageMode
     [BindProperty(SupportsGet = true)]
     public string? Stack { get; set; }
 
+    /// <summary>A pod's ID: only its containers.</summary>
+    [BindProperty(SupportsGet = true)]
+    public string? Pod { get; set; }
+
     /// <summary><c>key</c> or <c>key=value</c>.</summary>
     [BindProperty(SupportsGet = true)]
     public string? Label { get; set; }
 
     public IReadOnlyList<ContainerRow> Rows { get; private set; } = [];
     public IReadOnlyList<string> Stacks { get; private set; } = [];
+
+    /// <summary>Pods on the engine, for the filter; empty on engines without pods.</summary>
+    public IReadOnlyList<Docker.Models.PodSummary> PodChoices { get; private set; } = [];
     public int Total { get; private set; }
     public string? Error { get; private set; }
 
-    public bool Filtered => !string.IsNullOrEmpty(State) || !string.IsNullOrWhiteSpace(Q) || !string.IsNullOrEmpty(Stack) || !string.IsNullOrWhiteSpace(Label);
+    public bool Filtered => !string.IsNullOrEmpty(State) || !string.IsNullOrWhiteSpace(Q) || !string.IsNullOrEmpty(Stack) || !string.IsNullOrEmpty(Pod) || !string.IsNullOrWhiteSpace(Label);
 
-    public object Filters => new { endpointId = EndpointId, State, Q, Stack, Label };
+    public object Filters => new { endpointId = EndpointId, State, Q, Stack, Pod, Label };
 
     public async Task OnGetAsync(CancellationToken cancellationToken) => await LoadRowsAsync(cancellationToken);
 
@@ -110,9 +120,11 @@ public sealed class IndexModel(EngineConnections connections) : EndpointPageMode
         try
         {
             var all = await client.ListContainersAsync(all: true, cancellationToken);
+            var pods = await PodMembership.LoadAsync(client, Connection.Engine, cancellationToken);
             Total = all.Count;
             Stacks = [.. all.Select(c => ContainerLabels.Stack(c.Labels)).OfType<string>().Distinct().Order(StringComparer.OrdinalIgnoreCase)];
-            Rows = [.. all.Where(Matches).Select(ToRow).OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)];
+            PodChoices = [.. pods.Pods.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase)];
+            Rows = [.. all.Where(c => Matches(c, pods.Of(c.Id))).Select(c => ToRow(c, pods.Of(c.Id))).OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)];
         }
         catch (Exception ex) when (EngineFailures.IsFailure(ex, cancellationToken))
         {
@@ -120,7 +132,7 @@ public sealed class IndexModel(EngineConnections connections) : EndpointPageMode
         }
     }
 
-    private bool Matches(ContainerSummary c)
+    private bool Matches(ContainerSummary c, PodMember? pod)
     {
         var stateMatches = State switch
         {
@@ -144,6 +156,9 @@ public sealed class IndexModel(EngineConnections connections) : EndpointPageMode
         if (!string.IsNullOrEmpty(Stack) && ContainerLabels.Stack(c.Labels) != Stack)
             return false;
 
+        if (!string.IsNullOrEmpty(Pod) && pod?.Pod.Id != Pod)
+            return false;
+
         if (!string.IsNullOrWhiteSpace(Label))
         {
             var equals = Label.IndexOf('=', StringComparison.Ordinal);
@@ -156,9 +171,9 @@ public sealed class IndexModel(EngineConnections connections) : EndpointPageMode
         return true;
     }
 
-    private static ContainerRow ToRow(ContainerSummary c)
+    private static ContainerRow ToRow(ContainerSummary c, PodMember? pod)
     {
         var (state, health) = ContainerStatus.FromSummary(c);
-        return new ContainerRow(c, state, health, ContainerLabels.Stack(c.Labels), ContainerLabels.SwarmServiceName(c.Labels), ContainerStatus.PublishedPorts(c.Ports));
+        return new ContainerRow(c, state, health, ContainerLabels.Stack(c.Labels), ContainerLabels.SwarmServiceName(c.Labels), ContainerStatus.PublishedPorts(c.Ports), pod);
     }
 }

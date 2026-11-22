@@ -4,6 +4,7 @@ using Sockless.Port.Containers;
 using Sockless.Port.Docker;
 using Sockless.Port.Docker.Models;
 using Sockless.Port.Engines;
+using Sockless.Port.Pods;
 
 namespace Sockless.Port.Web.Infrastructure;
 
@@ -31,6 +32,12 @@ public abstract partial class ContainerPageModel(EngineConnections connections) 
     /// <summary>The Swarm service this container is a task of: the swarm replaces it, so editing it is pointless.</summary>
     public string? SwarmService => ContainerLabels.SwarmServiceName(Container?.Config?.Labels);
 
+    /// <summary>
+    /// The Podman pod the container is in. Docker's API can't create a container in a pod, so a
+    /// recreated one would leave it: recreating isn't offered.
+    /// </summary>
+    public PodMember? Pod { get; private set; }
+
     public string DisplayName => Container?.DisplayName ?? ContainerId;
 
     public bool IsRunning => Container?.State is { Running: true, Paused: false };
@@ -46,6 +53,7 @@ public abstract partial class ContainerPageModel(EngineConnections connections) 
         try
         {
             (Container, InspectJson) = await client.InspectContainerAsync(ContainerId, cancellationToken);
+            Pod = (await PodMembership.LoadAsync(client, Connection.Engine, cancellationToken)).Of(Container.Id);
         }
         catch (DockerApiException ex) when (ex.IsNotFound)
         {

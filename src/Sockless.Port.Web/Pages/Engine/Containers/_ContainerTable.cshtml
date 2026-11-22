@@ -1,6 +1,6 @@
 @model Sockless.Port.Web.Pages.Engine.Containers.IndexModel
 @{
-    var filters = new { endpointId = Model.EndpointId, Model.State, Model.Q, Model.Stack, Model.Label };
+    var filters = Model.Filters;
     var refreshUrl = Url.Page("/Engine/Containers/Index", "Table", filters);
 }
 @* Live: refreshes on engine events, but not while rows are selected (data-pause-when-selected). *@
@@ -39,7 +39,7 @@
 
         <form id="bulk-form" method="post" asp-page="/Engine/Containers/Index" asp-page-handler="Bulk"
               asp-route-endpointId="@Model.EndpointId" asp-route-state="@Model.State" asp-route-q="@Model.Q"
-              asp-route-stack="@Model.Stack" asp-route-label="@Model.Label">
+              asp-route-stack="@Model.Stack" asp-route-pod="@Model.Pod" asp-route-label="@Model.Label">
             <div class="mb-3 flex flex-wrap items-center gap-2" data-bulk-toolbar>
                 <span class="text-secondary" data-bulk-count aria-live="polite">@Model.Rows.Count of @Model.Total shown</span>
                 <span class="flex-1"></span>
@@ -86,6 +86,15 @@
                                         {
                                             <span class="badge-stat" title="Stack">@row.Stack</span>
                                         }
+                                        @if (row.Pod is { } member)
+                                        {
+                                            <a asp-page="/Engine/Pods/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-podId="@member.Pod.Id"
+                                               class="badge-stat hover:underline" title="In this Podman pod">Pod: @member.Pod.Name</a>
+                                            @if (member.IsInfra)
+                                            {
+                                                <span class="badge-stat" title="Holds the namespaces the pod's containers share. Starting, stopping or removing the pod handles it.">Pod infra</span>
+                                            }
+                                        }
                                         @if (row.SwarmService is not null)
                                         {
                                             <span class="badge-stat" title="Managed by this swarm service">Swarm: @row.SwarmService</span>
@@ -118,14 +127,14 @@
                                     @if (row.Running)
                                     {
                                         <button type="submit" form="row-actions" class="btn-soft" aria-label="Stop @row.Name"
-                                                formaction="@Url.Page("/Engine/Containers/Index", "Bulk", new { endpointId = Model.EndpointId, Model.State, Model.Q, Model.Stack, Model.Label, ids = row.Summary.Id, action = "stop" })">
+                                                formaction="@Url.Page("/Engine/Containers/Index", "Bulk", new { endpointId = Model.EndpointId, Model.State, Model.Q, Model.Stack, Model.Pod, Model.Label, ids = row.Summary.Id, action = "stop" })">
                                             <icon name="stop" class="h-4 w-4" /> Stop
                                         </button>
                                     }
                                     else
                                     {
                                         <button type="submit" form="row-actions" class="btn-soft" aria-label="Start @row.Name"
-                                                formaction="@Url.Page("/Engine/Containers/Index", "Bulk", new { endpointId = Model.EndpointId, Model.State, Model.Q, Model.Stack, Model.Label, ids = row.Summary.Id, action = "start" })">
+                                                formaction="@Url.Page("/Engine/Containers/Index", "Bulk", new { endpointId = Model.EndpointId, Model.State, Model.Q, Model.Stack, Model.Pod, Model.Label, ids = row.Summary.Id, action = "start" })">
                                             <icon name="play" class="h-4 w-4" /> Start
                                         </button>
                                     }

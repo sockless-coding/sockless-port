@@ -59,5 +59,10 @@ namespace Sockless.Port.Docker;
 [JsonSerializable(typeof(List<SwarmConfig>))]
 [JsonSerializable(typeof(SwarmConfig))]
 [JsonSerializable(typeof(SwarmObjectCreateRequest))]
+[JsonSerializable(typeof(List<PodSummary>))]
+[JsonSerializable(typeof(PodInspect))]
+[JsonSerializable(typeof(PodRemoveReport))]
+[JsonSerializable(typeof(PodCreateRequest))]
+[JsonSerializable(typeof(PodContainerCreateRequest))]
 [JsonSerializable(typeof(Dictionary<string, string[]>))]
 internal sealed partial class DockerJsonContext : JsonSerializerContext;

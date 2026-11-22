@@ -1,0 +1,358 @@
+[
+  {
+    "Id": "520fec36a7507b3122c202084288b5c12e4459e36df7ad553d2ea86082576932",
+    "Names": [
+      "/21947cc47cc6-infra"
+    ],
+    "Image": "",
+    "ImageID": "sha256:",
+    "Command": "",
+    "Created": 1795355612,
+    "Ports": [],
+    "Labels": {},
+    "State": "created",
+    "Status": "Created",
+    "HostConfig": {
+      "NetworkMode": "host"
+    },
+    "NetworkSettings": {
+      "Networks": {
+        "host": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": null,
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "host",
+          "EndpointID": "",
+          "Gateway": "",
+          "IPAddress": "",
+          "MacAddress": "",
+          "IPPrefixLen": 0,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": null
+        }
+      }
+    },
+    "Mounts": []
+  },
+  {
+    "Id": "d1a880dbd28e73d1094564fba948e7aa40a3b21e9705c0c36c7741d53c4f2e3b",
+    "Names": [
+      "/fixture-stopped-app"
+    ],
+    "Image": "docker.io/library/busybox:1.37",
+    "ImageID": "sha256:30ecbe1509090b38ef3260f3609d64d8261230464eaa4d235901db496e9647fb",
+    "Command": "true",
+    "Created": 1795355612,
+    "Ports": [],
+    "Labels": {},
+    "State": "created",
+    "Status": "Created",
+    "HostConfig": {
+      "NetworkMode": "host",
+      "Annotations": {
+        "io.kubernetes.cri-o.SandboxID": "520fec36a7507b3122c202084288b5c12e4459e36df7ad553d2ea86082576932"
+      }
+    },
+    "NetworkSettings": {
+      "Networks": {
+        "host": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": null,
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "host",
+          "EndpointID": "",
+          "Gateway": "",
+          "IPAddress": "",
+          "MacAddress": "",
+          "IPPrefixLen": 0,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": null
+        }
+      }
+    },
+    "Mounts": []
+  },
+  {
+    "Id": "7e0f54b1fdd3bd5e7cb89204add367a69ed89d2ee579b1a086a4fcb85485ae33",
+    "Names": [
+      "/fixture-solo"
+    ],
+    "Image": "docker.io/library/busybox:1.37",
+    "ImageID": "sha256:30ecbe1509090b38ef3260f3609d64d8261230464eaa4d235901db496e9647fb",
+    "Command": "sleep 3600",
+    "Created": 1795355613,
+    "Ports": [],
+    "Labels": {},
+    "State": "running",
+    "Status": "Up 2 minutes",
+    "HostConfig": {
+      "NetworkMode": "host",
+      "Annotations": {
+        "io.container.manager": "libpod",
+        "org.opencontainers.image.stopSignal": "15",
+        "org.systemd.property.KillSignal": "15",
+        "org.systemd.property.TimeoutStopUSec": "uint64 10000000"
+      }
+    },
+    "NetworkSettings": {
+      "Networks": {
+        "host": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": null,
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "host",
+          "EndpointID": "",
+          "Gateway": "",
+          "IPAddress": "",
+          "MacAddress": "",
+          "IPPrefixLen": 0,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": null
+        }
+      }
+    },
+    "Mounts": []
+  },
+  {
+    "Id": "aa5892edbd5106907b6f3136d0e5bf9d5da83bec3fb536ff63cfa994f2299a4b",
+    "Names": [
+      "/66dc61154798-infra"
+    ],
+    "Image": "",
+    "ImageID": "sha256:",
+    "Command": "",
+    "Created": 1795355677,
+    "Ports": [],
+    "Labels": {},
+    "State": "running",
+    "Status": "Up About a minute",
+    "HostConfig": {
+      "NetworkMode": "host",
+      "Annotations": {
+        "io.container.manager": "libpod",
+        "org.opencontainers.image.stopSignal": "15",
+        "org.systemd.property.KillSignal": "15",
+        "org.systemd.property.TimeoutStopUSec": "uint64 10000000"
+      }
+    },
+    "NetworkSettings": {
+      "Networks": {
+        "host": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": null,
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "host",
+          "EndpointID": "",
+          "Gateway": "",
+          "IPAddress": "",
+          "MacAddress": "",
+          "IPPrefixLen": 0,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": null
+        }
+      }
+    },
+    "Mounts": []
+  },
+  {
+    "Id": "f4d0a7f93b8561f7a7321bf7205daebcc479e958dfa2383f3117d64569e5a756",
+    "Names": [
+      "/fixture-broken-app"
+    ],
+    "Image": "docker.io/library/busybox:1.37",
+    "ImageID": "sha256:30ecbe1509090b38ef3260f3609d64d8261230464eaa4d235901db496e9647fb",
+    "Command": "/nope",
+    "Created": 1795355678,
+    "Ports": [],
+    "Labels": {},
+    "State": "created",
+    "Status": "Created",
+    "HostConfig": {
+      "NetworkMode": "host",
+      "Annotations": {
+        "io.container.manager": "libpod",
+        "io.kubernetes.cri-o.SandboxID": "aa5892edbd5106907b6f3136d0e5bf9d5da83bec3fb536ff63cfa994f2299a4b",
+        "org.opencontainers.image.stopSignal": "15",
+        "org.systemd.property.KillSignal": "15",
+        "org.systemd.property.TimeoutStopUSec": "uint64 10000000"
+      }
+    },
+    "NetworkSettings": {
+      "Networks": {
+        "host": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": null,
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "host",
+          "EndpointID": "",
+          "Gateway": "",
+          "IPAddress": "",
+          "MacAddress": "",
+          "IPPrefixLen": 0,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": null
+        }
+      }
+    },
+    "Mounts": []
+  },
+  {
+    "Id": "546a5a37fbb0217c782f6d4a14334f285fea7e3e7996531bfcd446ca16931b76",
+    "Names": [
+      "/ee6fa3a1a1f7-infra"
+    ],
+    "Image": "",
+    "ImageID": "sha256:",
+    "Command": "",
+    "Created": 1795355738,
+    "Ports": [],
+    "Labels": {
+      "team": "infra"
+    },
+    "State": "running",
+    "Status": "Up 11 seconds",
+    "HostConfig": {
+      "NetworkMode": "host",
+      "Annotations": {
+        "io.container.manager": "libpod",
+        "org.opencontainers.image.stopSignal": "15",
+        "org.systemd.property.KillSignal": "15",
+        "org.systemd.property.TimeoutStopUSec": "uint64 10000000"
+      }
+    },
+    "NetworkSettings": {
+      "Networks": {
+        "host": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": null,
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "host",
+          "EndpointID": "",
+          "Gateway": "",
+          "IPAddress": "",
+          "MacAddress": "",
+          "IPPrefixLen": 0,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": null
+        }
+      }
+    },
+    "Mounts": []
+  },
+  {
+    "Id": "a83eb250c633f483738e24bf497a82773d80eb5a25f25b612d917b80c9ff3f81",
+    "Names": [
+      "/fixture-pod-web"
+    ],
+    "Image": "docker.io/library/busybox:1.37",
+    "ImageID": "sha256:30ecbe1509090b38ef3260f3609d64d8261230464eaa4d235901db496e9647fb",
+    "Command": "sleep 3600",
+    "Created": 1795355738,
+    "Ports": [],
+    "Labels": {},
+    "State": "running",
+    "Status": "Up 14 seconds",
+    "HostConfig": {
+      "NetworkMode": "host",
+      "Annotations": {
+        "io.container.manager": "libpod",
+        "io.kubernetes.cri-o.SandboxID": "546a5a37fbb0217c782f6d4a14334f285fea7e3e7996531bfcd446ca16931b76",
+        "org.opencontainers.image.stopSignal": "15",
+        "org.systemd.property.KillSignal": "15",
+        "org.systemd.property.TimeoutStopUSec": "uint64 10000000"
+      }
+    },
+    "NetworkSettings": {
+      "Networks": {
+        "host": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": null,
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "host",
+          "EndpointID": "",
+          "Gateway": "",
+          "IPAddress": "",
+          "MacAddress": "",
+          "IPPrefixLen": 0,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": null
+        }
+      }
+    },
+    "Mounts": []
+  },
+  {
+    "Id": "315030613e88f5395ddee4f832dedb3a7d2975fa514c071a90d17b3855cae856",
+    "Names": [
+      "/fixture-pod-side"
+    ],
+    "Image": "docker.io/library/busybox:1.37",
+    "ImageID": "sha256:30ecbe1509090b38ef3260f3609d64d8261230464eaa4d235901db496e9647fb",
+    "Command": "sleep 3600",
+    "Created": 1795355738,
+    "Ports": [],
+    "Labels": {},
+    "State": "running",
+    "Status": "Up 13 seconds",
+    "HostConfig": {
+      "NetworkMode": "host",
+      "Annotations": {
+        "io.container.manager": "libpod",
+        "io.kubernetes.cri-o.SandboxID": "546a5a37fbb0217c782f6d4a14334f285fea7e3e7996531bfcd446ca16931b76",
+        "org.opencontainers.image.stopSignal": "15",
+        "org.systemd.property.KillSignal": "15",
+        "org.systemd.property.TimeoutStopUSec": "uint64 10000000"
+      }
+    },
+    "NetworkSettings": {
+      "Networks": {
+        "host": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": null,
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "host",
+          "EndpointID": "",
+          "Gateway": "",
+          "IPAddress": "",
+          "MacAddress": "",
+          "IPPrefixLen": 0,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": null
+        }
+      }
+    },
+    "Mounts": []
+  }
+]

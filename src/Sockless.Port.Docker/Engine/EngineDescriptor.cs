@@ -36,6 +36,7 @@ public enum EngineCapabilities
 /// <summary>An engine as detected when connecting.</summary>
 /// <param name="SwarmNodeId">The engine's node in its swarm, when it's in one: how a swarm node is matched to the endpoint that reaches it.</param>
 /// <param name="SwarmClusterId">The swarm's ID. Set on managers only (workers don't know it).</param>
+/// <param name="CgroupVersion">1 or 2, from <c>/info</c>; null when the engine doesn't say. Rootless engines on cgroups v1 can't limit or measure containers.</param>
 public sealed record EngineDescriptor(
     EngineKind Kind,
     string Version,
@@ -44,7 +45,8 @@ public sealed record EngineDescriptor(
     string? Architecture,
     EngineCapabilities Capabilities,
     string? SwarmNodeId = null,
-    string? SwarmClusterId = null)
+    string? SwarmClusterId = null,
+    int? CgroupVersion = null)
 {
     public bool Has(EngineCapabilities capability) => (Capabilities & capability) == capability;
 
@@ -53,6 +55,9 @@ public sealed record EngineDescriptor(
 
     /// <summary>E.g. <c>linux/amd64</c>.</summary>
     public string? Platform => Os is null ? Architecture : Architecture is null ? Os : $"{Os}/{Architecture}";
+
+    /// <summary>A rootless engine on cgroups v1: resource limits and stats don't work at all.</summary>
+    public bool RootlessWithoutCgroups => Has(EngineCapabilities.Rootless) && CgroupVersion == 1;
 
     public static EngineDescriptor Detect(VersionResponse version, SystemInfo info, Version negotiatedApiVersion)
     {
@@ -81,6 +86,7 @@ public sealed record EngineDescriptor(
             version.Arch ?? info.Architecture,
             capabilities,
             capabilities.HasFlag(EngineCapabilities.Swarm) && info.Swarm?.NodeId is { Length: > 0 } node ? node : null,
-            capabilities.HasFlag(EngineCapabilities.Swarm) && info.Swarm?.Cluster?.Id is { Length: > 0 } cluster ? cluster : null);
+            capabilities.HasFlag(EngineCapabilities.Swarm) && info.Swarm?.Cluster?.Id is { Length: > 0 } cluster ? cluster : null,
+            info.CgroupVersion?.Trim().TrimStart('v', 'V') switch { "1" => 1, "2" => 2, _ => null });
     }
 }

@@ -39,6 +39,15 @@
                 {
                     <span class="badge-stat" title="Stack">@Model.Stack</span>
                 }
+                @if (Model.Pod is { } member)
+                {
+                    <a asp-page="/Engine/Pods/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-podId="@member.Pod.Id"
+                       class="badge-stat hover:text-accent" title="In this Podman pod">Pod: @member.Pod.Name</a>
+                    @if (member.IsInfra)
+                    {
+                        <span class="badge-stat" title="Holds the namespaces the pod's containers share">Pod infra</span>
+                    }
+                }
                 <span class="badge-stat" title="@container.Id">@container.Id[..12]</span>
             </div>
         }
@@ -71,17 +80,20 @@
                 <div class="menu-panel w-80 p-3">
                     @if (Model.SwarmService is null)
                     {
-                        <div class="mb-3">
-                            <p class="label-caps mb-1">Recreate</p>
-                            <p class="mb-2 text-xs text-secondary">Replace it with a new container from the same settings. Its writable layer is lost; volumes are kept.</p>
-                            <label class="mb-2 flex items-center gap-2 text-secondary">
-                                <input type="checkbox" name="pull" value="true" form="recreate-form" class="accent-accent" checked /> Pull the image first
-                            </label>
-                            <button type="submit" form="recreate-form" class="btn-soft secondary"
-                                    data-confirm="Recreate @name? It is stopped and replaced with a new container from the same settings.">
-                                <icon name="arrow-path" class="h-4 w-4" /> Recreate
-                            </button>
-                        </div>
+                        @if (Model.Pod is null)
+                        {
+                            <div class="mb-3">
+                                <p class="label-caps mb-1">Recreate</p>
+                                <p class="mb-2 text-xs text-secondary">Replace it with a new container from the same settings. Its writable layer is lost; volumes are kept.</p>
+                                <label class="mb-2 flex items-center gap-2 text-secondary">
+                                    <input type="checkbox" name="pull" value="true" form="recreate-form" class="accent-accent" checked /> Pull the image first
+                                </label>
+                                <button type="submit" form="recreate-form" class="btn-soft secondary"
+                                        data-confirm="Recreate @name? It is stopped and replaced with a new container from the same settings.">
+                                    <icon name="arrow-path" class="h-4 w-4" /> Recreate
+                                </button>
+                            </div>
+                        }
                         <div class="mb-3">
                             <p class="label-caps mb-1">Rename</p>
                             <div class="field flex gap-2">
@@ -121,6 +133,20 @@
         </form>
     }
 </div>
+
+@if (Model.Pod is { } podMember)
+{
+    <div class="callout mb-4">
+        <icon name="information-circle" class="h-5 w-5" />
+        <p>
+            This container is @(podMember.IsInfra ? "the infra container of" : "in") the pod
+            <a asp-page="/Engine/Pods/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-podId="@podMember.Pod.Id" class="font-mono hover:underline">@podMember.Pod.Name</a>.
+            @(podMember.IsInfra
+                ? "It holds the namespaces the pod's containers share, and starts and stops with the pod."
+                : "Recreate isn't offered: Docker's API can't put a new container in a pod, so it would leave it.")
+        </p>
+    </div>
+}
 
 @if (Model.SwarmService is not null)
 {

@@ -94,6 +94,6 @@ public sealed class SwarmPagesTests : IDisposable
         Assert.Equal(["Cluster"], Navigation.Swarm.Where(i => i.IsAvailable(worker)).Select(i => i.Label));
         Assert.DoesNotContain(Navigation.Swarm, i => i.IsAvailable(plain));
         Assert.DoesNotContain(Navigation.Swarm, i => i.IsAvailable(null));
-        Assert.All(Navigation.Main, item => Assert.True(item.IsAvailable(plain)));
+        Assert.Equal(["Pods"], Navigation.Main.Where(i => !i.IsAvailable(plain)).Select(i => i.Label));
     }
 }

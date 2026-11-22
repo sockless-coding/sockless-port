@@ -1,0 +1,56 @@
+{
+  "Id": "66dc61154798144b7636ddb306978e7aed0698a379d307e2e2894f9ff75de65d",
+  "Name": "fixture-broken",
+  "Created": "2026-11-22T13:54:37.7973006Z",
+  "CreateCommand": [
+    "podman",
+    "pod",
+    "create",
+    "--name",
+    "fixture-broken"
+  ],
+  "ExitPolicy": "continue",
+  "State": "Degraded",
+  "Hostname": "",
+  "CreateCgroup": true,
+  "CreateInfra": true,
+  "InfraContainerID": "aa5892edbd5106907b6f3136d0e5bf9d5da83bec3fb536ff63cfa994f2299a4b",
+  "InfraConfig": {
+    "PortBindings": {},
+    "HostNetwork": true,
+    "StaticIP": "",
+    "StaticMAC": "",
+    "NoManageResolvConf": false,
+    "DNSServer": null,
+    "DNSSearch": null,
+    "DNSOption": null,
+    "NoManageHostname": false,
+    "NoManageHosts": false,
+    "HostAdd": null,
+    "HostsFile": "",
+    "Networks": null,
+    "NetworkOptions": null,
+    "pid_ns": "private",
+    "userns": "host",
+    "uts_ns": "host"
+  },
+  "SharedNamespaces": [
+    "ipc",
+    "net",
+    "uts"
+  ],
+  "NumContainers": 2,
+  "Containers": [
+    {
+      "Id": "aa5892edbd5106907b6f3136d0e5bf9d5da83bec3fb536ff63cfa994f2299a4b",
+      "Name": "66dc61154798-infra",
+      "State": "running"
+    },
+    {
+      "Id": "f4d0a7f93b8561f7a7321bf7205daebcc479e958dfa2383f3117d64569e5a756",
+      "Name": "fixture-broken-app",
+      "State": "created"
+    }
+  ],
+  "LockNumber": 1
+}

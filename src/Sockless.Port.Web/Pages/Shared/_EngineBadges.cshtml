@@ -11,4 +11,8 @@
     {
         <span class="badge-stat">Swarm worker</span>
     }
+    @if (Model.Has(EngineCapabilities.Rootless))
+    {
+        <span class="badge-stat" title="@Sockless.Port.Web.Infrastructure.RootlessNotes.Badge">Rootless</span>
+    }
 </span>

@@ -21,6 +21,13 @@
         }
         else
         {
+            @if (RootlessNotes.Stats(Model.Connection.Engine) is { } statsNote)
+            {
+                <div class="callout warning mb-4">
+                    <icon name="exclamation-triangle" class="h-5 w-5" />
+                    <p>@statsNote</p>
+                </div>
+            }
             <div data-stats data-endpoint="@Model.EndpointId" data-container="@Model.Container.Id">
                 <p class="mb-4 text-xs text-secondary" aria-live="polite" data-stats-status>Waiting for the first reading…</p>
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">

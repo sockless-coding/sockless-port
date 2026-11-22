@@ -63,6 +63,11 @@ public sealed partial class DetailModel(EngineConnections connections, RegistryC
             Flash.Error(TempData, $"This container is a task of the swarm service {SwarmService}. Update the service instead.");
             return BackTo(null);
         }
+        if (Pod is not null)
+        {
+            Flash.Error(TempData, $"{DisplayName} is in the pod {Pod.Pod.Name}, and a recreated container would leave it. Recreate it with podman run --pod {Pod.Pod.Name} instead.");
+            return BackTo(null);
+        }
 
         string? newId = null;
         var ok = await TryEngineAsync(async client => newId = await ContainerRecreator.RecreateAsync(client, ContainerId, pull && !pulled, HttpContext.RequestAborted,

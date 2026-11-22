@@ -92,6 +92,13 @@ else
                     <partial name="_FieldError" model='"Input_Ports"' />
                 </div>
             </div>
+            @if (RootlessNotes.Ports(Model.Connection.Engine) is { } portsNote)
+            {
+                <div class="callout">
+                    <icon name="information-circle" class="h-5 w-5" />
+                    <p>@portsNote</p>
+                </div>
+            }
         </section>
 
         <section class="card space-y-4" aria-labelledby="create-storage">
@@ -157,6 +164,13 @@ else
                     <input asp-for="Input.WorkingDir" class="font-mono" placeholder="The image's default" autocomplete="off" />
                 </div>
             </div>
+            @if (RootlessNotes.Limits(Model.Connection.Engine) is { } limitsNote)
+            {
+                <div class="callout">
+                    <icon name="information-circle" class="h-5 w-5" />
+                    <p>@limitsNote</p>
+                </div>
+            }
             <div class="flex flex-wrap gap-6">
                 <label class="flex items-center gap-2"><input asp-for="Input.Tty" class="accent-accent" /> Allocate a terminal (TTY)</label>
                 <label class="flex items-center gap-2"><input asp-for="Input.Interactive" class="accent-accent" /> Keep standard input open</label>

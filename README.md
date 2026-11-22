@@ -1,8 +1,8 @@
 # Sockless Port
 
-Self-hosted container management for Docker, Docker Swarm and Podman. Sockless Port runs as a container and manages containers, stacks, images, volumes and networks on the local engine, and on remote engines through a lightweight agent. On a swarm manager it also manages services, nodes, secrets, configs and swarm stacks.
+Self-hosted container management for Docker, Docker Swarm and Podman. Sockless Port runs as a container and manages containers, stacks, images, volumes and networks on the local engine, and on remote engines through a lightweight agent. On a swarm manager it also manages services, nodes, secrets, configs and swarm stacks, and on Podman its pods.
 
-> **Status:** early development. Phases 0 to 7 are done: Compose and swarm stacks, containers, images, volumes and networks, remote engines through agents, and Docker Swarm. The roadmap is in [docs/plan.md](docs/plan.md).
+> **Status:** early development. Phases 0 to 8 are done: Compose and swarm stacks, containers, images, volumes and networks, remote engines through agents, Docker Swarm, and Podman pods. The roadmap is in [docs/plan.md](docs/plan.md).
 
 ## Run it
 
@@ -58,6 +58,10 @@ Mount the Podman socket in place of the Docker one:
 | Rootless | `$XDG_RUNTIME_DIR/podman/podman.sock` (enable it with `systemctl --user enable --now podman.socket`) |
 
 On SELinux hosts, add `:z` to the socket mount or run with `--security-opt label=disable`.
+
+On Podman the sidebar gets **Pods**: each pod with its containers, and start, stop, restart and remove (which removes the pod's containers too). Container lists say which pod a container is in and filter by pod. A container in a pod isn't offered *Recreate*, because Docker's API, which Sockless Port uses for containers, can't put the new one back in the pod.
+
+Rootless engines (Docker or Podman) are badged on the dashboard. The container form says that they can't publish ports below 1024 and that limits need cgroups v2 with the controllers delegated to the engine's user. When an engine call fails for one of these reasons, the error says what to do.
 
 ### Security
 

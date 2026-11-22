@@ -1,0 +1,142 @@
+@model Sockless.Port.Web.Pages.Engine.Pods.DetailModel
+@{
+    var pod = Model.Pod;
+}
+<div id="pod-overview" hx-get="@Url.Page("/Engine/Pods/Detail", "Overview", new { endpointId = Model.EndpointId, podId = Model.PodId })"
+     hx-trigger="engine-changed from:body, endpoint-state from:body" hx-swap="outerHTML">
+    @if (pod is not null)
+    {
+        var created = Format.EngineTime(pod.Created);
+        var infra = pod.InfraConfig;
+        var ports = PodStatus.PublishedPorts(infra);
+        var networks = infra?.Networks ?? [];
+
+        <div class="grid grid-cols-1 gap-6">
+            <section class="card" aria-labelledby="members-title">
+                <h3 id="members-title" class="section-title">Containers</h3>
+                @if (Model.Members.Count == 0)
+                {
+                    <p class="text-secondary">The pod has no containers. Add one with <span class="font-mono">podman run --pod @pod.Name …</span></p>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="table">
+                            <caption class="sr-only">The pod's containers</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Container</th>
+                                    <th scope="col">State</th>
+                                    <th scope="col">Image</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var member in Model.Members)
+                                {
+                                    var badges = member.Summary is { } summary ? ContainerStatus.FromSummary(summary) : (ContainerStatus.State(pod.Containers?.FirstOrDefault(c => c.Id == member.Id)?.State, null), null);
+                                    <tr>
+                                        <th scope="row">
+                                            <a asp-page="/Engine/Containers/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-containerId="@member.Id"
+                                               class="break-all font-mono hover:underline">@member.Name</a>
+                                            @if (member.IsInfra)
+                                            {
+                                                <span class="mt-1 flex"><span class="badge-stat" title="Holds the namespaces the pod's containers share; it only sleeps">Infra</span></span>
+                                            }
+                                        </th>
+                                        <td>
+                                            <span class="flex flex-wrap gap-1">
+                                                <partial name="_StatusBadge" model="badges.State" />
+                                                @if (badges.Health is { } health)
+                                                {
+                                                    <partial name="_StatusBadge" model="health" />
+                                                }
+                                            </span>
+                                            @if (member.Summary?.Status is { Length: > 0 } status)
+                                            {
+                                                <span class="mt-1 block text-xs text-secondary">@status</span>
+                                            }
+                                        </td>
+                                        <td class="max-w-[16rem] break-all font-mono text-xs">@(member.Summary?.Image is { Length: > 0 } image ? image : "—")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+
+            <section class="card" aria-labelledby="summary-title">
+                <h3 id="summary-title" class="section-title">Summary</h3>
+                <dl class="details">
+                    <dt>ID</dt>
+                    <dd class="break-all font-mono text-xs">@pod.Id</dd>
+                    <dt>Created</dt>
+                    <dd>@(created is { } cr ? $"{Format.Relative(cr)} ({Format.Timestamp(cr)})" : "—")</dd>
+                    <dt>Shared namespaces</dt>
+                    <dd class="font-mono">@(pod.SharedNamespaces is { Count: > 0 } shared ? string.Join(", ", shared) : "None")</dd>
+                    <dt>Network</dt>
+                    <dd>
+                        @if (infra?.HostNetwork == true)
+                        {
+                            <span>The host's network</span>
+                        }
+                        else if (networks.Count > 0)
+                        {
+                            <span class="font-mono">@string.Join(", ", networks)</span>
+                        }
+                        else
+                        {
+                            <span>@(pod.CreateInfra ? "The engine's default" : "Each container's own")</span>
+                        }
+                    </dd>
+                    <dt>Published ports</dt>
+                    <dd class="font-mono text-xs">
+                        @if (ports.Count == 0)
+                        {
+                            <span class="font-sans text-sm text-secondary">None</span>
+                        }
+                        @foreach (var port in ports)
+                        {
+                            <span class="block">@port</span>
+                        }
+                    </dd>
+                    @if (pod.Hostname is { Length: > 0 } hostname)
+                    {
+                        <dt>Hostname</dt>
+                        <dd class="font-mono">@hostname</dd>
+                    }
+                    <dt>When containers exit</dt>
+                    <dd>@(pod.ExitPolicy switch { "stop" => "The pod stops once the last one exits", "continue" => "The pod keeps running (its infra container stays up)", { Length: > 0 } other => other, _ => "—" })</dd>
+                    @if (pod.RestartPolicy is { Length: > 0 } restart)
+                    {
+                        <dt>Restart policy</dt>
+                        <dd class="font-mono">@restart</dd>
+                    }
+                    @if (pod.CreateCommand is { Count: > 0 } command)
+                    {
+                        <dt>Created with</dt>
+                        <dd class="break-all font-mono text-xs">@string.Join(' ', command)</dd>
+                    }
+                </dl>
+            </section>
+
+            <section class="card" aria-labelledby="labels-title">
+                <h3 id="labels-title" class="section-title">Labels</h3>
+                @if (pod.Labels is { Count: > 0 } labels)
+                {
+                    <dl class="details">
+                        @foreach (var (key, value) in labels.OrderBy(l => l.Key, StringComparer.Ordinal))
+                        {
+                            <dt class="break-all font-mono text-xs">@key</dt>
+                            <dd class="break-all font-mono text-xs">@(value.Length > 0 ? value : "—")</dd>
+                        }
+                    </dl>
+                }
+                else
+                {
+                    <p class="text-secondary">None.</p>
+                }
+            </section>
+        </div>
+    }
+</div>

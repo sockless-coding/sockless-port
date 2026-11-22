@@ -1,0 +1,97 @@
+[
+  {
+    "Cgroup": "",
+    "Containers": [
+      {
+        "Id": "520fec36a7507b3122c202084288b5c12e4459e36df7ad553d2ea86082576932",
+        "Names": "21947cc47cc6-infra",
+        "Status": "created",
+        "RestartCount": 0
+      },
+      {
+        "Id": "d1a880dbd28e73d1094564fba948e7aa40a3b21e9705c0c36c7741d53c4f2e3b",
+        "Names": "fixture-stopped-app",
+        "Status": "created",
+        "RestartCount": 0
+      }
+    ],
+    "Created": "2026-11-22T13:53:32.589997686Z",
+    "Id": "21947cc47cc676861d32ea0ed851fe9fccbe4b4a10cf1a7d3ef194f4301b10dd",
+    "InfraId": "520fec36a7507b3122c202084288b5c12e4459e36df7ad553d2ea86082576932",
+    "Name": "fixture-stopped",
+    "Namespace": "",
+    "Networks": [],
+    "Status": "Created",
+    "Labels": {}
+  },
+  {
+    "Cgroup": "",
+    "Containers": [],
+    "Created": "2026-11-22T13:53:33.161167704Z",
+    "Id": "1615693b0ebfb43987bd7a02bb801deaaec1c1fa8a09a7790409ec272e5ce9d3",
+    "InfraId": "",
+    "Name": "fixture-empty",
+    "Namespace": "",
+    "Networks": [],
+    "Status": "Created",
+    "Labels": {}
+  },
+  {
+    "Cgroup": "",
+    "Containers": [
+      {
+        "Id": "aa5892edbd5106907b6f3136d0e5bf9d5da83bec3fb536ff63cfa994f2299a4b",
+        "Names": "66dc61154798-infra",
+        "Status": "running",
+        "RestartCount": 0
+      },
+      {
+        "Id": "f4d0a7f93b8561f7a7321bf7205daebcc479e958dfa2383f3117d64569e5a756",
+        "Names": "fixture-broken-app",
+        "Status": "created",
+        "RestartCount": 0
+      }
+    ],
+    "Created": "2026-11-22T13:54:37.7973006Z",
+    "Id": "66dc61154798144b7636ddb306978e7aed0698a379d307e2e2894f9ff75de65d",
+    "InfraId": "aa5892edbd5106907b6f3136d0e5bf9d5da83bec3fb536ff63cfa994f2299a4b",
+    "Name": "fixture-broken",
+    "Namespace": "",
+    "Networks": [],
+    "Status": "Degraded",
+    "Labels": {}
+  },
+  {
+    "Cgroup": "",
+    "Containers": [
+      {
+        "Id": "546a5a37fbb0217c782f6d4a14334f285fea7e3e7996531bfcd446ca16931b76",
+        "Names": "ee6fa3a1a1f7-infra",
+        "Status": "running",
+        "RestartCount": 0
+      },
+      {
+        "Id": "a83eb250c633f483738e24bf497a82773d80eb5a25f25b612d917b80c9ff3f81",
+        "Names": "fixture-pod-web",
+        "Status": "running",
+        "RestartCount": 0
+      },
+      {
+        "Id": "315030613e88f5395ddee4f832dedb3a7d2975fa514c071a90d17b3855cae856",
+        "Names": "fixture-pod-side",
+        "Status": "running",
+        "RestartCount": 0
+      }
+    ],
+    "Created": "2026-11-22T13:55:38.021008265Z",
+    "Id": "ee6fa3a1a1f745d7540c4930d99f274ee9bcec73806037cd905684fa02285a68",
+    "InfraId": "546a5a37fbb0217c782f6d4a14334f285fea7e3e7996531bfcd446ca16931b76",
+    "Name": "fixture-pod",
+    "Namespace": "",
+    "Networks": [],
+    "Status": "Running",
+    "Labels": {
+      "team": "infra"
+    }
+  }
+]

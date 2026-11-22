@@ -1,0 +1,41 @@
+@page "/endpoints/{endpointId:int}/pods"
+@model Sockless.Port.Web.Pages.Engine.Pods.IndexModel
+@{
+    ViewData["Title"] = "Pods";
+    var tableUrl = Url.Page("/Engine/Pods/Index", "Table", new { endpointId = Model.EndpointId });
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <div class="mb-6">
+        <h2 class="page-title">Pods</h2>
+        <p class="mt-1 text-secondary">Podman pods on @Model.Connection.Name: containers that share a network, and start and stop together.</p>
+    </div>
+
+    @if (Model.Pods is null)
+    {
+        <partial name="_PodsCallout" model="Model" />
+    }
+    else
+    {
+        <form method="get" role="search" aria-label="Filter pods" class="mb-4 flex flex-wrap items-end gap-3"
+              hx-get="@tableUrl" hx-target="#pod-table" hx-swap="outerHTML"
+              hx-trigger="change, input changed delay:300ms from:find input[type=search], submit">
+            <div class="field min-w-[14rem] flex-1">
+                <label for="filter-q">Search</label>
+                <input id="filter-q" type="search" name="q" value="@Model.Q" placeholder="Pod, ID or container" autocomplete="off" />
+            </div>
+            <div class="field">
+                <label for="filter-state">State</label>
+                <select id="filter-state" name="state">
+                    @foreach (var (value, label) in Sockless.Port.Web.Pages.Engine.Pods.IndexModel.States)
+                    {
+                        <option value="@value" selected="@(value == (Model.State ?? ""))">@label</option>
+                    }
+                </select>
+            </div>
+            <noscript><button type="submit" class="btn-soft">Filter</button></noscript>
+        </form>
+
+        <partial name="_PodTable" model="Model" />
+    }
+</div>
