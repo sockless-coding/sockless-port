@@ -85,20 +85,29 @@ public sealed partial class LiveContainerTests : IAsyncLifetime
         // Inspect shows the engine's JSON.
         Assert.Contains("MARK=web-test", await _browser.GetStringAsync($"/endpoints/1/containers/{id}/inspect", ct));
 
-        // Update check from the detail page and the list: the registry is asked, nothing is pulled.
-        var check = await PostAsync(detailUrl, $"{detailUrl}?handler=CheckUpdate", []);
-        Assert.Equal(HttpStatusCode.Redirect, check.StatusCode);
-        Assert.Matches(">(Up to date|Update available)<", await _browser.GetStringAsync(check.Headers.Location!.OriginalString, ct));
-        var listCheck = await PostAsync("/endpoints/1/containers", $"/endpoints/1/containers?handler=CheckUpdates&q={_name}", []);
-        Assert.Contains("Checked 1 container:", await _browser.GetStringAsync(listCheck.Headers.Location!.OriginalString, ct));
+        if (ImageUpdates.CanCheck(_factory.LocalEndpoint))
+        {
+            // Update check from the detail page and the list: the registry is asked, nothing is pulled.
+            var check = await PostAsync(detailUrl, $"{detailUrl}?handler=CheckUpdate", []);
+            Assert.Equal(HttpStatusCode.Redirect, check.StatusCode);
+            Assert.Matches(">(Up to date|Update available)<", await _browser.GetStringAsync(check.Headers.Location!.OriginalString, ct));
+            var listCheck = await PostAsync("/endpoints/1/containers", $"/endpoints/1/containers?handler=CheckUpdates&q={_name}", []);
+            Assert.Contains("Checked 1 container:", await _browser.GetStringAsync(listCheck.Headers.Location!.OriginalString, ct));
 
-        // As if the registry had moved on: the list flags it and the detail page says how to update.
-        var client = _factory.LocalEndpoint.Client!;
-        var (inspected, _) = await client.InspectContainerAsync(id, ct);
-        await _factory.Services.GetRequiredService<ImageUpdates>().CheckAsync(_factory.LocalEndpoint, client, inspected.Image!,
-            ["busybox@sha256:" + new string('0', 64)], inspected.Config!.Image!, ct);
-        Assert.Contains(">Update available<", await _browser.GetStringAsync($"/endpoints/1/containers?q={_name}", ct));
-        Assert.Contains("The registry has a newer image for", await _browser.GetStringAsync(detailUrl, ct));
+            // As if the registry had moved on: the list flags it and the detail page says how to update.
+            var client = _factory.LocalEndpoint.Client!;
+            var (inspected, _) = await client.InspectContainerAsync(id, ct);
+            await _factory.Services.GetRequiredService<ImageUpdates>().CheckAsync(_factory.LocalEndpoint, client, inspected.Image!,
+                ["busybox@sha256:" + new string('0', 64)], inspected.Config!.Image!, ct);
+            Assert.Contains(">Update available<", await _browser.GetStringAsync($"/endpoints/1/containers?q={_name}", ct));
+            Assert.Contains("The registry has a newer image for", await _browser.GetStringAsync(detailUrl, ct));
+        }
+        else
+        {
+            // Podman before 6.2: no check is offered, and the page says why.
+            Assert.Contains("Podman 6.2 and later can", detail);
+            Assert.DoesNotContain("handler=CheckUpdate", detail);
+        }
 
         // Bulk stop from the list.
         var stop = await PostAsync("/endpoints/1/containers", "/endpoints/1/containers?handler=Bulk", new() { ["action"] = "stop", ["ids"] = id });

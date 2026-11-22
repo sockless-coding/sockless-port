@@ -12,7 +12,7 @@
     var deployed = Model.IsDeployed;
     var swarm = Model.IsSwarm;
     // Checking asks the registries through the engine: no Compose needed, but swarm stacks need a manager.
-    var canCheck = detail is not null && Model.Client is not null && deployed && !Model.IsGone && (!swarm || Model.CanReachSwarm);
+    var canCheck = detail is not null && Model.CanCheckUpdates && deployed && !Model.IsGone && (!swarm || Model.CanReachSwarm);
 }
 
 <nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">

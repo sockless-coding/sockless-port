@@ -75,13 +75,22 @@ public sealed partial class LiveImageTests : IAsyncLifetime
         var detail = await _browser.GetStringAsync(detailUrl, ct);
         Assert.Contains(Image, detail);
         Assert.Contains("Configuration", detail);
-        Assert.Contains("Not checked", detail);
+        Assert.Contains(ImageUpdates.CanCheck(_factory.LocalEndpoint) ? "Not checked" : "Podman 6.2 and later can", detail);
         Assert.Contains("BusyBox", await _browser.GetStringAsync($"{detailUrl}/history", ct));
         Assert.Contains("\"RepoDigests\"", WebUtility.HtmlDecode(await _browser.GetStringAsync($"{detailUrl}/inspect", ct)));
 
-        // The registry still serves what was just pulled.
+        // The registry still serves what was just pulled. Podman before 6.2 can't ask: no check is offered,
+        // and a post anyway answers unknown, saying why.
         var checkedPage = await FollowAsync(await PostAsync(detailUrl, $"{detailUrl}?handler=CheckUpdate", []));
-        Assert.Contains(">Up to date<", checkedPage);
+        if (ImageUpdates.CanCheck(_factory.LocalEndpoint))
+        {
+            Assert.Contains(">Up to date<", checkedPage);
+        }
+        else
+        {
+            Assert.DoesNotContain("handler=CheckUpdate", detail);
+            Assert.Contains("Podman 6.2 and later can", checkedPage);
+        }
 
         var tagged = await FollowAsync(await PostAsync(detailUrl, $"{detailUrl}?handler=Tag", new() { ["reference"] = $"{_repository}:tagged" }));
         Assert.Contains($"{_repository}:tagged", tagged);

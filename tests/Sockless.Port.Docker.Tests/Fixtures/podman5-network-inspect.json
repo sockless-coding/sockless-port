@@ -1,0 +1,35 @@
+{
+    "Name": "fixture-net",
+    "Id": "6dc823890bdc177c5a928417a18d180609f4e88b4d42889cc169afd0342cd0f1",
+    "Created": "2026-11-22T20:31:22.467182931Z",
+    "Scope": "local",
+    "Driver": "bridge",
+    "EnableIPv4": false,
+    "EnableIPv6": false,
+    "IPAM": {
+        "Driver": "default",
+        "Options": {
+            "driver": "host-local"
+        },
+        "Config": [
+            {
+                "Subnet": "10.77.0.0/24",
+                "Gateway": "10.77.0.1"
+            }
+        ]
+    },
+    "Internal": false,
+    "Attachable": false,
+    "Ingress": false,
+    "ConfigFrom": {
+        "Network": ""
+    },
+    "ConfigOnly": false,
+    "Containers": {},
+    "Options": {
+        "mtu": "1400"
+    },
+    "Labels": {
+        "fixture": "yes"
+    }
+}

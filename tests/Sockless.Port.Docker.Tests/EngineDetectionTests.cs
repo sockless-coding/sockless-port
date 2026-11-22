@@ -20,7 +20,7 @@ public sealed class EngineDetectionTests
         var engine = Detect("docker");
 
         Assert.Equal(EngineKind.Docker, engine.Kind);
-        Assert.Equal(EngineCapabilities.None, engine.Capabilities);
+        Assert.Equal(EngineCapabilities.RegistryDigests, engine.Capabilities);
         Assert.Equal("Docker 29.10.0", engine.DisplayName);
         Assert.Equal("linux/amd64", engine.Platform);
         Assert.Equal(DockerClient.MaximumApiVersion, engine.ApiVersion);
@@ -82,8 +82,25 @@ public sealed class EngineDetectionTests
 
         Assert.Equal(EngineKind.Podman, engine.Kind);
         Assert.Equal("Podman 6.2.0", engine.DisplayName);
-        Assert.Equal(EngineCapabilities.Pods, engine.Capabilities);
+        Assert.Equal(EngineCapabilities.Pods | EngineCapabilities.RegistryDigests, engine.Capabilities);
         Assert.Equal(new Version(1, 44), engine.ApiVersion);
+    }
+
+    [Theory]
+    [InlineData("6.2.0", true)]
+    [InlineData("6.3.0-dev", true)]
+    [InlineData("7.0.1", true)]
+    [InlineData("6.1.3", false)]
+    [InlineData("5.7.1", false)]
+    [InlineData("4.9.3", false)]
+    [InlineData("unknown", false)]
+    public void Podman_asks_registries_for_digests_from_6_2(string release, bool expected)
+    {
+        var version = Fixture.Load("podman-version.json", Json.VersionResponse);
+        var info = Fixture.Load("podman-info.json", Json.SystemInfo);
+        var older = version with { Components = [.. version.Components!.Select(c => c.Name == "Podman Engine" ? c with { Version = release } : c)] };
+
+        Assert.Equal(expected, EngineDescriptor.Detect(older, info, DockerClient.Negotiate(older)).Has(EngineCapabilities.RegistryDigests));
     }
 
     [Fact]

@@ -45,7 +45,8 @@ internal sealed partial class ImageUpdateSchedule(ImageUpdates updates, EngineCo
         var now = time.GetUtcNow();
         foreach (var connection in connections.All)
         {
-            if (connection.Client is not { } client || (updates.LastChecked(connection.Id) is { } last && now - last < TimeSpan.FromHours(hours)))
+            if (connection.Client is not { } client || !ImageUpdates.CanCheck(connection)
+                || (updates.LastChecked(connection.Id) is { } last && now - last < TimeSpan.FromHours(hours)))
                 continue;
             try
             {

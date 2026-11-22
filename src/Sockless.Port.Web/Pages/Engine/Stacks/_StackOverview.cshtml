@@ -227,7 +227,9 @@
                     <p class="mt-3 text-xs text-secondary">
                         <a asp-page="/Engine/Containers/Index" asp-route-endpointId="@Model.EndpointId" asp-route-stack="@Model.StackName" class="hover:underline">Open in Containers</a>
                         to act on single containers. Compose recreates what differs from the files at the next deploy.
-                        Image updates: @ImageDisplay.LastChecked(Model.Updates, "The images")
+                        Image updates: @(Model.Client is not null && !Model.CanCheckUpdates
+                            ? Sockless.Port.Images.ImageUpdates.Unsupported(Model.Connection)
+                            : ImageDisplay.LastChecked(Model.Updates, "The images"))
                     </p>
                 }
             </section>

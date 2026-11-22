@@ -1,0 +1,31 @@
+{
+    "name": "fixture-net",
+    "id": "6dc823890bdc177c5a928417a18d180609f4e88b4d42889cc169afd0342cd0f1",
+    "driver": "bridge",
+    "network_interface": "podman1",
+    "created": "2026-11-22T20:31:22.467182931Z",
+    "subnets": [
+        {
+            "subnet": "10.77.0.0/24",
+            "gateway": "10.77.0.1",
+            "lease_range": {
+                "start_ip": "10.77.0.129",
+                "end_ip": "10.77.0.255"
+            }
+        }
+    ],
+    "ipv6_enabled": false,
+    "internal": false,
+    "dns_enabled": true,
+    "labels": {
+        "fixture": "yes"
+    },
+    "options": {
+        "isolate": "true",
+        "mtu": "1400"
+    },
+    "ipam_options": {
+        "driver": "host-local"
+    },
+    "containers": {}
+}

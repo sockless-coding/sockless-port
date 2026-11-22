@@ -100,21 +100,29 @@ public sealed partial class LiveStackTests : IAsyncLifetime
         Assert.Contains("Running 1/1", detail);
         Assert.Contains($">{_name}</a>", await _browser.GetStringAsync("/endpoints/1/stacks", ct));
 
-        // Update check of the stack's containers.
-        Assert.Contains("been checked since Sockless Port started", detail);
-        var check = await PostAsync(detailUrl, $"{detailUrl}?handler=CheckUpdates", []);
-        Assert.Equal(HttpStatusCode.Redirect, check.StatusCode);
-        Assert.Contains("Checked 1 container:", await _browser.GetStringAsync(check.Headers.Location!.OriginalString, ct));
+        // Update check of the stack's containers (Podman before 6.2 can't, and offers none).
+        if (ImageUpdates.CanCheck(_factory.LocalEndpoint))
+        {
+            Assert.Contains("been checked since Sockless Port started", detail);
+            var check = await PostAsync(detailUrl, $"{detailUrl}?handler=CheckUpdates", []);
+            Assert.Equal(HttpStatusCode.Redirect, check.StatusCode);
+            Assert.Contains("Checked 1 container:", await _browser.GetStringAsync(check.Headers.Location!.OriginalString, ct));
 
-        // As if the registry had moved on: the stack and its list row say so.
-        var container = Assert.Single(await Client.ListContainersAsync(
-            new Dictionary<string, string[]> { ["label"] = [$"com.docker.compose.project={_name}"] }, all: true, ct));
-        await _factory.Services.GetRequiredService<ImageUpdates>().CheckAsync(_factory.LocalEndpoint, Client, container.ImageId!,
-            ["busybox@sha256:" + new string('0', 64)], Image, ct);
-        var outdated = await _browser.GetStringAsync($"{detailUrl}?handler=Overview", ct);
-        Assert.Contains("The registry has a newer image for the service", outdated);
-        Assert.Contains(">Update available<", outdated);
-        Assert.Contains(">Update available<", await _browser.GetStringAsync($"/endpoints/1/stacks?q={_name}", ct));
+            // As if the registry had moved on: the stack and its list row say so.
+            var container = Assert.Single(await Client.ListContainersAsync(
+                new Dictionary<string, string[]> { ["label"] = [$"com.docker.compose.project={_name}"] }, all: true, ct));
+            await _factory.Services.GetRequiredService<ImageUpdates>().CheckAsync(_factory.LocalEndpoint, Client, container.ImageId!,
+                ["busybox@sha256:" + new string('0', 64)], Image, ct);
+            var outdated = await _browser.GetStringAsync($"{detailUrl}?handler=Overview", ct);
+            Assert.Contains("The registry has a newer image for the service", outdated);
+            Assert.Contains(">Update available<", outdated);
+            Assert.Contains(">Update available<", await _browser.GetStringAsync($"/endpoints/1/stacks?q={_name}", ct));
+        }
+        else
+        {
+            Assert.Contains("Podman 6.2 and later can", detail);
+            Assert.DoesNotContain("handler=CheckUpdates", detail);
+        }
 
         // Edit, review the diff, deploy what was reviewed.
         var review = await PostAsync($"{detailUrl}/editor", $"{detailUrl}/editor?handler=Review", new()

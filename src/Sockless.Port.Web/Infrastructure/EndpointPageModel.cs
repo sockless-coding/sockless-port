@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Sockless.Port.Access;
 using Sockless.Port.Docker;
 using Sockless.Port.Engines;
+using Sockless.Port.Images;
 
 namespace Sockless.Port.Web.Infrastructure;
 
@@ -37,6 +38,9 @@ public abstract class EndpointPageModel(EngineConnections connections) : PageMod
     public bool CanOperate => Access.Can(EndpointId, EndpointPermission.Operate);
 
     public bool CanManageSwarm => Access.Can(EndpointId, EndpointPermission.ManageSwarm);
+
+    /// <summary>Online, and the engine can ask registries for digests (not Podman before 6.2). Hides the update-check actions.</summary>
+    public bool CanCheckUpdates => Client is not null && ImageUpdates.CanCheck(Connection);
 
     /// <summary>What the audit log names as the target of this page's posts; null for the route's values.</summary>
     public virtual string? AuditTarget => null;

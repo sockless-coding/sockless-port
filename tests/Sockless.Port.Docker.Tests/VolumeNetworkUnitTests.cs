@@ -117,6 +117,54 @@ public sealed class VolumeNetworkUnitTests
 
     // ---------------------------------------------------------------- networks
 
+    private static FakeEngineHandler Podman(string version, Func<HttpRequestMessage, HttpResponseMessage> respond) =>
+        new(r => r.RequestUri!.AbsolutePath == "/version"
+            ? FakeEngineHandler.Json($$"""{"Version":"{{version}}","ApiVersion":"1.41","Os":"linux","Arch":"amd64","Components":[{"Name":"Podman Engine","Version":"{{version}}"}]}""")
+            : respond(r));
+
+    [Fact]
+    public async Task Podman_before_6_2_reads_the_ip_range_from_libpod()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var handler = Podman("5.7.1", r => r.RequestUri!.AbsolutePath.StartsWith("/v4.0.0/libpod/networks/", StringComparison.Ordinal)
+            ? FakeEngineHandler.Json(Fixture.Read("podman5-libpod-network-inspect.json"))
+            : FakeEngineHandler.Json(Fixture.Read("podman5-network-inspect.json")));
+        using var client = await FakeEngineHandler.ConnectAsync(handler);
+
+        var (network, json) = await client.InspectNetworkAsync("fixture-net", ct);
+
+        var config = Assert.Single(network.Ipam!.Config!);
+        Assert.Equal(("10.77.0.0/24", "10.77.0.1", "10.77.0.128/25"), (config.Subnet, config.Gateway, config.IpRange));
+        // The engine's JSON stays as it was sent.
+        Assert.DoesNotContain("IPRange", json);
+        Assert.Equal($"/v4.0.0/libpod/networks/{network.Id}/json", handler.Requests[^1].RequestUri!.AbsolutePath);
+    }
+
+    [Theory]
+    [InlineData("6.2.0")]
+    [InlineData("5.7.1")]
+    public async Task Libpod_is_not_asked_when_the_range_is_there_or_the_network_has_none(string version)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        // 6.2 reports the range itself; a 5.x network without a subnet has no range to look up.
+        var body = version == "6.2.0" ? Fixture.Read("podman-network-inspect.json") : Fixture.Read("podman5-network-inspect.json").Replace("\"Subnet\"", "\"Unused\"");
+        var handler = Podman(version, _ => FakeEngineHandler.Json(body));
+        using var client = await FakeEngineHandler.ConnectAsync(handler);
+
+        await client.InspectNetworkAsync("fixture-net", ct);
+
+        Assert.DoesNotContain(handler.Requests, r => r.RequestUri!.AbsolutePath.Contains("/libpod/", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("10.77.0.129", "10.77.0.255", "10.77.0.128/25")]
+    [InlineData("10.77.0.1", "10.77.0.255", "10.77.0.0/24")]
+    [InlineData("172.30.0.1", "172.30.255.255", "172.30.0.0/16")]
+    [InlineData("10.77.0.5", "10.77.0.50", "10.77.0.5-10.77.0.50")]
+    [InlineData("fd00::1", "fd00::ff", "fd00::/120")]
+    public void Lease_ranges_read_as_the_ip_range_they_came_from(string start, string end, string expected) =>
+        Assert.Equal(expected, DockerClient.IpRangeOf(new LibpodLeaseRange { StartIp = start, EndIp = end }));
+
     [Theory]
     [InlineData("docker-network-inspect.json", "com.docker.network.driver.mtu")]
     [InlineData("podman-network-inspect.json", "mtu")]

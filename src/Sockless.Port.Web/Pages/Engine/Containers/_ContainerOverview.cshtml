@@ -67,11 +67,15 @@
                             {
                                 <partial name="_UpdateBadge" model="update" />
                             }
+                            else if (Model.Client is not null && !Model.CanCheckUpdates)
+                            {
+                                <span class="text-secondary">Can't be checked: @Sockless.Port.Images.ImageUpdates.Unsupported(Model.Connection)</span>
+                            }
                             else
                             {
                                 <span class="text-secondary">Not checked</span>
                             }
-                            @if (Model.Client is not null && c.Image is not null)
+                            @if (Model.CanCheckUpdates && c.Image is not null)
                             {
                                 <form sp-can="write" method="post" asp-page="/Engine/Containers/Detail" asp-page-handler="CheckUpdate"
                                       asp-route-endpointId="@Model.EndpointId" asp-route-containerId="@Model.ContainerId">

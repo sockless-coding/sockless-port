@@ -31,6 +31,13 @@ public enum EngineCapabilities
     /// ports below 1024 and may lack cgroup controllers for resource limits.
     /// </summary>
     Rootless = 1 << 3,
+
+    /// <summary>
+    /// The engine reports what a registry serves for a tag without pulling it
+    /// (<c>/distribution/{name}/json</c>), so image update checks work. Docker has it; Podman has
+    /// it from 6.2.
+    /// </summary>
+    RegistryDigests = 1 << 4,
 }
 
 /// <summary>An engine as detected when connecting.</summary>
@@ -64,9 +71,14 @@ public sealed record EngineDescriptor(
         var podman = version.Components?.FirstOrDefault(c => c.Name?.Contains("Podman", StringComparison.OrdinalIgnoreCase) == true);
         var isPodman = podman is not null || version.Platform?.Name?.Contains("Podman", StringComparison.OrdinalIgnoreCase) == true;
 
+        var engineVersion = (isPodman ? podman?.Version : null) ?? version.Version ?? info.ServerVersion ?? "unknown";
+
         var capabilities = EngineCapabilities.None;
         if (isPodman)
             capabilities |= EngineCapabilities.Pods;
+
+        if (!isPodman || AtLeast(engineVersion, PodmanRegistryDigests))
+            capabilities |= EngineCapabilities.RegistryDigests;
 
         if (info.SecurityOptions?.Any(o => o.Split(',').Contains("name=rootless", StringComparer.Ordinal)) == true)
             capabilities |= EngineCapabilities.Rootless;
@@ -80,7 +92,7 @@ public sealed record EngineDescriptor(
 
         return new EngineDescriptor(
             isPodman ? EngineKind.Podman : EngineKind.Docker,
-            (isPodman ? podman?.Version : null) ?? version.Version ?? info.ServerVersion ?? "unknown",
+            engineVersion,
             negotiatedApiVersion,
             version.Os ?? info.OsType,
             version.Arch ?? info.Architecture,
@@ -88,5 +100,17 @@ public sealed record EngineDescriptor(
             capabilities.HasFlag(EngineCapabilities.Swarm) && info.Swarm?.NodeId is { Length: > 0 } node ? node : null,
             capabilities.HasFlag(EngineCapabilities.Swarm) && info.Swarm?.Cluster?.Id is { Length: > 0 } cluster ? cluster : null,
             info.CgroupVersion?.Trim().TrimStart('v', 'V') switch { "1" => 1, "2" => 2, _ => null });
+    }
+
+    /// <summary>The first Podman release that serves <c>/distribution/{name}/json</c> (6.1 and 5.x answer 404).</summary>
+    internal static readonly Version PodmanRegistryDigests = new(6, 2);
+
+    /// <summary>Whether a release string (<c>6.2.0</c>, <c>6.2.0-rc1</c>, <c>6.3.0-dev</c>) is at least <paramref name="minimum"/>. Unreadable ones aren't.</summary>
+    internal static bool AtLeast(string release, Version minimum)
+    {
+        var numbers = release.Split('-', '+', '~')[0].Split('.');
+        var major = numbers.Length > 0 && int.TryParse(numbers[0], out var m) ? m : -1;
+        var minor = numbers.Length > 1 && int.TryParse(numbers[1], out var n) ? n : 0;
+        return major >= 0 && new Version(major, minor) >= minimum;
     }
 }

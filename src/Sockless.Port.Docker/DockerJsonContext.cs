@@ -61,6 +61,7 @@ namespace Sockless.Port.Docker;
 [JsonSerializable(typeof(SwarmObjectCreateRequest))]
 [JsonSerializable(typeof(List<PodSummary>))]
 [JsonSerializable(typeof(PodInspect))]
+[JsonSerializable(typeof(LibpodNetwork))]
 [JsonSerializable(typeof(PodRemoveReport))]
 [JsonSerializable(typeof(PodCreateRequest))]
 [JsonSerializable(typeof(PodContainerCreateRequest))]

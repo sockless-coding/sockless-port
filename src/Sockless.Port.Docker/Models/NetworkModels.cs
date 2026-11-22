@@ -62,6 +62,32 @@ public sealed record NetworkIpamConfig
     public string? Gateway { get; init; }
 }
 
+/// <summary>A network from libpod's <c>GET /libpod/networks/{name}/json</c>, for what Docker's inspect leaves out.</summary>
+public sealed record LibpodNetwork
+{
+    public string? Name { get; init; }
+    public IReadOnlyList<LibpodSubnet>? Subnets { get; init; }
+}
+
+public sealed record LibpodSubnet
+{
+    public string? Subnet { get; init; }
+    public string? Gateway { get; init; }
+
+    [JsonPropertyName("lease_range")]
+    public LibpodLeaseRange? LeaseRange { get; init; }
+}
+
+/// <summary>The addresses containers get, both included.</summary>
+public sealed record LibpodLeaseRange
+{
+    [JsonPropertyName("start_ip")]
+    public string? StartIp { get; init; }
+
+    [JsonPropertyName("end_ip")]
+    public string? EndIp { get; init; }
+}
+
 public static class NetworkOptions
 {
     /// <summary>Overlay driver option: encrypt traffic between nodes. Its value is empty.</summary>

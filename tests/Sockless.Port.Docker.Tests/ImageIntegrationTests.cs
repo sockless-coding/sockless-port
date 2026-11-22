@@ -1,5 +1,6 @@
 using System.Formats.Tar;
 using System.Text;
+using Sockless.Port.Docker.Engine;
 using Sockless.Port.Docker.Models;
 using Sockless.Port.Docker.Streams;
 
@@ -57,10 +58,16 @@ public sealed class ImageIntegrationTests : IAsyncLifetime
         tracker.Complete();
 
         var (image, json) = await _client.InspectImageAsync(Image, ct);
-        var remote = await _client.InspectDistributionAsync(Image, cancellationToken: ct);
-
         Assert.Contains("\"RepoTags\"", json);
         Assert.All(tracker.Snapshot().Layers, l => Assert.Equal(LayerPhase.Done, l.Phase));
+
+        if (!EngineDescriptor.Detect(_client.ServerVersion, await _client.GetInfoAsync(ct), _client.ApiVersion).Has(EngineCapabilities.RegistryDigests))
+        {
+            // Podman before 6.2 has no distribution endpoint.
+            await Assert.ThrowsAsync<DockerApiException>(() => _client.InspectDistributionAsync(Image, cancellationToken: ct));
+            return;
+        }
+        var remote = await _client.InspectDistributionAsync(Image, cancellationToken: ct);
         // Docker records the index digest, Podman the index and the platform manifest: the registry's digest is among them.
         Assert.Contains(image.RepoDigests!, d => d.EndsWith("@" + remote.Descriptor.Digest, StringComparison.Ordinal));
     }

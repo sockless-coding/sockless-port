@@ -170,6 +170,10 @@ public sealed class ImageUpdates(RegistryCredentials registries, TimeProvider ti
         {
             status = new UpdateUnknown("It has no registry digest: it was built locally or loaded from a file.", now);
         }
+        else if (!CanCheck(connection))
+        {
+            status = new UpdateUnknown(Unsupported(connection), now);
+        }
         else
         {
             try
@@ -193,6 +197,16 @@ public sealed class ImageUpdates(RegistryCredentials registries, TimeProvider ti
         _results[(connection.Id, imageId, Key(tag))] = status;
         return status;
     }
+
+    /// <summary>
+    /// Whether the endpoint's engine can say what a registry serves without pulling
+    /// (<see cref="EngineCapabilities.RegistryDigests"/>). An endpoint not yet detected is tried.
+    /// </summary>
+    public static bool CanCheck(EngineConnection connection) => connection.Engine?.Has(EngineCapabilities.RegistryDigests) != false;
+
+    /// <summary>Why an endpoint can't check, for people.</summary>
+    public static string Unsupported(EngineConnection connection) =>
+        $"{connection.Engine?.DisplayName ?? "This engine"} can't ask a registry for an image's current digest without pulling it. Podman 6.2 and later can.";
 
     /// <summary>
     /// Up to date when the registry's digest is one the image is known by for that repository.

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
@@ -20,7 +21,79 @@ public sealed partial class DockerClient
         var json = await response.Content.ReadAsStringAsync(cts.Token);
         var network = JsonSerializer.Deserialize(json, Json.NetworkSummary)
                       ?? throw new InvalidDataException($"The engine returned an empty inspect for network {idOrName}.");
+        if (OmitsIpRanges && network.Ipam?.Config is { Count: > 0 } configs && configs.Any(c => c.Subnet is not null && c.IpRange is null))
+            network = await WithLeaseRangesAsync(network, cts.Token);
         return (network, json);
+    }
+
+    /// <summary>
+    /// Podman before 6.2 applies a network's IP range but leaves it out of Docker's inspect.
+    /// Libpod's own inspect has it as a lease range.
+    /// </summary>
+    private bool OmitsIpRanges =>
+        ServerVersion.Components?.FirstOrDefault(c => c.Name?.Contains("Podman", StringComparison.OrdinalIgnoreCase) == true) is { Version: { } podman }
+        && !Engine.EngineDescriptor.AtLeast(podman, PodmanReportsIpRanges);
+
+    internal static readonly Version PodmanReportsIpRanges = new(6, 2);
+
+    private async Task<NetworkSummary> WithLeaseRangesAsync(NetworkSummary network, CancellationToken cancellationToken)
+    {
+        LibpodNetwork libpod;
+        try
+        {
+            libpod = await GetAsync($"{LibpodPrefix}/networks/{Escape(network.Id ?? network.Name)}/json", Json.LibpodNetwork, cancellationToken);
+        }
+        catch (DockerApiException)
+        {
+            return network;
+        }
+        var ranges = (libpod.Subnets ?? []).Where(s => s.Subnet is not null && s.LeaseRange is not null)
+            .GroupBy(s => s.Subnet!, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().LeaseRange!, StringComparer.Ordinal);
+        if (ranges.Count == 0)
+            return network;
+        var configs = network.Ipam!.Config!.Select(c => c.IpRange is null && c.Subnet is not null && ranges.TryGetValue(c.Subnet, out var lease)
+            ? c with { IpRange = IpRangeOf(lease) }
+            : c).ToList();
+        return network with { Ipam = network.Ipam with { Config = configs } };
+    }
+
+    /// <summary>
+    /// A lease range as the IP range it was created from. Podman leases from the range's first
+    /// host address to its last address, so <c>10.0.0.128/25</c> is .129 to .255. A range that
+    /// isn't such a block (set through libpod) reads <c>start-end</c>.
+    /// </summary>
+    internal static string? IpRangeOf(LibpodLeaseRange lease)
+    {
+        if (!IPAddress.TryParse(lease.StartIp ?? "", out var start) || !IPAddress.TryParse(lease.EndIp ?? "", out var end) || start.AddressFamily != end.AddressFamily)
+            return null;
+        var bits = start.GetAddressBytes().Length * 8;
+        var first = ToNumber(start) - 1;
+        var last = ToNumber(end);
+        for (var prefix = bits; prefix >= 0; prefix--)
+        {
+            var size = prefix == 0 ? UInt128.MaxValue >> (128 - bits) : (UInt128.One << (bits - prefix)) - 1;
+            if ((first & size) == 0 && first + size == last)
+                return $"{FromNumber(first, bits)}/{prefix}";
+            if (first + size > last)
+                break;
+        }
+        return $"{start}-{end}";
+    }
+
+    private static UInt128 ToNumber(IPAddress address)
+    {
+        var value = UInt128.Zero;
+        foreach (var b in address.GetAddressBytes())
+            value = (value << 8) | b;
+        return value;
+    }
+
+    private static IPAddress FromNumber(UInt128 value, int bits)
+    {
+        var bytes = new byte[bits / 8];
+        for (var i = bytes.Length - 1; i >= 0; i--, value >>= 8)
+            bytes[i] = (byte)(value & 0xFF);
+        return new IPAddress(bytes);
     }
 
     public Task<NetworkCreateResponse> CreateNetworkAsync(NetworkCreateRequest request, CancellationToken cancellationToken = default) =>

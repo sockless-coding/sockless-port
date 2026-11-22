@@ -71,6 +71,14 @@ public sealed class ImageUpdatesIntegrationTests : IAsyncLifetime
         var byId = listed with { Image = listed.ImageId };
         var summary = await _updates.CheckContainersAsync(_connection, _client, [byId], ct);
 
+        if (!ImageUpdates.CanCheck(_connection))
+        {
+            // Podman before 6.2: unknown, saying why, without asking the engine.
+            Assert.Equal(1, summary.Unknown);
+            Assert.Contains("Podman 6.2 and later can", Assert.IsType<UpdateUnknown>(_updates.ForContainer(1, byId)).Reason);
+            return;
+        }
+
         Assert.Equal(1, summary.Checked);
         Assert.Equal(0, summary.Unknown);
         Assert.True(_updates.ForContainer(1, byId) is UpToDate or UpdateAvailable);

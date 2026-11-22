@@ -41,6 +41,10 @@
                                             {
                                                 <partial name="_UpdateBadge" model="status" />
                                             }
+                                            else if (Model.Client is not null && !Model.CanCheckUpdates)
+                                            {
+                                                <span class="text-xs text-secondary">@Sockless.Port.Images.ImageUpdates.Unsupported(Model.Connection)</span>
+                                            }
                                             else
                                             {
                                                 <span class="text-secondary">Not checked</span>
