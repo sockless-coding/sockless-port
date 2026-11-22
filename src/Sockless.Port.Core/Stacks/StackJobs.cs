@@ -2,7 +2,10 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using Sockless.Port.Docker;
+using Sockless.Port.Docker.Engine;
+using Sockless.Port.Docker.Models;
 using Sockless.Port.Engines;
+using Sockless.Port.Swarm;
 
 namespace Sockless.Port.Stacks;
 
@@ -14,14 +17,19 @@ public sealed class StackJobRejectedException(string message) : Exception(messag
 public sealed record StackJobOptions(bool RemoveVolumes = false, bool Down = true);
 
 /// <summary>
-/// Runs Compose on stacks in the background, one job per stack at a time, and keeps finished jobs
-/// for a while so the stack's page can show how the last one ended.
+/// Runs Compose (or, for swarm stacks, <c>docker stack</c>) on stacks in the background, one job
+/// per stack at a time, and keeps finished jobs for a while so the stack's page can show how the
+/// last one ended.
 /// </summary>
-public sealed class StackJobs(ComposeCli compose, StackStore store, TimeProvider time, ILogger<StackJobs> logger) : IDisposable
+public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore store, SwarmServices services, TimeProvider time, ILogger<StackJobs> logger) : IDisposable
 {
     public const int MaxRunningPerEndpoint = 4;
 
     public static readonly TimeSpan Retention = TimeSpan.FromMinutes(15);
+
+    /// <summary>What a swarm stack can do. Swarm has no stopped state: scale services to 0 or take the stack down.</summary>
+    public static readonly IReadOnlySet<StackOperation> SwarmOperations = new HashSet<StackOperation>
+        { StackOperation.Deploy, StackOperation.Update, StackOperation.Restart, StackOperation.Down, StackOperation.Remove };
 
     private readonly ConcurrentDictionary<string, StackJob> _jobs = new(StringComparer.Ordinal);
     private readonly Lock _startGate = new();
@@ -45,21 +53,13 @@ public sealed class StackJobs(ComposeCli compose, StackStore store, TimeProvider
 
     /// <summary>
     /// Starts <paramref name="operation"/> on the stack. A stack Sockless Port manages runs from its
-    /// files; any other Compose project on the engine is addressed by name (start, stop, restart, down).
+    /// files; any other project on the engine is addressed by name (start, stop, restart, down).
     /// </summary>
-    /// <exception cref="StackJobRejectedException">Offline, Compose missing, busy, or it's Sockless Port's own stack.</exception>
+    /// <exception cref="StackJobRejectedException">Offline, the tool missing, busy, not possible for the kind, or it's Sockless Port's own stack.</exception>
     public async Task<StackJob> StartAsync(EngineConnection connection, string stackName, StackOperation operation, StackJobOptions? options = null)
     {
         options ??= new StackJobOptions();
         var client = connection.Client ?? throw new StackJobRejectedException("The engine is offline, so nothing was started.");
-        try
-        {
-            await compose.FindAsync(_stopping.Token);
-        }
-        catch (ComposeUnavailableException ex)
-        {
-            throw new StackJobRejectedException(ex.Message);
-        }
 
         var definition = await store.GetAsync(connection.Id, stackName, _stopping.Token);
         var managed = definition is not null && store.Files.Exists(connection.Id, stackName);
@@ -70,11 +70,34 @@ public sealed class StackJobs(ComposeCli compose, StackStore store, TimeProvider
                 : $"The files of {stackName} are missing from {store.Files.Directory(connection.Id, stackName)}.");
         }
 
+        var kind = definition?.Kind ?? await ExternalKindAsync(connection, client, stackName, _stopping.Token);
+        try
+        {
+            if (kind == StackKind.Swarm)
+                await docker.FindAsync(_stopping.Token);
+            else
+                await compose.FindAsync(_stopping.Token);
+        }
+        catch (ComposeUnavailableException ex)
+        {
+            throw new StackJobRejectedException(ex.Message);
+        }
+
+        if (kind == StackKind.Swarm)
+        {
+            if (connection.Engine?.Has(EngineCapabilities.SwarmManager) != true)
+                throw new StackJobRejectedException($"{stackName} is a swarm stack, and {connection.Name} isn't a swarm manager. Connect to a manager to deploy or change it.");
+            if (!SwarmOperations.Contains(operation))
+                throw new StackJobRejectedException($"Swarm stacks can't {Verb(operation)}: scale their services to 0, or take the stack down.");
+        }
+
         if (operation is not (StackOperation.Remove) || options.Down)
         {
-            var project = await ProjectAsync(client, stackName, _stopping.Token);
-            if (project.IsSelf)
-                throw new StackJobRejectedException($"Sockless Port itself runs in {stackName}, so it can't {Verb(operation)} it from here. Use docker compose on the host.");
+            var self = kind == StackKind.Swarm
+                ? SwarmInventory.IncludesSelf(await SwarmTasksAsync(client, stackName, _stopping.Token))
+                : (await ProjectAsync(client, stackName, _stopping.Token)).IsSelf;
+            if (self)
+                throw new StackJobRejectedException($"Sockless Port itself runs in {stackName}, so it can't {Verb(operation)} it from here. Use the Docker CLI on the host.");
         }
 
         StackJob job;
@@ -90,7 +113,7 @@ public sealed class StackJobs(ComposeCli compose, StackStore store, TimeProvider
         }
 
         var directory = managed ? store.Files.Directory(connection.Id, stackName) : null;
-        _ = RunAsync(job, connection, directory, options);
+        _ = RunAsync(job, connection, kind, directory, options);
         return job;
     }
 
@@ -100,7 +123,7 @@ public sealed class StackJobs(ComposeCli compose, StackStore store, TimeProvider
         _stopping.Dispose();
     }
 
-    /// <summary>What a job runs, in order. Exposed for tests.</summary>
+    /// <summary>What a Compose job runs, in order. Exposed for tests.</summary>
     internal static IReadOnlyList<string[]> Steps(StackOperation operation, StackJobOptions options) => operation switch
     {
         StackOperation.Deploy => [["up", "--detach", "--remove-orphans"]],
@@ -113,20 +136,39 @@ public sealed class StackJobs(ComposeCli compose, StackStore store, TimeProvider
         _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, null),
     };
 
+    /// <summary>
+    /// What a swarm job runs with the Docker CLI. Deploy resolves images only where they changed;
+    /// update asks the registry again for every one. Restart has no CLI step: it force-updates
+    /// each service through the API. Exposed for tests.
+    /// </summary>
+    internal static IReadOnlyList<string[]> SwarmSteps(StackOperation operation, string name, string? composeFile, StackJobOptions options) => operation switch
+    {
+        StackOperation.Deploy or StackOperation.Update when composeFile is null => throw new ArgumentNullException(nameof(composeFile)),
+        StackOperation.Deploy => [Deploy(name, composeFile, "changed")],
+        StackOperation.Update => [Deploy(name, composeFile, "always")],
+        StackOperation.Restart => [],
+        StackOperation.Down => [["stack", "rm", name]],
+        StackOperation.Remove => options.Down ? [["stack", "rm", name]] : [],
+        _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, "Swarm stacks don't start or stop."),
+    };
+
+    private static string[] Deploy(string name, string composeFile, string resolve) =>
+        ["stack", "deploy", "--compose-file", composeFile, "--with-registry-auth", "--prune", "--detach=true", "--resolve-image", resolve, name];
+
     private static string[] Down(StackJobOptions options) =>
         options.RemoveVolumes ? ["down", "--remove-orphans", "--volumes"] : ["down", "--remove-orphans"];
 
-    private async Task RunAsync(StackJob job, EngineConnection connection, string? directory, StackJobOptions options)
+    private async Task RunAsync(StackJob job, EngineConnection connection, StackKind kind, string? directory, StackJobOptions options)
     {
         await Task.Yield();
         StackJobStatus outcome;
         try
         {
-            outcome = await RunStepsAsync(job, connection, directory, options);
+            outcome = await RunStepsAsync(job, connection, kind, directory, options);
         }
         catch (OperationCanceledException) when (job.Token.IsCancellationRequested)
         {
-            job.AppendLine("Cancelled. What Compose already did stays done.");
+            job.AppendLine(kind == StackKind.Swarm ? "Cancelled. What was already sent to the swarm stays done." : "Cancelled. What Compose already did stays done.");
             outcome = new StackJobCanceled();
         }
         catch (ComposeUnavailableException ex)
@@ -146,19 +188,27 @@ public sealed class StackJobs(ComposeCli compose, StackStore store, TimeProvider
         job.Finish(outcome, time.GetUtcNow());
     }
 
-    private async Task<StackJobStatus> RunStepsAsync(StackJob job, EngineConnection connection, string? directory, StackJobOptions options)
+    private async Task<StackJobStatus> RunStepsAsync(StackJob job, EngineConnection connection, StackKind kind, string? directory, StackJobOptions options)
     {
         var name = job.StackName;
-        // What's deployed is what Compose read at the start, not what someone saves meanwhile.
+        // What's deployed is what was read at the start, not what someone saves meanwhile.
         var content = directory is null ? null : await store.Files.ReadAsync(connection.Id, name, job.Token);
-        var tool = await compose.FindAsync(job.Token);
 
-        foreach (var step in Steps(job.Operation, options))
+        if (kind == StackKind.Swarm)
         {
-            job.AppendLine($"$ {tool.DisplayName} {string.Join(' ', step)}");
-            var result = await compose.RunAsync(new ComposeRequest(name, step, connection.Address, directory), job.AppendLine, job.Token);
-            if (!result.Succeeded)
-                return Failure(step[0], result);
+            if (await RunSwarmAsync(job, connection, directory, content, options) is { } failed)
+                return failed;
+        }
+        else
+        {
+            var tool = await compose.FindAsync(job.Token);
+            foreach (var step in Steps(job.Operation, options))
+            {
+                job.AppendLine($"$ {tool.DisplayName} {string.Join(' ', step)}");
+                var result = await compose.RunAsync(new ComposeRequest(name, step, connection.Address, directory), job.AppendLine, job.Token);
+                if (!result.Succeeded)
+                    return Failure($"docker compose {step[0]}", result);
+            }
         }
 
         switch (job.Operation)
@@ -175,29 +225,75 @@ public sealed class StackJobs(ComposeCli compose, StackStore store, TimeProvider
                 break;
         }
 
+        var swarm = kind == StackKind.Swarm;
         return new StackJobSucceeded(job.Operation switch
         {
-            StackOperation.Deploy => $"Deployed {name}.",
-            StackOperation.Update => $"Pulled the images of {name} and recreated what changed.",
+            StackOperation.Deploy => swarm ? $"Deployed {name}. Its services now converge on the nodes." : $"Deployed {name}.",
+            StackOperation.Update => swarm ? $"Deployed {name}, with every image resolved again." : $"Pulled the images of {name} and recreated what changed.",
             StackOperation.Start => $"Started {name}.",
             StackOperation.Stop => $"Stopped {name}.",
-            StackOperation.Restart => $"Restarted {name}.",
-            StackOperation.Down => options.RemoveVolumes ? $"Took {name} down and removed its volumes." : $"Took {name} down. Its volumes are kept.",
-            StackOperation.Remove => !options.Down ? $"Removed the stack {name}. Its containers were left running."
+            StackOperation.Restart => swarm ? $"Replacing the tasks of every service of {name}." : $"Restarted {name}.",
+            StackOperation.Down => swarm ? $"Removed the services and networks of {name} from the swarm. Volumes stay on the nodes."
+                : options.RemoveVolumes ? $"Took {name} down and removed its volumes." : $"Took {name} down. Its volumes are kept.",
+            StackOperation.Remove => !options.Down ? $"Removed the stack {name}. {(swarm ? "Its services" : "Its containers")} were left running."
+                : swarm ? $"Removed {name} from the swarm and deleted the stack. Volumes stay on the nodes."
                 : options.RemoveVolumes ? $"Took {name} down, removed its volumes and deleted the stack."
                 : $"Took {name} down and deleted the stack. Its volumes are kept.",
             _ => throw new ArgumentOutOfRangeException(nameof(job), job.Operation, null),
         });
     }
 
-    /// <summary>The line that says what went wrong (Compose ends with it), and hints for known problems.</summary>
+    /// <returns>The failure, or null when every step succeeded.</returns>
+    private async Task<StackJobFailed?> RunSwarmAsync(StackJob job, EngineConnection connection, string? directory, StackContent? content, StackJobOptions options)
+    {
+        var name = job.StackName;
+        if (job.Operation == StackOperation.Restart)
+            return await RestartServicesAsync(job, connection, name);
+
+        var tool = await docker.FindAsync(job.Token);
+        var file = directory is null ? null : Path.Combine(directory, StackFiles.ComposeFile);
+        var variables = StackEnv.Parse(content?.Env);
+        foreach (var step in SwarmSteps(job.Operation, name, file, options))
+        {
+            job.AppendLine($"$ {tool.FileName} {string.Join(' ', step.Select(a => a == file ? StackFiles.ComposeFile : a))}");
+            var result = await docker.RunAsync(new DockerCliRequest(step, connection.Address, directory, variables), job.AppendLine, job.Token);
+            if (!result.Succeeded)
+                return Failure($"docker {step[0]} {step[1]}", result);
+        }
+        return null;
+    }
+
+    private async Task<StackJobFailed?> RestartServicesAsync(StackJob job, EngineConnection connection, string name)
+    {
+        var client = connection.Client ?? throw new IOException("The engine went offline.");
+        var stackServices = await client.ListServicesAsync(StackFilter(name), job.Token);
+        if (stackServices.Count == 0)
+            return new StackJobFailed($"{name} has no services on the swarm. Deploy it first.", []);
+        foreach (var service in stackServices.OrderBy(s => s.Name, StringComparer.Ordinal))
+        {
+            job.AppendLine($"Replacing the tasks of {service.Name}…");
+            try
+            {
+                await services.RedeployAsync(client, service.Id, pull: false, job.Token);
+            }
+            catch (DockerApiException ex)
+            {
+                job.AppendLine($"Error: {ex.Message}");
+                return new StackJobFailed($"Couldn't restart {service.Name}: {EngineErrors.Sentence(ex.Message)}", []);
+            }
+        }
+        job.AppendLine("Each service replaces its tasks as its update config says.");
+        return null;
+    }
+
+    /// <summary>The line that says what went wrong (the tool ends with it), and hints for known problems.</summary>
     internal static StackJobFailed Failure(string command, ComposeResult result)
     {
         var reason = result.Output.LastOrDefault(l => l.Contains("error", StringComparison.OrdinalIgnoreCase))
                      ?? result.Output.LastOrDefault(l => !string.IsNullOrWhiteSpace(l));
         var error = reason is null
-            ? $"docker compose {command} failed with exit code {result.ExitCode}."
-            : $"docker compose {command} failed: {EngineErrors.Sentence(TrimErrorPrefix(reason))}";
+            ? $"{command} failed with exit code {result.ExitCode}."
+            : $"{command} failed: {EngineErrors.Sentence(TrimErrorPrefix(reason))}";
         return new StackJobFailed(error, ComposeHints.FromOutput(result.Output));
     }
 
@@ -224,6 +320,23 @@ public sealed class StackJobs(ComposeCli compose, StackStore store, TimeProvider
         _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, null),
     };
 
+    internal static Dictionary<string, string[]> StackFilter(string name) => new() { ["label"] = [$"{ServiceSpec.StackNamespaceLabel}={name}"] };
+
+    /// <summary>For a stack Sockless Port doesn't manage: a Compose project if it has containers, else a swarm stack if it has services.</summary>
+    private static async Task<StackKind> ExternalKindAsync(EngineConnection connection, DockerClient client, string name, CancellationToken cancellationToken)
+    {
+        if ((await ProjectAsync(client, name, cancellationToken)).Containers.Count > 0 || connection.Engine?.Has(EngineCapabilities.SwarmManager) != true)
+            return StackKind.Compose;
+        try
+        {
+            return (await client.ListServicesAsync(StackFilter(name), cancellationToken)).Count > 0 ? StackKind.Swarm : StackKind.Compose;
+        }
+        catch (Exception ex) when (ex is DockerApiException or HttpRequestException or IOException or TimeoutException or ObjectDisposedException)
+        {
+            throw new StackJobRejectedException($"Couldn't list the services of {name}: {ex.Message}");
+        }
+    }
+
     private static async Task<ComposeProject> ProjectAsync(DockerClient client, string name, CancellationToken cancellationToken)
     {
         try
@@ -235,6 +348,20 @@ public sealed class StackJobs(ComposeCli compose, StackStore store, TimeProvider
         catch (Exception ex) when (ex is DockerApiException or HttpRequestException or IOException or TimeoutException or ObjectDisposedException)
         {
             throw new StackJobRejectedException($"Couldn't list the containers of {name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>The current tasks of a swarm stack's services.</summary>
+    private static async Task<IReadOnlyList<SwarmTask>> SwarmTasksAsync(DockerClient client, string name, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var ids = (await client.ListServicesAsync(StackFilter(name), cancellationToken)).Select(s => s.Id).ToArray();
+            return ids.Length == 0 ? [] : await client.ListTasksAsync(new Dictionary<string, string[]> { ["service"] = ids, ["desired-state"] = ["running"] }, cancellationToken);
+        }
+        catch (Exception ex) when (ex is DockerApiException or HttpRequestException or IOException or TimeoutException or ObjectDisposedException)
+        {
+            throw new StackJobRejectedException($"Couldn't list the services of {name}: {ex.Message}");
         }
     }
 

@@ -1,0 +1,74 @@
+@model Sockless.Port.Web.Pages.Engine.Swarm.Nodes.IndexModel
+<div id="node-table" hx-get="@Url.Page("/Engine/Swarm/Nodes/Index", "Table", new { endpointId = Model.EndpointId })"
+     hx-trigger="engine-changed from:body, endpoint-state from:body, every 30s" hx-swap="outerHTML">
+    @if (Model.Error is not null)
+    {
+        <div class="callout danger" role="alert">
+            <icon name="exclamation-triangle" class="h-5 w-5" />
+            <p>@Model.Error</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table">
+                <caption class="sr-only">Nodes</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Node</th>
+                        <th scope="col">State</th>
+                        <th scope="col">Role</th>
+                        <th scope="col">Engine</th>
+                        <th scope="col" class="num">CPUs</th>
+                        <th scope="col" class="num">Memory</th>
+                        <th scope="col" class="num">Tasks</th>
+                        <th scope="col">Endpoint</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var node in Model.Rows)
+                    {
+                        var endpoint = Model.EndpointFor(node.Id);
+                        var resources = node.Description?.Resources;
+                        <tr>
+                            <th scope="row" class="max-w-[18rem]">
+                                <a asp-page="/Engine/Swarm/Nodes/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-nodeId="@node.Id"
+                                   class="break-all font-mono text-xs font-semibold hover:underline">@node.DisplayName</a>
+                                <span class="mt-1 block font-mono text-xs text-secondary">@(node.Status?.Addr ?? "")</span>
+                            </th>
+                            <td>
+                                <span class="flex flex-wrap gap-1">
+                                    <partial name="_StatusBadge" model="SwarmDisplay.NodeState(node)" />
+                                    @if (node.Spec?.Availability != "active")
+                                    {
+                                        <partial name="_StatusBadge" model="SwarmDisplay.Availability(node)" />
+                                    }
+                                </span>
+                            </td>
+                            <td><partial name="_StatusBadge" model="SwarmDisplay.Role(node)" /></td>
+                            <td class="whitespace-nowrap font-mono text-xs">@(node.Description?.Engine?.EngineVersion ?? "—")</td>
+                            <td class="num font-mono text-xs">@(resources is { NanoCpus: > 0 } ? Sockless.Port.Swarm.SwarmUnits.FormatCpus(resources.NanoCpus) : "—")</td>
+                            <td class="num whitespace-nowrap font-mono text-xs">@(resources is { MemoryBytes: > 0 } ? Format.BinaryBytes(resources.MemoryBytes) : "—")</td>
+                            <td class="num font-mono text-xs">@Model.RunningTasks.GetValueOrDefault(node.Id)</td>
+                            <td>
+                                @if (endpoint is not null)
+                                {
+                                    <a asp-page="/Engine/Containers/Index" asp-route-endpointId="@endpoint.Id" class="hover:underline"
+                                       title="This node's own containers, logs and terminals">@endpoint.Name</a>
+                                }
+                                else
+                                {
+                                    <span class="text-secondary">None</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="mt-3 text-xs text-secondary">
+            Endpoint: the Sockless Port endpoint that reaches the node itself, for its containers, logs and terminals. Add an agent on a node
+            (the Docker Swarm install runs one on every node) and enrol it as an endpoint to drill into it.
+        </p>
+    }
+</div>

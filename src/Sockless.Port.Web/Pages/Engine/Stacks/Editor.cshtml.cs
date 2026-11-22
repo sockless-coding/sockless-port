@@ -44,7 +44,7 @@ public sealed class EditorModel(EngineConnections connections, StackStore store,
     {
         if (!IsManaged)
             return RedirectToDetail();
-        Validation = await StackForms.ValidateAsync(validator, Store, Connection, StackName, Input.Content, cancellationToken);
+        Validation = await StackForms.ValidateAsync(validator, Store, Connection, StackName, Input.Content, Kind, cancellationToken);
         return Request.Headers.ContainsKey("HX-Request") ? Partial("_StackValidation", Validation) : Page();
     }
 
@@ -113,7 +113,7 @@ public sealed class EditorModel(EngineConnections connections, StackStore store,
             ModelState.AddModelError("Input.Compose", "The compose file is empty. Remove the stack instead if it's no longer needed.");
             return false;
         }
-        Validation = await StackForms.ValidateAsync(validator, Store, Connection, StackName, content, cancellationToken);
+        Validation = await StackForms.ValidateAsync(validator, Store, Connection, StackName, content, Kind, cancellationToken);
         if (Validation.Check is { Valid: false })
         {
             ModelState.AddModelError("Input.Compose", "Compose rejected the file. Fix the problems listed above it.");

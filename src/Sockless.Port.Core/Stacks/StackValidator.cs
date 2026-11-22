@@ -22,15 +22,35 @@ public sealed record ComposeCheck(IReadOnlyList<ComposeProblem> Errors, IReadOnl
 /// Validates a stack's files with <c>docker compose config</c> before they're saved or deployed,
 /// and warns about what will go wrong on the engine although the file is valid: builds (there's no
 /// build context), relative bind mounts (they resolve inside Sockless Port's own data folder) and,
-/// on rootless engines, ports below 1024.
+/// on rootless engines, ports below 1024. Swarm stacks are also checked with <c>docker stack
+/// config</c>, which knows what swarm accepts, and warned about settings swarm ignores.
 /// </summary>
-public sealed partial class StackValidator(ComposeCli compose, IOptions<PortOptions> options, ILogger<StackValidator> logger)
+public sealed partial class StackValidator(ComposeCli compose, DockerCli docker, IOptions<PortOptions> options, ILogger<StackValidator> logger)
 {
+    /// <summary>Service settings <c>docker stack deploy</c> ignores, and what to do instead.</summary>
+    internal static readonly IReadOnlyDictionary<string, string> IgnoredBySwarm = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["build"] = "swarm only runs images: push one to a registry and use image:",
+        ["container_name"] = "swarm names tasks itself (stack_service.slot)",
+        ["depends_on"] = "swarm starts services in any order; make them retry until what they need is up",
+        ["restart"] = "use deploy.restart_policy instead",
+        ["network_mode"] = "attach networks instead; host networking needs the predefined host network",
+        ["links"] = "services on the same network reach each other by name",
+        ["external_links"] = "services on the same network reach each other by name",
+        ["devices"] = "swarm can't pass devices to tasks",
+        ["security_opt"] = "swarm doesn't pass security options",
+        ["userns_mode"] = "swarm doesn't pass a user namespace mode",
+        ["cgroup_parent"] = "swarm doesn't pass a cgroup parent",
+    };
+
     /// <param name="deployDirectory">Where the stack will run from, for the warnings about relative paths.</param>
+    /// <param name="kind">Swarm stacks get swarm's own check and warnings.</param>
     /// <param name="rootless">The engine runs rootless, so ports below 1024 can't be published.</param>
     /// <exception cref="ComposeUnavailableException">Compose isn't installed.</exception>
-    public async Task<ComposeCheck> CheckAsync(string projectName, StackContent content, string deployDirectory, bool rootless = false, CancellationToken cancellationToken = default)
+    public async Task<ComposeCheck> CheckAsync(string projectName, StackContent content, string deployDirectory, StackKind kind = StackKind.Compose,
+        bool rootless = false, CancellationToken cancellationToken = default)
     {
+        var swarm = kind == StackKind.Swarm;
         if (string.IsNullOrWhiteSpace(content.Compose))
             return new ComposeCheck([new ComposeProblem("The compose file is empty. Add at least one service.", null)], [], []);
 
@@ -60,7 +80,10 @@ public sealed partial class StackValidator(ComposeCli compose, IOptions<PortOpti
                 return new ComposeCheck(errors, [], []);
             }
 
-            var warnings = messages.Select(m => WarningPrefix().Replace(m, "")).ToList();
+            var warnings = messages.Select(m => WarningPrefix().Replace(m, ""))
+                // Compose warns that deploy settings only apply to swarm, which is where this goes.
+                .Where(m => !swarm || !m.Contains("Swarm", StringComparison.Ordinal))
+                .ToList();
             JsonObject? model;
             try
             {
@@ -73,7 +96,17 @@ public sealed partial class StackValidator(ComposeCli compose, IOptions<PortOpti
             }
 
             var services = model?["services"] as JsonObject;
-            warnings.AddRange(Analyse(services, project, deployDirectory, rootless));
+            warnings.AddRange(Analyse(services, project, deployDirectory, rootless && !swarm));
+            if (swarm)
+            {
+                warnings.AddRange(AnalyseSwarm(services, content));
+                if (await CheckSwarmAsync(project, content, cancellationToken) is { } swarmCheck)
+                {
+                    if (swarmCheck.Errors.Count > 0)
+                        return new ComposeCheck(swarmCheck.Errors, warnings, []);
+                    warnings.AddRange(swarmCheck.Warnings);
+                }
+            }
             return new ComposeCheck([], warnings, [.. (services?.Select(s => s.Key) ?? []).Order(StringComparer.Ordinal)]);
         }
         finally
@@ -126,6 +159,42 @@ public sealed partial class StackValidator(ComposeCli compose, IOptions<PortOpti
                 }
             }
         }
+    }
+
+    /// <summary>Settings swarm ignores, and <c>.env</c> variables that can't reach <c>docker stack deploy</c>.</summary>
+    internal static IEnumerable<string> AnalyseSwarm(JsonObject? services, StackContent content)
+    {
+        foreach (var (name, node) in services ?? [])
+        {
+            if (node is not JsonObject service)
+                continue;
+            foreach (var (key, instead) in IgnoredBySwarm.Where(i => service.ContainsKey(i.Key)))
+                yield return $"{name} sets {key}:, which swarm ignores: {instead}.";
+        }
+        foreach (var reserved in StackEnv.Parse(content.Env).Keys.Where(StackEnv.IsReserved))
+            yield return $".env sets {reserved}, which Sockless Port sets itself for the deploy, so ${{{reserved}}} won't be what .env says.";
+    }
+
+    /// <summary><c>docker stack config</c>: null when it ran and found nothing wrong.</summary>
+    private async Task<ComposeCheck?> CheckSwarmAsync(string project, StackContent content, CancellationToken cancellationToken)
+    {
+        var (tool, problem) = await docker.StatusAsync(cancellationToken);
+        if (tool is null)
+            return new ComposeCheck([], [$"Swarm's own checks were skipped: {problem}"], []);
+
+        var result = await docker.RunAsync(new DockerCliRequest(
+            ["stack", "config", "--compose-file", Path.Combine(project, StackFiles.ComposeFile)], WorkingDirectory: project, Variables: StackEnv.Parse(content.Env)),
+            cancellationToken: cancellationToken);
+        if (result.Succeeded)
+            return null;
+        var stdout = result.Stdout.Split('\n').Select(l => l.TrimEnd('\r')).ToHashSet(StringComparer.Ordinal);
+        var errors = result.Output.Where(l => !string.IsNullOrWhiteSpace(l) && !stdout.Contains(l))
+            .Select(l => Clean(l, project))
+            .Select(m => new ComposeProblem($"Swarm: {m}", LineOf(m)))
+            .ToList();
+        if (errors.Count == 0)
+            errors.Add(new ComposeProblem($"docker stack config rejected the file (exit code {result.ExitCode}).", null));
+        return new ComposeCheck(errors, [], []);
     }
 
     private static int FirstPort(string published) =>

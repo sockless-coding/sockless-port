@@ -59,9 +59,24 @@
                 <div class="field max-w-md">
                     <label asp-for="Input.Name">Name</label>
                     <input asp-for="Input.Name" class="font-mono" placeholder="web" autocomplete="off" spellcheck="false" aria-describedby="name-hint" />
-                    <p class="hint" id="name-hint">The Compose project name: lower-case letters, digits, - and _. Containers are named after it (web-app-1).</p>
+                    <p class="hint" id="name-hint">Lower-case letters, digits, - and _. Compose names containers after it (web-app-1); swarm names services after it (web_app).</p>
                     <partial name="_FieldError" model='"Input_Name"' />
                 </div>
+                @if (Model.OffersSwarm)
+                {
+                    <fieldset class="space-y-2">
+                        <legend class="label-caps mb-1">Deploy as</legend>
+                        <label class="flex items-start gap-2">
+                            <input type="radio" name="Kind" value="Swarm" class="mt-1 accent-accent" checked="@(Model.Kind == Sockless.Port.Stacks.StackKind.Swarm)" />
+                            <span>A swarm stack <span class="text-secondary">(docker stack deploy): services across the swarm's nodes, using the deploy: settings.</span></span>
+                        </label>
+                        <label class="flex items-start gap-2">
+                            <input type="radio" name="Kind" value="Compose" class="mt-1 accent-accent" checked="@(Model.Kind == Sockless.Port.Stacks.StackKind.Compose)" />
+                            <span>A Compose project <span class="text-secondary">(docker compose up): containers on @Model.Connection.Name only.</span></span>
+                        </label>
+                        <p class="hint">This can't change later: create another stack to deploy the file the other way.</p>
+                    </fieldset>
+                }
             </section>
         }
         else

@@ -30,6 +30,18 @@
                 {
                     <span class="badge-stat" title="Spans every node of the swarm">Swarm</span>
                 }
+                @if (network.Ingress)
+                {
+                    <span class="badge-stat" title="The swarm's routing mesh: published ports arrive here">Ingress</span>
+                }
+                @if (network.IsEncrypted)
+                {
+                    <span class="badge-stat" title="Traffic between nodes is encrypted">Encrypted</span>
+                }
+                @if (network.Attachable)
+                {
+                    <span class="badge-stat" title="Standalone containers can join, not only services">Attachable</span>
+                }
                 @if (network.Internal)
                 {
                     <span class="badge-stat" title="No route out of the network">Internal</span>

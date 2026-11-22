@@ -1,0 +1,83 @@
+@model Sockless.Port.Web.Pages.Engine.Swarm.Nodes.DetailModel
+@{
+    var node = Model.Node!;
+    var endpoint = Model.NodeEndpoint;
+    var route = new { endpointId = Model.EndpointId, nodeId = Model.NodeId };
+}
+<div id="node-tasks" class="space-y-4" hx-get="@Url.Page("/Engine/Swarm/Nodes/Detail", "Overview", route)"
+     hx-trigger="engine-changed from:body, endpoint-state from:body, every 15s" hx-swap="outerHTML">
+    @if (node.Status?.Message is { Length: > 0 } nodeMessage && !node.IsReady)
+    {
+        <div class="callout danger" role="alert">
+            <icon name="exclamation-triangle" class="h-5 w-5" />
+            <p>@nodeMessage</p>
+        </div>
+    }
+
+    <section class="card" aria-labelledby="node-tasks-title">
+        <h3 id="node-tasks-title" class="section-title">Tasks</h3>
+        @if (Model.Tasks.Count == 0)
+        {
+            <p class="text-secondary">No tasks are placed on this node.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="table">
+                    <caption class="sr-only">Tasks on this node: current ones, then the last one that ended in each slot</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Task</th>
+                            <th scope="col">State</th>
+                            <th scope="col">Image</th>
+                            <th scope="col">Container</th>
+                            <th scope="col">Since</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in Model.Tasks)
+                        {
+                            var serviceName = Model.ServiceName(t.ServiceId);
+                            var taskName = t.Slot is { } slot ? $"{serviceName}.{slot}" : serviceName;
+                            var message = Sockless.Port.Web.Infrastructure.SwarmDisplay.TaskMessage(t);
+                            <tr class="@(t.IsCurrent ? "" : "text-secondary")">
+                                <th scope="row" class="font-mono text-xs @(t.IsCurrent ? "" : "font-normal")">
+                                    <a asp-page="/Engine/Swarm/Services/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-serviceId="@t.ServiceId" class="hover:underline">@taskName</a>
+                                    @if (!t.IsCurrent)
+                                    {
+                                        <span class="sr-only">(ended)</span>
+                                    }
+                                </th>
+                                <td>
+                                    <partial name="_StatusBadge" model="SwarmDisplay.TaskState(t)" />
+                                    @if (message is not null && t.Status?.State != "running")
+                                    {
+                                        <span class="mt-1 block max-w-[24rem] break-words text-xs text-secondary">@message</span>
+                                    }
+                                </td>
+                                <td class="break-all font-mono text-xs">@(t.Image ?? "—")</td>
+                                <td class="font-mono text-xs">
+                                    @if (t.ContainerId is { } containerId && endpoint is not null)
+                                    {
+                                        <a asp-page="/Engine/Containers/Detail" asp-route-endpointId="@endpoint.Id" asp-route-containerId="@containerId" class="hover:underline">@SwarmDisplay.Short(containerId)</a>
+                                    }
+                                    else
+                                    {
+                                        @SwarmDisplay.Short(t.ContainerId)
+                                    }
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    @if (Format.EngineTime(t.Status?.Timestamp) is { } since)
+                                    {
+                                        <span title="@Format.Timestamp(since)">@Format.Relative(since)</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+</div>

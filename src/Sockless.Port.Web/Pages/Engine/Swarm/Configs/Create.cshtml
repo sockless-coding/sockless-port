@@ -1,0 +1,7 @@
+@page "/endpoints/{endpointId:int}/swarm/configs/create"
+@model Sockless.Port.Web.Pages.Engine.Swarm.Configs.CreateModel
+@{
+    ViewData["Title"] = "Create config";
+}
+
+<partial name="_SwarmObjectCreate" model="Model" />

@@ -459,7 +459,7 @@ public sealed class StackJobStepTests
     [Fact]
     public void A_failure_names_the_engines_reason_and_hints()
     {
-        var failed = StackJobs.Failure("up", new ComposeResult(1, [
+        var failed = StackJobs.Failure("docker compose up", new ComposeResult(1, [
             " Container web-1 Starting",
             "Error response from daemon: driver failed programming external connectivity: Bind for 0.0.0.0:80 failed: port is already allocated",
         ], ""));
@@ -479,12 +479,12 @@ public sealed class StackStoreTests
         var store = harness.Store;
         var first = StackContent.Normalize("services:\r\n  web:\r\n    image: nginx\r\n", "TAG=1");
 
-        var stack = await store.CreateAsync(1, "web", first, adopted: false, ct);
+        var stack = await store.CreateAsync(1, "web", first, adopted: false, StackKind.Compose, ct);
         Assert.Null(stack.DeployedAt);
         Assert.Equal(first, await store.Files.ReadAsync(1, "web", ct));
         Assert.Equal("services:\n  web:\n    image: nginx\n", first.Compose);
         Assert.Null(await store.Files.ReadDeployedAsync(1, "web", ct));
-        await Assert.ThrowsAsync<StackRejectedException>(() => store.CreateAsync(1, "web", first, adopted: false, ct));
+        await Assert.ThrowsAsync<StackRejectedException>(() => store.CreateAsync(1, "web", first, adopted: false, StackKind.Compose, ct));
 
         await store.MarkDeployedAsync(1, "web", first, ct);
         var second = first with { Env = "TAG=2\n" };

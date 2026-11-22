@@ -1,0 +1,27 @@
+@* Why a swarm page has nothing to show: offline, not in a swarm, a worker, or a failed read. Model: any swarm page. *@
+@model Sockless.Port.Web.Infrastructure.SwarmPageModel
+@if (Model.Client is null)
+{
+    <div class="mb-4"><partial name="_EndpointStateCallout" model="Model.Connection" /></div>
+}
+else if (!Model.IsSwarm)
+{
+    <div class="callout mb-4">
+        <icon name="information-circle" class="h-5 w-5" />
+        <p>@Model.Connection.Name isn't part of a swarm. Run <span class="font-mono">docker swarm init</span> on it to start one, or <span class="font-mono">docker swarm join</span> to join an existing swarm.</p>
+    </div>
+}
+else if (!Model.IsManager)
+{
+    <div class="callout mb-4">
+        <icon name="information-circle" class="h-5 w-5" />
+        <p>@Model.Connection.Name is a swarm worker. Only managers know the cluster's nodes, services, secrets and configs: add an endpoint for a manager to manage them.</p>
+    </div>
+}
+else if (Model.Error is not null)
+{
+    <div class="callout danger mb-4" role="alert">
+        <icon name="exclamation-triangle" class="h-5 w-5" />
+        <p>@Model.Error</p>
+    </div>
+}

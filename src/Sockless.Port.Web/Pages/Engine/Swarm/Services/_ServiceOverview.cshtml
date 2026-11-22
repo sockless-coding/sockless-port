@@ -1,0 +1,226 @@
+@model Sockless.Port.Web.Pages.Engine.Swarm.Services.DetailModel
+@using Sockless.Port.Swarm
+@{
+    var service = Model.Service!;
+    var spec = service.Spec;
+    var task = spec?.TaskTemplate;
+    var container = task?.ContainerSpec;
+    var refresh = Url.Page("/Engine/Swarm/Services/Detail", "Overview", new { endpointId = Model.EndpointId, serviceId = Model.ServiceId });
+    // Task changes on other nodes send no events here, so poll while the service settles.
+    var trigger = Model.IsSettling ? "engine-changed from:body, endpoint-state from:body, every 3s" : "engine-changed from:body, endpoint-state from:body, every 30s";
+    var update = service.UpdateStatus;
+}
+<div id="service-overview" class="space-y-4" hx-get="@refresh" hx-trigger="@trigger" hx-swap="outerHTML">
+    @if (SwarmDisplay.UpdateState(service) is { } updateState)
+    {
+        var failed = update?.State is "paused" or "rollback_paused";
+        <div class="callout @(failed ? "danger" : update?.State is "updating" or "rollback_started" ? "warning" : "")" role="@(failed ? "alert" : null)">
+            <icon name="@(failed ? "exclamation-triangle" : "information-circle")" class="h-5 w-5" />
+            <div>
+                <p class="font-semibold">@updateState@(Format.EngineTime(update?.CompletedAt ?? update?.StartedAt) is { } at ? $" {Format.Relative(at)}" : "")</p>
+                @if (update?.Message is { Length: > 0 } message)
+                {
+                    <p class="text-secondary">@message</p>
+                }
+                @if (failed)
+                {
+                    <p class="mt-1 text-secondary">The tasks below say why. Fix the settings and save them, or roll back.</p>
+                }
+            </div>
+        </div>
+    }
+
+    <section class="card" aria-labelledby="tasks-title">
+        <div class="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+            <h3 id="tasks-title" class="section-title mb-0">Tasks</h3>
+            <span class="text-secondary">@SwarmDisplay.Replicas(service) running</span>
+        </div>
+        @if (Model.Tasks.Count == 0)
+        {
+            <p class="text-secondary">No tasks. @(Model.IsReplicated ? "Scale the service up to start some." : "No node fits its placement constraints.")</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="table">
+                    <caption class="sr-only">Tasks: current ones, then the last few that ended in each slot</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Task</th>
+                            <th scope="col">State</th>
+                            <th scope="col">Node</th>
+                            <th scope="col">Container</th>
+                            <th scope="col">Since</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in Model.Tasks)
+                        {
+                            var endpoint = Model.EndpointFor(t);
+                            var message = SwarmDisplay.TaskMessage(t);
+                            <tr class="@(t.IsCurrent ? "" : "text-secondary")">
+                                <th scope="row" class="font-mono text-xs @(t.IsCurrent ? "" : "font-normal")">
+                                    @SwarmDisplay.TaskName(t, service.Name, Model.Nodes)
+                                    @if (!t.IsCurrent)
+                                    {
+                                        <span class="sr-only">(ended)</span>
+                                    }
+                                </th>
+                                <td>
+                                    <partial name="_StatusBadge" model="SwarmDisplay.TaskState(t)" />
+                                    @if (message is not null && (t.Status?.Err is { Length: > 0 } || t.Status?.State != "running"))
+                                    {
+                                        <span class="mt-1 block max-w-[24rem] break-words text-xs text-secondary">@message</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (t.NodeId is { Length: > 0 } nodeId)
+                                    {
+                                        <a asp-page="/Engine/Swarm/Nodes/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-nodeId="@nodeId"
+                                           class="font-mono text-xs hover:underline">@Model.NodeName(nodeId)</a>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-secondary">Not placed</span>
+                                    }
+                                </td>
+                                <td class="font-mono text-xs">
+                                    @if (t.ContainerId is { } containerId && endpoint is not null)
+                                    {
+                                        <a asp-page="/Engine/Containers/Detail" asp-route-endpointId="@endpoint.Id" asp-route-containerId="@containerId"
+                                           class="hover:underline" title="On @endpoint.Name">@SwarmDisplay.Short(containerId)</a>
+                                    }
+                                    else
+                                    {
+                                        @SwarmDisplay.Short(t.ContainerId)
+                                    }
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    @if (Format.EngineTime(t.Status?.Timestamp) is { } since)
+                                    {
+                                        <span title="@Format.Timestamp(since)">@Format.Relative(since)</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="mt-3 text-xs text-secondary">Containers link to their endpoint when Sockless Port reaches their node: this one, or an agent on it.</p>
+        }
+    </section>
+
+    <section class="card" aria-labelledby="settings-title">
+        <div class="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+            <h3 id="settings-title" class="section-title mb-0">Settings</h3>
+            <a asp-page="/Engine/Swarm/Services/Edit" asp-route-endpointId="@Model.EndpointId" asp-route-serviceId="@Model.ServiceId" class="btn-soft">
+                <icon name="pencil-square" class="h-4 w-4" /> Edit
+            </a>
+        </div>
+        <dl class="details">
+            <dt>Image</dt>
+            <dd class="break-all font-mono text-xs">@(container?.Image ?? "—")</dd>
+            @if (container?.Args is { Count: > 0 } args)
+            {
+                <dt>Command</dt>
+                <dd class="break-all font-mono text-xs">@Sockless.Port.Containers.ContainerSpecBuilder.JoinShellWords(args)</dd>
+            }
+            <dt>Ports</dt>
+            <dd class="font-mono text-xs">@(service.Endpoint?.Ports is { Count: > 0 } ports ? string.Join(", ", ports.Select(SwarmDisplay.Port)) : "None published")</dd>
+            <dt>Networks</dt>
+            <dd class="font-mono text-xs">
+                @if (task?.Networks is { Count: > 0 } networks)
+                {
+                    @foreach (var network in networks)
+                    {
+                        <a asp-page="/Engine/Networks/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-networkId="@network.Target" class="mr-2 hover:underline">@(Model.NetworkName(network.Target))</a>
+                    }
+                }
+                else
+                {
+                    <span class="text-secondary">Ingress only</span>
+                }
+            </dd>
+            @if (container?.Mounts is { Count: > 0 } mounts)
+            {
+                <dt>Mounts</dt>
+                <dd class="font-mono text-xs">
+                    @foreach (var mount in mounts)
+                    {
+                        <span class="block break-all">@mount.Type @(mount.Source ?? "(anonymous)") → @mount.Target@(mount.ReadOnly ? " (read-only)" : "")</span>
+                    }
+                </dd>
+            }
+            @if (container?.Secrets is { Count: > 0 } secrets)
+            {
+                <dt>Secrets</dt>
+                <dd class="font-mono text-xs">
+                    @foreach (var secret in secrets)
+                    {
+                        <span class="block">
+                            <a asp-page="/Engine/Swarm/Secrets/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-objectId="@secret.SecretId" class="hover:underline">@secret.SecretName</a>
+                            → /run/secrets/@secret.File?.Name
+                        </span>
+                    }
+                </dd>
+            }
+            @if (container?.Configs is { Count: > 0 } configs)
+            {
+                <dt>Configs</dt>
+                <dd class="font-mono text-xs">
+                    @foreach (var config in configs)
+                    {
+                        <span class="block">
+                            <a asp-page="/Engine/Swarm/Configs/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-objectId="@config.ConfigId" class="hover:underline">@config.ConfigName</a>
+                            → @config.File?.Name
+                        </span>
+                    }
+                </dd>
+            }
+            @if (task?.Placement is { } placement && (placement.Constraints is { Count: > 0 } || placement.Preferences is { Count: > 0 } || placement.MaxReplicas > 0))
+            {
+                <dt>Placement</dt>
+                <dd class="font-mono text-xs">
+                    @foreach (var constraint in placement.Constraints ?? [])
+                    {
+                        <span class="block">@constraint</span>
+                    }
+                    @foreach (var preference in placement.Preferences ?? [])
+                    {
+                        <span class="block">spread over @preference.Spread?.SpreadDescriptor</span>
+                    }
+                    @if (placement.MaxReplicas > 0)
+                    {
+                        <span class="block">at most @placement.MaxReplicas per node</span>
+                    }
+                </dd>
+            }
+            @if (task?.Resources is { } resources && (resources.Limits is not null || resources.Reservations is not null))
+            {
+                <dt>Resources</dt>
+                <dd class="text-xs">
+                    @if (resources.Limits is { } limits && (limits.NanoCpus > 0 || limits.MemoryBytes > 0))
+                    {
+                        <span class="block">Limit: @(limits.NanoCpus > 0 ? $"{SwarmUnits.FormatCpus(limits.NanoCpus)} CPUs" : "")@(limits.NanoCpus > 0 && limits.MemoryBytes > 0 ? ", " : "")@(limits.MemoryBytes > 0 ? Format.BinaryBytes(limits.MemoryBytes) : "")</span>
+                    }
+                    @if (resources.Reservations is { } reservations && (reservations.NanoCpus > 0 || reservations.MemoryBytes > 0))
+                    {
+                        <span class="block">Reserved: @(reservations.NanoCpus > 0 ? $"{SwarmUnits.FormatCpus(reservations.NanoCpus)} CPUs" : "")@(reservations.NanoCpus > 0 && reservations.MemoryBytes > 0 ? ", " : "")@(reservations.MemoryBytes > 0 ? Format.BinaryBytes(reservations.MemoryBytes) : "")</span>
+                    }
+                </dd>
+            }
+            @if (spec?.UpdateConfig is { } updateConfig)
+            {
+                <dt>Updates</dt>
+                <dd class="text-xs">@(updateConfig.Parallelism == 0 ? "All at once" : $"{updateConfig.Parallelism} at a time"), @SwarmUnits.FormatDuration(updateConfig.Delay) apart, @(updateConfig.Order ?? "stop-first"); on failure: @(updateConfig.FailureAction ?? "pause")</dd>
+            }
+            @if (Format.EngineTime(service.UpdatedAt) is { } updatedAt)
+            {
+                <dt>Changed</dt>
+                <dd title="@Format.Timestamp(updatedAt)">@Format.Relative(updatedAt)</dd>
+            }
+            <dt>ID</dt>
+            <dd class="break-all font-mono text-xs">@service.Id</dd>
+        </dl>
+    </section>
+</div>

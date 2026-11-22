@@ -81,7 +81,7 @@ public sealed class StackIntegrationTests : IAsyncLifetime
     {
         var ct = TestContext.Current.CancellationToken;
         var content = StackContent.Normalize(Compose(), "GREETING=hello");
-        await _harness.Store.CreateAsync(1, _name, content, adopted: false, ct);
+        await _harness.Store.CreateAsync(1, _name, content, adopted: false, StackKind.Compose, ct);
 
         var deploy = await EndOfAsync(await _harness.Jobs.StartAsync(_connection, _name, StackOperation.Deploy));
         Assert.True(deploy.Status is StackJobSucceeded, string.Join('\n', deploy.Log));
@@ -120,7 +120,7 @@ public sealed class StackIntegrationTests : IAsyncLifetime
     public async Task A_failed_deploy_says_why()
     {
         var ct = TestContext.Current.CancellationToken;
-        await _harness.Store.CreateAsync(1, _name, StackContent.Normalize(Compose("sockless-port-test/does-not-exist:1"), ""), adopted: false, ct);
+        await _harness.Store.CreateAsync(1, _name, StackContent.Normalize(Compose("sockless-port-test/does-not-exist:1"), ""), adopted: false, StackKind.Compose, ct);
 
         var end = await EndOfAsync(await _harness.Jobs.StartAsync(_connection, _name, StackOperation.Deploy));
 

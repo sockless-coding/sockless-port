@@ -6,7 +6,7 @@ using Sockless.Port.Web.Infrastructure;
 namespace Sockless.Port.Web.Pages.Engine.Stacks;
 
 /// <summary>A stack's services and containers, its last job, and the handlers for its actions.</summary>
-public sealed class DetailModel(EngineConnections connections, StackStore store, StackJobs jobs, ComposeCli compose) : StackPageModel(connections, store, jobs)
+public sealed class DetailModel(EngineConnections connections, StackStore store, StackJobs jobs, ComposeCli compose, DockerCli docker) : StackPageModel(connections, store, jobs)
 {
     /// <summary>The stack's tabs: route suffix → (page, label). The editor exists only for managed stacks.</summary>
     public static readonly IReadOnlyList<(string Tab, string Page, string Label)> Tabs =
@@ -18,8 +18,8 @@ public sealed class DetailModel(EngineConnections connections, StackStore store,
     /// <summary>The saved files differ from what was last deployed.</summary>
     public bool HasUndeployedChanges { get; private set; }
 
-    /// <summary>Why nothing can be deployed from here, when Compose is missing.</summary>
-    public string? ComposeProblem { get; private set; }
+    /// <summary>Why nothing can be deployed from here: Compose (or, for swarm stacks, the Docker CLI) is missing, or this isn't a manager.</summary>
+    public string? ToolProblem { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -54,7 +54,7 @@ public sealed class DetailModel(EngineConnections connections, StackStore store,
                 return Back();
             }
             if (await Store.DeleteAsync(EndpointId, StackName, HttpContext.RequestAborted))
-                Flash.Success(TempData, $"Removed the stack {StackName} from Sockless Port. Its containers keep running and it's listed as external.");
+                Flash.Success(TempData, $"Removed the stack {StackName} from Sockless Port. Its {(IsSwarm ? "services" : "containers")} keep running and it's listed as external.");
             return RedirectToPage("/Engine/Stacks/Index", new { endpointId = EndpointId });
         }
 
@@ -66,7 +66,9 @@ public sealed class DetailModel(EngineConnections connections, StackStore store,
 
     private async Task LoadStateAsync(CancellationToken cancellationToken)
     {
-        ComposeProblem = (await compose.StatusAsync(cancellationToken)).Problem;
+        ToolProblem = !IsSwarm ? (await compose.StatusAsync(cancellationToken)).Problem
+            : !CanReachSwarm ? $"{StackName} is a swarm stack, and {Connection.Name} isn't a swarm manager."
+            : (await docker.StatusAsync(cancellationToken)).Problem;
         if (Definition is null || Definition.DeployedAt is null)
             return;
         var saved = await Store.Files.ReadAsync(EndpointId, StackName, cancellationToken);

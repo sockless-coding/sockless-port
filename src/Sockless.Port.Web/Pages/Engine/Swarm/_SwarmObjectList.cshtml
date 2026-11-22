@@ -1,0 +1,48 @@
+@* The secrets or configs page. Model: their index page. *@
+@model Sockless.Port.Web.Infrastructure.SwarmObjectsIndexModel
+@{
+    var folder = SwarmObjects.Folder(Model.Kind);
+    var secret = Model.Kind == SwarmObjectKind.Secret;
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <h2 class="page-title">@SwarmObjects.Title(Model.Kind)</h2>
+            <p class="mt-1 text-secondary">
+                @if (secret)
+                {
+                    <text>Passwords, keys and certificates for services, kept encrypted by the swarm and given to tasks as files in /run/secrets. A secret's value can't be read back.</text>
+                }
+                else
+                {
+                    <text>Configuration files for services, given to tasks as files. Unlike secrets, anyone who can inspect them reads them.</text>
+                }
+            </p>
+        </div>
+        @if (Model.Manager is not null)
+        {
+            <a asp-page="@($"{folder}/Create")" asp-route-endpointId="@Model.EndpointId" class="btn-soft secondary">
+                <icon name="plus" class="h-4 w-4" /> Create @Model.Noun
+            </a>
+        }
+    </div>
+
+    @if (Model.Manager is null)
+    {
+        <partial name="_SwarmCallout" model="Model" />
+    }
+    else
+    {
+        <form method="get" role="search" aria-label="Filter @(Model.Noun)s" class="mb-4 flex flex-wrap items-end gap-3"
+              hx-get="@Url.Page($"{folder}/Index", "Table", new { endpointId = Model.EndpointId })" hx-target="#swarm-object-table" hx-swap="outerHTML"
+              hx-trigger="input changed delay:300ms from:find input[type=search], submit">
+            <div class="field min-w-[14rem] flex-1">
+                <label for="filter-q">Search</label>
+                <input id="filter-q" type="search" name="q" value="@Model.Q" placeholder="Name or ID" autocomplete="off" />
+            </div>
+            <noscript><button type="submit" class="btn-soft">Filter</button></noscript>
+        </form>
+        <partial name="_SwarmObjectTable" model="Model" />
+    }
+</div>

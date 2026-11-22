@@ -1,0 +1,155 @@
+@model Sockless.Port.Web.Pages.Engine.Swarm.Nodes.DetailModel
+@{
+    var node = Model.Node!;
+    var description = node.Description;
+    var endpoint = Model.NodeEndpoint;
+    var route = new { endpointId = Model.EndpointId, nodeId = Model.NodeId };
+    var labels = string.Join('\n', (node.Spec?.Labels ?? new Dictionary<string, string>()).OrderBy(l => l.Key, StringComparer.Ordinal).Select(l => l.Value.Length == 0 ? l.Key : $"{l.Key}={l.Value}"));
+    var address = node.Status?.Addr;
+}
+<div class="space-y-4">
+    <partial name="_NodeTasks" model="Model" />
+
+    <section class="card" aria-labelledby="node-endpoint-title">
+        <h3 id="node-endpoint-title" class="section-title">This node's containers</h3>
+        @if (endpoint is not null)
+        {
+            <p class="mb-3 text-secondary">
+                Sockless Port reaches @Model.DisplayName through the endpoint <span class="font-semibold">@endpoint.Name</span>@(endpoint.Id == Model.EndpointId ? " (this one)" : ""):
+                its containers, logs, terminals, images and volumes.
+            </p>
+            <div class="flex flex-wrap gap-2">
+                <a asp-page="/Engine/Containers/Index" asp-route-endpointId="@endpoint.Id" class="btn-soft"><icon name="cube" class="h-4 w-4" /> Containers</a>
+                <a asp-page="/Engine/Index" asp-route-endpointId="@endpoint.Id" class="btn-soft"><icon name="home" class="h-4 w-4" /> Dashboard</a>
+            </div>
+        }
+        else
+        {
+            <p class="mb-3 text-secondary">
+                Through the manager, Sockless Port sees which tasks run here, not the node's own containers, logs or terminals.
+                Install an agent on @Model.DisplayName and enrol it to manage them. The Docker Swarm install already runs one on every node; enrol the one at
+                @if (address is not null)
+                {
+                    <span class="font-mono">@address</span>
+                }
+                else
+                {
+                    <text>its address</text>
+                }.
+            </p>
+            <a asp-page="/Endpoints/Add" asp-route-name="@Model.DisplayName" asp-route-address="@address" class="btn-soft">
+                <icon name="plus" class="h-4 w-4" /> Add an agent endpoint
+            </a>
+        }
+    </section>
+
+    <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <section class="card space-y-5" aria-labelledby="node-manage-title">
+            <h3 id="node-manage-title" class="section-title mb-0">Manage</h3>
+
+            <form method="post" action="@Url.Page("/Engine/Swarm/Nodes/Detail", "Availability", route)">
+                <fieldset>
+                    <legend class="label-caps mb-1">Availability</legend>
+                    @foreach (var (value, label, hint) in Sockless.Port.Web.Pages.Engine.Swarm.Nodes.DetailModel.Availabilities)
+                    {
+                        <label class="flex items-start gap-2">
+                            <input type="radio" name="availability" value="@value" class="mt-1 accent-accent" checked="@(node.Spec?.Availability == value)" />
+                            <span>@label <span class="text-secondary">@hint</span></span>
+                        </label>
+                    }
+                </fieldset>
+                <button type="submit" class="btn-soft mt-2"
+                        data-confirm="Change the availability of @Model.DisplayName? Draining moves its tasks to other nodes.">Set availability</button>
+            </form>
+
+            <form method="post" action="@Url.Page("/Engine/Swarm/Nodes/Detail", "Role", route)" class="border-t border-line pt-4">
+                <p class="label-caps mb-1">Role</p>
+                @if (node.IsManager)
+                {
+                    <input type="hidden" name="role" value="worker" />
+                    <p class="mb-2 text-xs text-secondary">
+                        A worker runs tasks but takes no part in the cluster's decisions.
+                        @if (Model.IsThisNode)
+                        {
+                            <strong>Sockless Port manages the swarm through this node: once it's a worker, @Model.Connection.Name can't manage the cluster any more.</strong>
+                        }
+                    </p>
+                    <button type="submit" class="btn-soft danger"
+                            data-confirm="Demote @Model.DisplayName to worker?@(Model.IsThisNode ? $" {Model.Connection.Name} then can't manage the swarm." : "") Keep an odd number of managers.">
+                        Demote to worker
+                    </button>
+                }
+                else
+                {
+                    <input type="hidden" name="role" value="manager" />
+                    <p class="mb-2 text-xs text-secondary">Managers keep the cluster's state. Three or five tolerate one or two failing.</p>
+                    <button type="submit" class="btn-soft" data-confirm="Promote @Model.DisplayName to manager?">Promote to manager</button>
+                }
+            </form>
+
+            <form method="post" action="@Url.Page("/Engine/Swarm/Nodes/Detail", "Labels", route)" class="border-t border-line pt-4">
+                <div class="field">
+                    <label for="node-labels">Labels</label>
+                    <textarea id="node-labels" name="labels" rows="3" class="font-mono" placeholder="zone=a" spellcheck="false" aria-describedby="node-labels-hint">@labels</textarea>
+                    <p class="hint" id="node-labels-hint">One <span class="font-mono">key=value</span> per line. Services place tasks by them: <span class="font-mono">node.labels.zone==a</span>.</p>
+                </div>
+                <button type="submit" class="btn-soft mt-2">Save labels</button>
+            </form>
+
+            @if (!Model.IsThisNode)
+            {
+                <form method="post" action="@Url.Page("/Engine/Swarm/Nodes/Detail", "Remove", route)" class="border-t border-line pt-4">
+                    <p class="label-caps mb-1">Remove from swarm</p>
+                    @if (node.IsReady)
+                    {
+                        <p class="mb-2 text-xs text-secondary">The node is up. Run <span class="font-mono">docker swarm leave</span> on it first, or force the removal: its tasks are then rescheduled elsewhere and the node keeps running them until it notices.</p>
+                        <label class="mb-2 flex items-center gap-2 text-sm"><input type="checkbox" name="force" value="true" class="accent-accent" /> Remove although it's up</label>
+                    }
+                    <button type="submit" class="btn-soft danger" data-confirm="Remove the node @Model.DisplayName from the swarm?@(node.IsManager ? " It's a manager: demote it first, or the cluster may lose its quorum." : "")">
+                        <icon name="trash" class="h-4 w-4" /> Remove node
+                    </button>
+                </form>
+            }
+        </section>
+
+        <section class="card" aria-labelledby="node-details-title">
+            <h3 id="node-details-title" class="section-title">Details</h3>
+            <dl class="details">
+                <dt>Host name</dt>
+                <dd class="font-mono text-xs">@(description?.Hostname ?? "—")</dd>
+                <dt>Address</dt>
+                <dd class="font-mono text-xs">@(address ?? "—")</dd>
+                @if (node.ManagerStatus is { } manager)
+                {
+                    <dt>Manager address</dt>
+                    <dd class="font-mono text-xs">@(manager.Addr ?? "—") <span class="text-secondary">(@(manager.Reachability ?? "unknown"))</span></dd>
+                }
+                <dt>Platform</dt>
+                <dd class="font-mono text-xs">@(description?.Platform?.Os ?? "—")/@(description?.Platform?.Architecture ?? "—")</dd>
+                <dt>Engine</dt>
+                <dd class="font-mono text-xs">@(description?.Engine?.EngineVersion ?? "—")</dd>
+                <dt>CPUs</dt>
+                <dd class="font-mono text-xs">@(description?.Resources is { NanoCpus: > 0 } r ? Sockless.Port.Swarm.SwarmUnits.FormatCpus(r.NanoCpus) : "—")</dd>
+                <dt>Memory</dt>
+                <dd class="font-mono text-xs">@(description?.Resources is { MemoryBytes: > 0 } m ? Format.BinaryBytes(m.MemoryBytes) : "—")</dd>
+                @if (description?.Engine?.Labels is { Count: > 0 } engineLabels)
+                {
+                    <dt>Engine labels</dt>
+                    <dd class="font-mono text-xs">
+                        @foreach (var (key, value) in engineLabels.OrderBy(l => l.Key, StringComparer.Ordinal))
+                        {
+                            <span class="block break-all">@key=@value</span>
+                        }
+                    </dd>
+                }
+                @if (Format.EngineTime(node.CreatedAt) is { } joined)
+                {
+                    <dt>Joined</dt>
+                    <dd title="@Format.Timestamp(joined)">@Format.Relative(joined)</dd>
+                }
+                <dt>ID</dt>
+                <dd class="break-all font-mono text-xs">@node.Id</dd>
+            </dl>
+        </section>
+    </div>
+</div>

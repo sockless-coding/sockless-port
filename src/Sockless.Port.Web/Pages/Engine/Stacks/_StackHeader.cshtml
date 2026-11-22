@@ -6,10 +6,11 @@
     var tab = DetailModel.Tabs.FirstOrDefault(t => t.Page == current).Tab;
     var name = Model.StackName;
     var detail = Model as DetailModel;
-    var canAct = detail is not null && Model.Client is not null && !Model.Project.IsSelf && detail.ComposeProblem is null && !Model.IsGone;
+    var canAct = detail is not null && Model.Client is not null && !Model.IsSelf && detail.ToolProblem is null && !Model.IsGone;
     var busy = Model.IsBusy;
     var runUrl = Url.Page("/Engine/Stacks/Detail", "Run", new { endpointId = Model.EndpointId, stackName = name });
-    var hasContainers = Model.Project.Containers.Count > 0;
+    var deployed = Model.IsDeployed;
+    var swarm = Model.IsSwarm;
 }
 
 <nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
@@ -22,7 +23,7 @@
     <div class="min-w-0">
         <h2 class="page-title break-all">@name</h2>
         <div class="mt-2 flex flex-wrap items-center gap-1">
-            <span class="badge-stat" title="Kind">Compose</span>
+            <span class="badge-stat" title="Kind">@(swarm ? "Swarm" : "Compose")</span>
             @if (!Model.IsManaged && !Model.IsGone)
             {
                 <span class="badge-stat" title="Deployed outside Sockless Port">External</span>
@@ -31,7 +32,7 @@
             {
                 <span class="badge-stat" title="Deployed elsewhere first, then adopted">Adopted</span>
             }
-            @if (Model.Project.IsSelf)
+            @if (Model.IsSelf)
             {
                 <span class="badge-stat" title="Sockless Port runs in this stack">Sockless Port</span>
             }
@@ -60,12 +61,13 @@
                 }
                 <form method="post" action="@runUrl">
                     <input type="hidden" name="operation" value="update" />
-                    <button type="submit" class="btn-soft" disabled="@busy" title="Pull every image again, then recreate the services whose image changed">
-                        <icon name="cloud-arrow-down" class="h-4 w-4" /> Pull and update
+                    <button type="submit" class="btn-soft" disabled="@busy"
+                            title="@(swarm ? "Ask the registry again which image every tag points at, and roll out the services whose image changed" : "Pull every image again, then recreate the services whose image changed")">
+                        <icon name="cloud-arrow-down" class="h-4 w-4" /> @(swarm ? "Update images" : "Pull and update")
                     </button>
                 </form>
             }
-            else
+            else if (!swarm)
             {
                 <a asp-page="/Engine/Stacks/Create" asp-route-endpointId="@Model.EndpointId" asp-route-adopt="@name" class="btn-primary">
                     <icon name="arrow-down-on-square" class="h-4 w-4" /> Adopt
@@ -75,7 +77,24 @@
             <details class="menu" data-menu>
                 <summary class="btn-soft" aria-label="More actions for @name">More <icon name="chevron-down" class="h-4 w-4" /></summary>
                 <div class="menu-panel w-80 space-y-4 p-3">
-                    @if (hasContainers)
+                    @if (deployed && swarm)
+                    {
+                        <form method="post" action="@runUrl">
+                            <input type="hidden" name="operation" value="restart" />
+                            <p class="mb-2 text-xs text-secondary">Replaces the tasks of every service, as their update config says.</p>
+                            <button type="submit" class="btn-soft" disabled="@busy"><icon name="arrow-path" class="h-4 w-4" /> Restart services</button>
+                        </form>
+                        <form method="post" action="@runUrl">
+                            <input type="hidden" name="operation" value="down" />
+                            <p class="label-caps mb-1">Remove from swarm</p>
+                            <p class="mb-2 text-xs text-secondary">Removes the services and networks. Volumes stay on the nodes@(Model.IsManaged ? ", and the files stay here: deploy again any time" : "").</p>
+                            <button type="submit" class="btn-soft danger" disabled="@busy"
+                                    data-confirm="Remove @name from the swarm? Its services and networks are removed on every node. Volumes are kept.">
+                                <icon name="stop" class="h-4 w-4" /> Remove from swarm
+                            </button>
+                        </form>
+                    }
+                    else if (deployed)
                     {
                         <div class="flex flex-wrap gap-2">
                             @foreach (var (op, label, icon) in new[] { ("start", "Start", "play"), ("restart", "Restart", "arrow-path") })
@@ -120,18 +139,18 @@
                             <form method="post" action="@runUrl">
                                 <input type="hidden" name="operation" value="remove" />
                                 <button type="submit" class="btn-soft danger" disabled="@busy"
-                                        data-confirm="Remove the stack @name? It's taken down and its files are deleted. Volumes are kept.">
-                                    <icon name="trash" class="h-4 w-4" /> Take down and remove
+                                        data-confirm="@(swarm ? $"Remove the stack {name}? It's removed from the swarm and its files are deleted. Volumes are kept." : $"Remove the stack {name}? It's taken down and its files are deleted. Volumes are kept.")">
+                                    <icon name="trash" class="h-4 w-4" /> @(swarm ? "Remove from swarm and delete" : "Take down and remove")
                                 </button>
                             </form>
-                            @if (hasContainers)
+                            @if (deployed)
                             {
                                 <form method="post" action="@runUrl">
                                     <input type="hidden" name="operation" value="remove" />
                                     <input type="hidden" name="keepRunning" value="true" />
                                     <button type="submit" class="btn-soft danger" disabled="@busy"
-                                            data-confirm="Remove the stack @name from Sockless Port but leave its containers running? Its files are deleted.">
-                                        Forget, keep containers
+                                            data-confirm="Remove the stack @name from Sockless Port but leave its @(swarm ? "services" : "containers") running? Its files are deleted.">
+                                        Forget, keep @(swarm ? "services" : "containers")
                                     </button>
                                 </form>
                             }

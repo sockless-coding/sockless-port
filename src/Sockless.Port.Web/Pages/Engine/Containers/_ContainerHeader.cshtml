@@ -126,7 +126,17 @@
 {
     <div class="callout mb-4">
         <icon name="information-circle" class="h-5 w-5" />
-        <p>This container is a task of the swarm service <span class="font-mono">@Model.SwarmService</span>. The swarm replaces it as it sees fit, so change the service rather than the container.</p>
+        <p>
+            This container is a task of the swarm service
+            @if (Model.Connection.Engine?.Has(Sockless.Port.Docker.Engine.EngineCapabilities.SwarmManager) == true)
+            {
+                <a asp-page="/Engine/Swarm/Services/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-serviceId="@Model.SwarmService" class="font-mono hover:underline">@Model.SwarmService</a>
+            }
+            else
+            {
+                <span class="font-mono">@Model.SwarmService</span>
+            }. The swarm replaces it as it sees fit, so change the service rather than the container.
+        </p>
     </div>
 }
 

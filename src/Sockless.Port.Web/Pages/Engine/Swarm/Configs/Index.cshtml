@@ -1,0 +1,7 @@
+@page "/endpoints/{endpointId:int}/swarm/configs"
+@model Sockless.Port.Web.Pages.Engine.Swarm.Configs.IndexModel
+@{
+    ViewData["Title"] = "Configs";
+}
+
+<partial name="_SwarmObjectList" model="Model" />

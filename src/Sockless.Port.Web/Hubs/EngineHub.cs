@@ -11,7 +11,7 @@ using Sockless.Port.Web.Infrastructure;
 namespace Sockless.Port.Web.Hubs;
 
 /// <summary>
-/// Pushes live endpoint state and engine events to browsers, and streams container logs, stats,
+/// Pushes live endpoint state and engine events to browsers, and streams container and service logs, stats,
 /// terminals, image jobs (pulls and builds) and stack jobs (Compose runs). Every client receives <c>endpointState</c>; <c>engineEvent</c> goes only to
 /// clients watching that endpoint.
 /// </summary>
@@ -35,7 +35,8 @@ public sealed class EngineHub(EngineConnections connections, TerminalSessions te
 
     // ---------------------------------------------------------------- logs and stats
 
-    public sealed record LogMessage(string Stream, string Text, string? Time);
+    /// <param name="Source">For service logs: the task the line came from, e.g. <c>web.2 on node-1</c>.</param>
+    public sealed record LogMessage(string Stream, string Text, string? Time, string? Source = null);
 
     /// <summary>The last <paramref name="tail"/> lines, then new ones as they're written.</summary>
     public async IAsyncEnumerable<LogMessage> StreamLogs(int endpointId, string containerId, int tail, bool timestamps,
@@ -53,6 +54,51 @@ public sealed class EngineHub(EngineConnections connections, TerminalSessions te
                 line.Text,
                 line.Timestamp is { } time ? Format.Timestamp(time) : null);
         }
+    }
+
+    /// <summary>
+    /// The last <paramref name="tail"/> lines of every task of a swarm service, then new ones as
+    /// they're written, each with the task it came from. Through a manager only.
+    /// </summary>
+    public async IAsyncEnumerable<LogMessage> StreamServiceLogs(int endpointId, string serviceId, int tail, bool timestamps,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var client = Client(endpointId);
+        Docker.Models.SwarmService service;
+        Dictionary<string, string> sources;
+        try
+        {
+            service = (await client.InspectServiceAsync(serviceId, cancellationToken)).Service;
+            var nodes = (await client.ListNodesAsync(cancellationToken)).ToDictionary(n => n.Id, StringComparer.Ordinal);
+            var tasks = await client.ListTasksAsync(new Dictionary<string, string[]> { ["service"] = [service.Id] }, cancellationToken);
+            sources = tasks.ToDictionary(t => t.Id, t => TaskSource(t, service.Name, nodes), StringComparer.Ordinal);
+        }
+        catch (Exception ex) when (EngineFailures.IsFailure(ex, cancellationToken))
+        {
+            throw new HubException(EngineFailures.Describe(ex, Connection(endpointId)));
+        }
+
+        var options = new LogOptions
+        {
+            Follow = true,
+            Tail = Math.Clamp(tail, 0, MaxTail),
+            Timestamps = timestamps,
+            Tty = service.Spec?.TaskTemplate?.ContainerSpec?.Tty ?? false,
+        };
+        await foreach (var line in Guard(client.StreamServiceLogsAsync(service.Id, options, cancellationToken), endpointId, cancellationToken))
+        {
+            yield return new LogMessage(
+                line.Line.Stream == StreamKind.Stderr ? "stderr" : "stdout",
+                line.Line.Text,
+                line.Line.Timestamp is { } time ? Format.Timestamp(time) : null,
+                line.TaskId is { } task ? sources.GetValueOrDefault(task, SwarmDisplay.Short(task)) : null);
+        }
+    }
+
+    private static string TaskSource(Docker.Models.SwarmTask task, string serviceName, IReadOnlyDictionary<string, Docker.Models.SwarmNode> nodes)
+    {
+        var name = SwarmDisplay.TaskName(task, serviceName, nodes);
+        return task.Slot is not null && task.NodeId is { } node && nodes.TryGetValue(node, out var n) ? $"{name} on {n.DisplayName}" : name;
     }
 
     public sealed record StatsMessage(string Time, double Cpu, long Memory, long MemoryLimit, long NetworkRx, long NetworkTx, long BlockRead, long BlockWrite, long Pids);

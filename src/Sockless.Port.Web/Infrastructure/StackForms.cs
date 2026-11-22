@@ -54,12 +54,13 @@ public sealed record StackReview(IReadOnlyList<DiffHunk> Compose, IReadOnlyList<
 public static class StackForms
 {
     /// <summary>Validates the files the way they'd be deployed on <paramref name="connection"/>.</summary>
-    public static async Task<StackValidationView> ValidateAsync(StackValidator validator, StackStore store, EngineConnection connection, string name, StackContent content, CancellationToken cancellationToken)
+    public static async Task<StackValidationView> ValidateAsync(StackValidator validator, StackStore store, EngineConnection connection, string name, StackContent content,
+        StackKind kind, CancellationToken cancellationToken)
     {
         try
         {
             var rootless = connection.Engine?.Has(EngineCapabilities.Rootless) == true;
-            var check = await validator.CheckAsync(name, content, store.Files.Directory(connection.Id, name), rootless, cancellationToken);
+            var check = await validator.CheckAsync(name, content, store.Files.Directory(connection.Id, name), kind, rootless, cancellationToken);
             return new StackValidationView(check, null);
         }
         catch (ComposeUnavailableException ex)

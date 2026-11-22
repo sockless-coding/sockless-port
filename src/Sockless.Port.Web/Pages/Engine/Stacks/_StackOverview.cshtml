@@ -3,6 +3,7 @@
 @{
     var project = Model.Project;
     var definition = Model.Definition;
+    var swarm = Model.IsSwarm;
 }
 <div id="stack-overview" hx-get="@Url.Page("/Engine/Stacks/Detail", "Overview", new { endpointId = Model.EndpointId, stackName = Model.StackName })"
      hx-trigger="engine-changed from:body, endpoint-state from:body, stack-job-ended from:body" hx-swap="outerHTML">
@@ -13,29 +14,36 @@
             <div class="empty-state">
                 <icon name="rectangle-stack" class="h-12 w-12" stroke-width="1.5" />
                 <p class="text-base text-heading">@Model.StackName is gone</p>
-                <p class="text-secondary">It has no containers and Sockless Port no longer manages it. <a asp-page="/Engine/Stacks/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Back to the stacks</a>.</p>
+                <p class="text-secondary">It has no @(swarm ? "services" : "containers") and Sockless Port no longer manages it. <a asp-page="/Engine/Stacks/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Back to the stacks</a>.</p>
             </div>
         </section>
     }
     else
     {
         <div class="space-y-4">
-            @if (project.IsSelf)
+            @if (Model.IsSelf)
             {
                 <div class="callout">
                     <icon name="information-circle" class="h-5 w-5" />
-                    <p>Sockless Port runs in this stack, so it can't stop, take down or redeploy it: the request would end with Sockless Port. Manage it with docker compose on the host.</p>
+                    <p>Sockless Port runs in this stack, so it can't stop, take down or redeploy it: the request would end with Sockless Port. Manage it with @(swarm ? "docker stack" : "docker compose") on the host.</p>
                 </div>
             }
-            else if (Model.ComposeProblem is not null && Model.Client is not null)
+            else if (Model.ToolProblem is not null && Model.Client is not null)
             {
                 <div class="callout warning" role="alert">
                     <icon name="exclamation-triangle" class="h-5 w-5" />
-                    <p>Stacks can't be deployed or changed from here: @Model.ComposeProblem</p>
+                    <p>@(swarm ? "This stack" : "Stacks") can't be deployed or changed from here: @Model.ToolProblem</p>
                 </div>
             }
 
-            @if (definition is null)
+            @if (definition is null && swarm)
+            {
+                <div class="callout">
+                    <icon name="information-circle" class="h-5 w-5" />
+                    <p>This swarm stack was deployed outside Sockless Port, with docker stack deploy. It can be restarted and removed from the swarm by name. Adopting swarm stacks isn't built yet: to manage it here, create a swarm stack with the same name and its compose file.</p>
+                </div>
+            }
+            else if (definition is null)
             {
                 <div class="callout">
                     <icon name="information-circle" class="h-5 w-5" />
@@ -49,11 +57,11 @@
                     </p>
                 </div>
             }
-            else if (definition.DeployedAt is null && project.Containers.Count == 0)
+            else if (definition.DeployedAt is null && !Model.IsDeployed)
             {
                 <div class="callout">
                     <icon name="information-circle" class="h-5 w-5" />
-                    <p>Saved but not deployed. Deploy it to create its containers.</p>
+                    <p>Saved but not deployed. Deploy it to create its @(swarm ? "services on the swarm" : "containers").</p>
                 </div>
             }
             else if (definition.DeployedAt is null)
@@ -77,14 +85,59 @@
             <section class="card" aria-labelledby="services-title">
                 <div class="mb-4 flex flex-wrap items-baseline justify-between gap-2">
                     <h3 id="services-title" class="section-title mb-0">Services</h3>
-                    @if (Model.Client is not null && project.Containers.Count > 0)
+                    @if (Model.Client is not null && Model.IsDeployed)
                     {
-                        <partial name="_StatusBadge" model="StackDisplay.State(project)" />
+                        <partial name="_StatusBadge" model="swarm ? StackDisplay.State(Model.Swarm) : StackDisplay.State(project)" />
                     }
                 </div>
                 @if (Model.Client is null)
                 {
-                    <p class="text-secondary">The engine is offline, so its containers aren't known.</p>
+                    <p class="text-secondary">The engine is offline, so its @(swarm ? "services" : "containers") aren't known.</p>
+                }
+                else if (swarm && !Model.CanReachSwarm)
+                {
+                    <p class="text-secondary">@Model.Connection.Name isn't a swarm manager, so the stack's services can't be listed.</p>
+                }
+                else if (swarm && Model.Swarm.Services.Count == 0)
+                {
+                    <p class="text-secondary">No services on the swarm. @(definition is null ? "" : "Deploy the stack to create them.")</p>
+                }
+                else if (swarm)
+                {
+                    <div class="table-wrap">
+                        <table class="table">
+                            <caption class="sr-only">Swarm services</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Service</th>
+                                    <th scope="col">State</th>
+                                    <th scope="col">Mode</th>
+                                    <th scope="col">Image</th>
+                                    <th scope="col">Ports</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var service in Model.Swarm.Services)
+                                {
+                                    var ports = service.Endpoint?.Ports ?? [];
+                                    <tr>
+                                        <th scope="row">
+                                            <a asp-page="/Engine/Swarm/Services/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-serviceId="@service.Id"
+                                               class="font-mono hover:underline" title="@service.Name">@SwarmDisplay.InStack(service.Name, Model.StackName)</a>
+                                        </th>
+                                        <td><partial name="_StatusBadge" model="SwarmDisplay.ServiceState(service)" /></td>
+                                        <td class="whitespace-nowrap">@SwarmDisplay.Mode(service)</td>
+                                        <td class="break-all font-mono text-xs">@(service.Image ?? "—")</td>
+                                        <td class="font-mono text-xs">@(ports.Count > 0 ? string.Join(", ", ports.Select(SwarmDisplay.Port)) : "—")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="mt-3 text-xs text-secondary">
+                        <a asp-page="/Engine/Swarm/Services/Index" asp-route-endpointId="@Model.EndpointId" asp-route-stack="@Model.StackName" class="hover:underline">Open in Services</a>
+                        to scale or update single services. The next deploy sets them back to what the file says.
+                    </p>
                 }
                 else if (project.Services.Count == 0)
                 {

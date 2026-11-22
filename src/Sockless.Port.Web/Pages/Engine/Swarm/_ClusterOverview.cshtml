@@ -1,0 +1,133 @@
+@model Sockless.Port.Web.Pages.Engine.Swarm.IndexModel
+@{
+    var totals = Model.Totals;
+    var swarm = Model.Swarm;
+}
+<div id="cluster-overview" hx-get="@Url.Page("/Engine/Swarm/Index", "Overview", new { endpointId = Model.EndpointId })"
+     hx-trigger="engine-changed from:body, endpoint-state from:body" hx-swap="outerHTML">
+    <partial name="_SwarmCallout" model="Model" />
+
+    @if (totals is not null && Model.Manager is not null)
+    {
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <section class="card stat-card" aria-label="Nodes">
+                <p class="label-caps">Nodes</p>
+                <p class="stat-value">@Format.Count(totals.Nodes)</p>
+                <p class="stat-meta">
+                    @if (totals.Ready == totals.Nodes)
+                    {
+                        <span class="text-success">All ready</span>
+                    }
+                    else
+                    {
+                        <span class="text-warning">@Format.Count(totals.Ready) ready</span><span> · @Format.Count(totals.Nodes - totals.Ready) not</span>
+                    }
+                    · <a asp-page="/Engine/Swarm/Nodes/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">See nodes</a>
+                </p>
+            </section>
+            <section class="card stat-card" aria-label="Managers">
+                <p class="label-caps">Managers</p>
+                <p class="stat-value">@Format.Count(totals.Managers)</p>
+                <p class="stat-meta">
+                    @Format.Count(totals.Reachable) reachable · survives @((totals.Managers - 1) / 2) failing@(totals.Managers % 2 == 0 ? " (an odd number is better)" : "")
+                </p>
+            </section>
+            <section class="card stat-card" aria-label="CPUs">
+                <p class="label-caps">CPUs</p>
+                <p class="stat-value">@Sockless.Port.Swarm.SwarmUnits.FormatCpus(totals.NanoCpus)</p>
+                <p class="stat-meta">@Sockless.Port.Swarm.SwarmUnits.FormatCpus(totals.ReservedNanoCpus) reserved by running tasks</p>
+            </section>
+            <section class="card stat-card" aria-label="Memory">
+                <p class="label-caps">Memory</p>
+                <p class="stat-value">@Format.BinaryBytes(totals.MemoryBytes)</p>
+                <p class="stat-meta">@Format.BinaryBytes(totals.ReservedMemoryBytes) reserved by running tasks</p>
+            </section>
+        </div>
+        <p class="mt-2 text-xs text-secondary">CPUs and memory are the totals of the ready nodes. Reservations only count what services ask for; tasks without one can still use the rest.</p>
+
+        <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <section class="card" aria-labelledby="managers-title">
+                <h3 id="managers-title" class="section-title">Managers</h3>
+                <div class="table-wrap">
+                    <table class="table">
+                        <caption class="sr-only">Managers</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Node</th>
+                                <th scope="col">Role</th>
+                                <th scope="col">Address</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var node in Model.Managers)
+                            {
+                                <tr>
+                                    <th scope="row">
+                                        <a asp-page="/Engine/Swarm/Nodes/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-nodeId="@node.Id"
+                                           class="font-mono font-semibold hover:underline">@node.DisplayName</a>
+                                    </th>
+                                    <td><partial name="_StatusBadge" model="SwarmDisplay.Role(node)" /></td>
+                                    <td class="font-mono text-xs">@(node.ManagerStatus?.Addr ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="card" aria-labelledby="swarm-details-title">
+                <h3 id="swarm-details-title" class="section-title">Swarm</h3>
+                <dl class="details">
+                    <dt>Services</dt>
+                    <dd>
+                        <a asp-page="/Engine/Swarm/Services/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">@Format.Count(Model.Services)</a>
+                        @if (Model.Stacks > 0)
+                        {
+                            <span class="text-secondary">in @Format.Count(Model.Stacks) @(Model.Stacks == 1 ? "stack" : "stacks") and on their own</span>
+                        }
+                    </dd>
+                    <dt>Secrets</dt>
+                    <dd><a asp-page="/Engine/Swarm/Secrets/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">@Format.Count(Model.Secrets)</a></dd>
+                    <dt>Configs</dt>
+                    <dd><a asp-page="/Engine/Swarm/Configs/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">@Format.Count(Model.Configs)</a></dd>
+                    @if (swarm is not null)
+                    {
+                        <dt>Cluster ID</dt>
+                        <dd class="break-all font-mono text-xs">@swarm.Id</dd>
+                        @if (Format.EngineTime(swarm.CreatedAt) is { } created)
+                        {
+                            <dt>Created</dt>
+                            <dd title="@Format.Timestamp(created)">@Format.Relative(created)</dd>
+                        }
+                        <dt>Overlay traffic</dt>
+                        <dd class="font-mono text-xs">udp/@swarm.DataPathPort, subnets from @(swarm.DefaultAddrPool is { Count: > 0 } pools ? string.Join(", ", pools) : "10.0.0.0/8") (/@(swarm.SubnetSize > 0 ? swarm.SubnetSize : 24) each)</dd>
+                        <dt>Autolock</dt>
+                        <dd>@(swarm.Spec?.EncryptionConfig?.AutoLockManagers == true ? "On: managers need the unlock key after a restart" : "Off")</dd>
+                        @if (swarm.Spec?.Orchestration?.TaskHistoryRetentionLimit is { } history)
+                        {
+                            <dt>Task history</dt>
+                            <dd>@history ended tasks kept per slot</dd>
+                        }
+                        @if (swarm.RootRotationInProgress)
+                        {
+                            <dt>CA</dt>
+                            <dd><span class="badge warning">Rotating</span> the root certificate</dd>
+                        }
+                    }
+                </dl>
+            </section>
+        </div>
+    }
+    else if (Model.IsSwarm && !Model.IsManager && Model.Connection.Engine is { SwarmNodeId: { } nodeId })
+    {
+        <section class="card" aria-labelledby="worker-title">
+            <h3 id="worker-title" class="section-title">This node</h3>
+            <dl class="details">
+                <dt>Role</dt>
+                <dd>Worker</dd>
+                <dt>Node ID</dt>
+                <dd class="break-all font-mono text-xs">@nodeId</dd>
+            </dl>
+        </section>
+    }
+</div>

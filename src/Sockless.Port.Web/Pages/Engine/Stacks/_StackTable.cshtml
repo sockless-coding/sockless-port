@@ -54,12 +54,12 @@
                                 <a asp-page="/Engine/Stacks/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-stackName="@row.Name"
                                    class="font-mono font-semibold hover:underline">@row.Name</a>
                                 <span class="mt-1 flex flex-wrap gap-1">
-                                    <span class="badge-stat" title="Kind">Compose</span>
+                                    <span class="badge-stat" title="Kind">@(row.IsSwarm ? "Swarm" : "Compose")</span>
                                     @if (row.IsExternal)
                                     {
                                         <span class="badge-stat" title="Deployed outside Sockless Port">External</span>
                                     }
-                                    @if (row.Project.IsSelf)
+                                    @if (row.IsSelf)
                                     {
                                         <span class="badge-stat" title="Sockless Port runs in this stack">Sockless Port</span>
                                     }
@@ -74,22 +74,26 @@
                                 {
                                     <span class="text-secondary">Unknown while offline</span>
                                 }
+                                else if (row.IsSwarm && !Model.IsSwarmManager)
+                                {
+                                    <span class="text-secondary">Unknown: not a swarm manager</span>
+                                }
                                 else
                                 {
-                                    <partial name="_StatusBadge" model="StackDisplay.State(row.Project)" />
+                                    <partial name="_StatusBadge" model="row.IsSwarm ? StackDisplay.State(row.Swarm) : StackDisplay.State(row.Project)" />
                                 }
                             </td>
                             <td>
-                                @if (row.Project.Services.Count == 0)
+                                @if (row.ServiceNames.Count == 0)
                                 {
                                     <span class="text-secondary">—</span>
                                 }
                                 else
                                 {
-                                    <span class="font-mono text-xs">@string.Join(", ", row.Project.Services.Take(4).Select(s => s.Name))</span>
-                                    @if (row.Project.Services.Count > 4)
+                                    <span class="font-mono text-xs">@string.Join(", ", row.ServiceNames.Take(4))</span>
+                                    @if (row.ServiceNames.Count > 4)
                                     {
-                                        <span class="block text-xs text-secondary">and @(row.Project.Services.Count - 4) more</span>
+                                        <span class="block text-xs text-secondary">and @(row.ServiceNames.Count - 4) more</span>
                                     }
                                 }
                             </td>
@@ -108,7 +112,7 @@
                                 }
                             </td>
                             <td class="num">
-                                @if (row.IsExternal && !row.Project.IsSelf)
+                                @if (row.IsExternal && !row.IsSwarm && !row.IsSelf)
                                 {
                                     <a asp-page="/Engine/Stacks/Create" asp-route-endpointId="@Model.EndpointId" asp-route-adopt="@row.Name" class="btn-soft"
                                        aria-label="Adopt @row.Name">

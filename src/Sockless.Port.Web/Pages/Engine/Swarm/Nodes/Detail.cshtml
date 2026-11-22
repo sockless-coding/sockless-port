@@ -1,0 +1,13 @@
+@page "/endpoints/{endpointId:int}/swarm/nodes/{nodeId}"
+@model Sockless.Port.Web.Pages.Engine.Swarm.Nodes.DetailModel
+@{
+    ViewData["Title"] = Model.DisplayName;
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <partial name="_NodeHeader" model="Model" />
+    @if (Model.Node is not null)
+    {
+        <partial name="_NodeOverview" model="Model" />
+    }
+</div>

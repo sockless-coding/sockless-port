@@ -13,8 +13,11 @@ public sealed class AddModel(EndpointRegistry registry) : PageModel
     [BindProperty]
     public string Address { get; set; } = "";
 
-    public void OnGet()
+    /// <summary>A swarm node's page links here with its name and address filled in.</summary>
+    public void OnGet(string? name, string? address)
     {
+        Name = name?.Trim() ?? "";
+        Address = address?.Trim() ?? "";
     }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)

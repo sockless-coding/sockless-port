@@ -37,6 +37,12 @@ public sealed class NetworkCreateSpec
     /// <summary>Overlay only: standalone containers may join, not only swarm services.</summary>
     public bool Attachable { get; set; }
 
+    /// <summary>Overlay only: encrypt traffic between nodes (IPsec). Costs throughput; Windows nodes can't join.</summary>
+    public bool Encrypted { get; set; }
+
+    /// <summary>Overlay only: the swarm's routing mesh. There's one per swarm; remove the old one first.</summary>
+    public bool Ingress { get; set; }
+
     public string? Options { get; set; }
     public string? Labels { get; set; }
 }
@@ -101,6 +107,14 @@ public static partial class NetworkCreateSpecBuilder
 
         if (spec.Attachable && driver != "overlay")
             errors.Add(new(nameof(spec.Attachable), "Only overlay networks can be made attachable; containers can always join other networks."));
+        if (spec.Encrypted && driver != "overlay")
+            errors.Add(new(nameof(spec.Encrypted), "Only overlay networks are encrypted: traffic of other networks doesn't leave the host."));
+        if (spec.Ingress && driver != "overlay")
+            errors.Add(new(nameof(spec.Ingress), "Only an overlay network can be the routing mesh."));
+        else if (spec.Ingress && spec.Attachable)
+            errors.Add(new(nameof(spec.Ingress), "The routing mesh network can't be attachable: only services use it."));
+        else if (spec.Ingress && spec.Internal)
+            errors.Add(new(nameof(spec.Ingress), "The routing mesh network can't be internal: it carries published ports in."));
 
         var options = VolumeCreateSpecBuilder.Parse(errors, nameof(spec.Options), spec.Options);
         var labels = VolumeCreateSpecBuilder.Parse(errors, nameof(spec.Labels), spec.Labels);
@@ -109,6 +123,8 @@ public static partial class NetworkCreateSpecBuilder
 
         if (!string.IsNullOrEmpty(parent))
             options!["parent"] = parent;
+        if (spec.Encrypted)
+            options![Docker.Models.NetworkOptions.Encrypted] = "";
 
         var configs = new List<NetworkIpamConfig>();
         if (subnet is not null)
@@ -122,6 +138,7 @@ public static partial class NetworkCreateSpecBuilder
             Driver = driver,
             Internal = spec.Internal,
             Attachable = spec.Attachable,
+            Ingress = spec.Ingress,
             EnableIpv6 = spec.EnableIpv6,
             Ipam = configs.Count > 0 ? new NetworkIpam { Driver = "default", Config = configs } : null,
             Options = options is { Count: > 0 } ? options : null,

@@ -75,6 +75,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<VolumeBrowser>();
 
         services.AddSingleton<ComposeCli>();
+        services.AddSingleton<DockerCli>();
+        services.AddSingleton<Swarm.SwarmServices>();
         services.AddSingleton<StackStore>();
         services.AddSingleton<StackValidator>();
         services.AddSingleton<StackJobs>();

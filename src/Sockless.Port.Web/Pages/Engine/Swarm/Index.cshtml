@@ -1,0 +1,61 @@
+@page "/endpoints/{endpointId:int}/swarm"
+@model Sockless.Port.Web.Pages.Engine.Swarm.IndexModel
+@{
+    ViewData["Title"] = "Cluster";
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <div class="mb-6">
+        <h2 class="page-title">Cluster</h2>
+        <p class="mt-1 text-secondary">The swarm @Model.Connection.Name belongs to: its nodes, what they have, and how to add more.</p>
+    </div>
+
+    <partial name="_ClusterOverview" model="Model" />
+
+    @if (Model.Manager is not null && Model.Swarm is not null)
+    {
+        <section class="card mt-6" aria-labelledby="join-title">
+            <h3 id="join-title" class="section-title">Add nodes</h3>
+            <p class="mb-4 text-secondary">
+                Run a join command on the new node. Anyone with a token can join the swarm, so the tokens are shown only on request.
+                Rotate a token if it leaked: nodes that already joined stay.
+            </p>
+
+            @if (Model.JoinCommands is { } commands)
+            {
+                <div class="space-y-4">
+                    @foreach (var command in commands)
+                    {
+                        <div>
+                            <div class="mb-1 flex items-center justify-between gap-2">
+                                <p class="label-caps">As a @command.Role</p>
+                                <button type="button" class="btn-soft" data-copy="#join-@command.Role">Copy</button>
+                            </div>
+                            <pre id="join-@command.Role" class="code-block whitespace-pre-wrap break-all" tabindex="0">@command.Command</pre>
+                        </div>
+                    }
+                    <p class="text-xs text-secondary">Port 2377/tcp of @Model.JoinAddress must be reachable from the new node, and 7946 (tcp and udp) and @Model.Swarm.DataPathPort/udp between all nodes.</p>
+                </div>
+            }
+            else
+            {
+                <form method="post" asp-page-handler="ShowJoin" asp-route-endpointId="@Model.EndpointId">
+                    <button type="submit" class="btn-soft"><icon name="eye" class="h-4 w-4" /> Show join commands</button>
+                </form>
+            }
+
+            <div class="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
+                @foreach (var role in new[] { "worker", "manager" })
+                {
+                    <form method="post" asp-page-handler="Rotate" asp-route-endpointId="@Model.EndpointId">
+                        <input type="hidden" name="role" value="@role" />
+                        <button type="submit" class="btn-soft danger"
+                                data-confirm="Rotate the @role join token of this swarm? Commands using the current token stop working.">
+                            <icon name="arrow-path" class="h-4 w-4" /> Rotate @role token
+                        </button>
+                    </form>
+                }
+            </div>
+        </section>
+    }
+</div>

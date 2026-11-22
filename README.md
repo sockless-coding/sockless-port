@@ -1,8 +1,8 @@
 # Sockless Port
 
-Self-hosted container management for Docker, Docker Swarm and Podman. Sockless Port runs as a container and manages containers, stacks, images, volumes and networks on the local engine. A lightweight agent will let it manage remote engines too.
+Self-hosted container management for Docker, Docker Swarm and Podman. Sockless Port runs as a container and manages containers, stacks, images, volumes and networks on the local engine, and on remote engines through a lightweight agent. On a swarm manager it also manages services, nodes, secrets, configs and swarm stacks.
 
-> **Status:** early development. Phases 0 to 5 are done: it manages Compose stacks, containers, images, volumes and networks on the local engine. The roadmap is in [docs/plan.md](docs/plan.md).
+> **Status:** early development. Phases 0 to 7 are done: Compose and swarm stacks, containers, images, volumes and networks, remote engines through agents, and Docker Swarm. The roadmap is in [docs/plan.md](docs/plan.md).
 
 ## Run it
 
@@ -34,6 +34,16 @@ Compose runs inside the Sockless Port container, not on the engine's host, so:
 
 To use another Compose binary, set `Port__Compose` (for example `docker compose`, or a full path).
 
+### Docker Swarm
+
+When the endpoint is a swarm manager, the sidebar gets a Swarm section: the cluster (nodes, managers, resources and join tokens, shown only on request), services (create, edit, scale, restart, update the image, roll back, and logs of every task), nodes (drain, pause, promote, demote, labels, remove), secrets and configs. A worker only shows that it's one: managers know the cluster.
+
+Stacks on a manager can be **swarm stacks**, deployed with `docker stack deploy` from the same editor and files as Compose stacks. The image bundles the Docker CLI for that (`Port__DockerCli` picks another). As with Compose, `${VAR}` comes from the stack's `.env` only, and the stored registry credentials are passed on (`--with-registry-auth`). The editor also warns about settings swarm ignores, such as `container_name:`, `restart:` and `depends_on:`.
+
+Services created or changed here are pinned to the digest their tag points at, as `docker service create` does, so every node runs the same image.
+
+To see a node's own containers, logs and terminals, enrol the agent on that node as an endpoint (the Docker Swarm install command runs one on every node). Node pages link to the endpoint that reaches them.
+
 ### Volume file browser
 
 Browsing a volume's files starts a short-lived helper container that mounts the volume read-only, without a network. It uses `busybox:1.37`, pulled when missing. On hosts without internet access, set `Port__HelperImage` to an image the engine already has that provides `find` and `stat`.
@@ -55,7 +65,7 @@ Access to the engine socket is equivalent to root on the host. Keep Sockless Por
 
 ## Develop
 
-Needs the .NET 11 SDK. Node is not needed: the build downloads the Tailwind standalone CLI, and the CodeMirror bundle is checked in (rebuild it from `build/codemirror/` when bumping it). Stacks need `docker-compose` or the `docker compose` plugin on the PATH.
+Needs the .NET 11 SDK. Node is not needed: the build downloads the Tailwind standalone CLI, and the CodeMirror bundle is checked in (rebuild it from `build/codemirror/` when bumping it). Stacks need `docker-compose` or the `docker compose` plugin on the PATH, and swarm stacks the `docker` CLI.
 
 ```sh
 dotnet build

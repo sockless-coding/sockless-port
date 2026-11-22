@@ -127,6 +127,14 @@
                     {
                         <p class="mt-4 text-secondary">This node is a worker. Connect to a manager to manage services and the cluster.</p>
                     }
+                    else
+                    {
+                        <p class="mt-4">
+                            <a asp-page="/Engine/Swarm/Index" asp-route-endpointId="@Model.Connection.Id" class="hover:underline">Open the cluster</a>
+                            <span class="text-secondary">·</span>
+                            <a asp-page="/Engine/Swarm/Services/Index" asp-route-endpointId="@Model.Connection.Id" class="hover:underline">Services</a>
+                        </p>
+                    }
                 </section>
             }
         </div>

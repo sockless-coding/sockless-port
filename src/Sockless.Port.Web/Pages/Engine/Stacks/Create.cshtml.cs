@@ -14,6 +14,13 @@ public sealed class CreateModel(EngineConnections connections, StackStore store,
     [BindProperty]
     public StackInput Input { get; set; } = new();
 
+    /// <summary>How the new stack deploys. Swarm is offered (and preselected) on swarm managers.</summary>
+    [BindProperty]
+    public StackKind Kind { get; set; } = StackKind.Compose;
+
+    /// <summary>The endpoint can deploy swarm stacks.</summary>
+    public bool OffersSwarm => Connection.Engine?.Has(Docker.Engine.EngineCapabilities.SwarmManager) == true;
+
     /// <summary>The project being adopted.</summary>
     [BindProperty(SupportsGet = true)]
     public string? Adopt { get; set; }
@@ -30,7 +37,10 @@ public sealed class CreateModel(EngineConnections connections, StackStore store,
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         if (!Adopting)
+        {
+            Kind = OffersSwarm ? StackKind.Swarm : StackKind.Compose;
             return Page();
+        }
 
         if (StackNames.Problem(Adopt) is not null)
             return NotFound();
@@ -69,7 +79,7 @@ public sealed class CreateModel(EngineConnections connections, StackStore store,
     /// <summary>Checks the files with docker compose config: the result alone for htmx, the whole form otherwise.</summary>
     public async Task<IActionResult> OnPostValidateAsync(CancellationToken cancellationToken)
     {
-        Validation = await StackForms.ValidateAsync(validator, store, Connection, StackForms.NameForCheck(Adopting ? Adopt : Input.Name), Input.Content, cancellationToken);
+        Validation = await StackForms.ValidateAsync(validator, store, Connection, StackForms.NameForCheck(Adopting ? Adopt : Input.Name), Input.Content, ChosenKind, cancellationToken);
         return Request.Headers.ContainsKey("HX-Request") ? Partial("_StackValidation", Validation) : Page();
     }
 
@@ -78,12 +88,13 @@ public sealed class CreateModel(EngineConnections connections, StackStore store,
     {
         var name = (Adopting ? Adopt : Input.Name)?.Trim() ?? "";
         Input.Name = name;
+        var kind = ChosenKind;
         if (StackNames.Problem(name) is { } problem)
             ModelState.AddModelError("Input.Name", problem);
         else if (await store.GetAsync(EndpointId, name, cancellationToken) is not null)
             ModelState.AddModelError("Input.Name", $"There's already a stack named {name}. Open it to edit its files.");
-        else if (!Adopting && Client is { } client && await RunsOutsideAsync(client, name, cancellationToken))
-            ModelState.AddModelError("Input.Name", $"A Compose project named {name} already runs on {Connection.Name}. Adopt it from the stack list, or choose another name.");
+        else if (!Adopting && Client is { } client && await RunsOutsideAsync(client, name, cancellationToken) is { } outside)
+            ModelState.AddModelError("Input.Name", outside);
 
         var content = Input.Content;
         if (string.IsNullOrWhiteSpace(content.Compose))
@@ -91,7 +102,7 @@ public sealed class CreateModel(EngineConnections connections, StackStore store,
 
         if (ModelState.IsValid)
         {
-            Validation = await StackForms.ValidateAsync(validator, store, Connection, name, content, cancellationToken);
+            Validation = await StackForms.ValidateAsync(validator, store, Connection, name, content, kind, cancellationToken);
             if (Validation.Check is { Valid: false })
                 ModelState.AddModelError("Input.Compose", "Compose rejected the file. Fix the problems listed above it.");
             else if (Validation.Check is null && deploy)
@@ -102,7 +113,7 @@ public sealed class CreateModel(EngineConnections connections, StackStore store,
 
         try
         {
-            await store.CreateAsync(EndpointId, name, content, adopted: Adopting, cancellationToken);
+            await store.CreateAsync(EndpointId, name, content, adopted: Adopting, kind, cancellationToken);
         }
         catch (StackRejectedException ex)
         {
@@ -130,15 +141,23 @@ public sealed class CreateModel(EngineConnections connections, StackStore store,
         return RedirectToPage("/Engine/Stacks/Detail", new { endpointId = EndpointId, stackName = name });
     }
 
-    private async Task<bool> RunsOutsideAsync(Docker.DockerClient client, string name, CancellationToken cancellationToken)
+    /// <summary>Adopted stacks are Compose projects; swarm stacks can't be adopted yet.</summary>
+    private StackKind ChosenKind => !Adopting && OffersSwarm && Kind == StackKind.Swarm ? StackKind.Swarm : StackKind.Compose;
+
+    /// <summary>Why the name is taken on the engine by something Sockless Port doesn't manage; null when it's free.</summary>
+    private async Task<string?> RunsOutsideAsync(Docker.DockerClient client, string name, CancellationToken cancellationToken)
     {
         try
         {
-            return (await StackPageModel.LoadProjectAsync(client, name, cancellationToken)).Containers.Count > 0;
+            if ((await StackPageModel.LoadProjectAsync(client, name, cancellationToken)).Containers.Count > 0)
+                return $"A Compose project named {name} already runs on {Connection.Name}. Adopt it from the stack list, or choose another name.";
+            if (OffersSwarm && (await StackPageModel.LoadSwarmAsync(client, name, cancellationToken)).Services.Count > 0)
+                return $"A swarm stack named {name} already runs on this swarm. Choose another name.";
+            return null;
         }
         catch (Exception ex) when (EngineFailures.IsFailure(ex, cancellationToken))
         {
-            return false;
+            return null;
         }
     }
 }

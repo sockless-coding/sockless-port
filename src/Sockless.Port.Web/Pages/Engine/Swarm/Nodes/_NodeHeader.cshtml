@@ -1,0 +1,40 @@
+@* Name, badges and tabs of a node. Model: any node page. *@
+@model Sockless.Port.Web.Infrastructure.NodePageModel
+@using Sockless.Port.Web.Pages.Engine.Swarm.Nodes
+@{
+    var current = ViewContext.RouteData.Values["page"] as string;
+    var tab = DetailModel.Tabs.FirstOrDefault(t => t.Page == current).Tab;
+    var node = Model.Node;
+}
+
+<nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+    <a asp-page="/Engine/Swarm/Nodes/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Nodes</a>
+    <span class="text-line-accent" aria-hidden="true">/</span>
+    <span aria-current="page">@Model.DisplayName</span>
+</nav>
+
+<div class="mb-4">
+    <h2 class="page-title break-all">@Model.DisplayName</h2>
+    @if (node is not null)
+    {
+        <div class="mt-2 flex flex-wrap items-center gap-1">
+            <partial name="_StatusBadge" model="SwarmDisplay.NodeState(node)" />
+            <partial name="_StatusBadge" model="SwarmDisplay.Availability(node)" />
+            <partial name="_StatusBadge" model="SwarmDisplay.Role(node)" />
+            @if (Model.IsThisNode)
+            {
+                <span class="badge-stat" title="The node @Model.Connection.Name talks to">This endpoint</span>
+            }
+        </div>
+    }
+</div>
+
+<nav aria-label="Node" class="tabs mb-6">
+    @foreach (var (key, tabPage, label) in DetailModel.Tabs)
+    {
+        <a asp-page="@tabPage" asp-route-endpointId="@Model.EndpointId" asp-route-nodeId="@Model.NodeId"
+           class="tab" aria-current="@(key == tab ? "page" : null)">@label</a>
+    }
+</nav>
+
+<partial name="_SwarmCallout" model="Model" />

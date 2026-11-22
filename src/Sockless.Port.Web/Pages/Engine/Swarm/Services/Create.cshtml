@@ -1,0 +1,29 @@
+@page "/endpoints/{endpointId:int}/swarm/services/create"
+@model Sockless.Port.Web.Pages.Engine.Swarm.Services.CreateModel
+@{
+    ViewData["Title"] = "Create service";
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+        <a asp-page="/Engine/Swarm/Services/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Services</a>
+        <span class="text-line-accent" aria-hidden="true">/</span>
+        <span aria-current="page">Create</span>
+    </nav>
+    <div class="mb-6">
+        <h2 class="page-title">Create service</h2>
+        <p class="mt-1 text-secondary">The swarm keeps the service's tasks running on nodes that fit it, and replaces them when a node goes down.</p>
+    </div>
+
+    <partial name="_SwarmCallout" model="Model" />
+
+    @if (Model.Manager is not null)
+    {
+        <form method="post" class="space-y-6" novalidate>
+            <partial name="_ServiceForm" model="Model" />
+            <div class="flex justify-end">
+                <button type="submit" class="btn-primary"><icon name="rocket-launch" class="h-4 w-4" /> Create service</button>
+            </div>
+        </form>
+    }
+</div>

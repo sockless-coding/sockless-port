@@ -25,6 +25,8 @@ public sealed class StackHarness : IAsyncDisposable
 
     public ComposeCli Compose { get; private set; } = null!;
 
+    public DockerCli Docker { get; private set; } = null!;
+
     public StackStore Store { get; private set; } = null!;
 
     public StackValidator Validator { get; private set; } = null!;
@@ -60,8 +62,10 @@ public sealed class StackHarness : IAsyncDisposable
         Registries = new RegistryCredentials(scopes, new EphemeralDataProtectionProvider(), TimeProvider.System, NullLogger<RegistryCredentials>.Instance);
         Compose = new ComposeCli(options, Registries, TimeProvider.System, NullLogger<ComposeCli>.Instance);
         Store = new StackStore(scopes, options, TimeProvider.System);
-        Validator = new StackValidator(Compose, options, NullLogger<StackValidator>.Instance);
-        Jobs = new StackJobs(Compose, Store, TimeProvider.System, NullLogger<StackJobs>.Instance);
+        Docker = new DockerCli(options, Registries, TimeProvider.System, NullLogger<DockerCli>.Instance);
+        Validator = new StackValidator(Compose, Docker, options, NullLogger<StackValidator>.Instance);
+        Jobs = new StackJobs(Compose, Docker, Store, new Swarm.SwarmServices(Registries, NullLogger<Swarm.SwarmServices>.Instance),
+            TimeProvider.System, NullLogger<StackJobs>.Instance);
     }
 
     /// <summary>Skips the test when Compose isn't installed here.</summary>
@@ -69,6 +73,13 @@ public sealed class StackHarness : IAsyncDisposable
     {
         var (tool, problem) = await Compose.StatusAsync(TestContext.Current.CancellationToken);
         Assert.SkipWhen(tool is null, $"Compose isn't available: {problem}");
+    }
+
+    /// <summary>Skips the test when the Docker CLI (for swarm stacks) isn't installed here.</summary>
+    public async Task RequireDockerCliAsync()
+    {
+        var (tool, problem) = await Docker.StatusAsync(TestContext.Current.CancellationToken);
+        Assert.SkipWhen(tool is null, $"The Docker CLI isn't available: {problem}");
     }
 
     public async ValueTask DisposeAsync()

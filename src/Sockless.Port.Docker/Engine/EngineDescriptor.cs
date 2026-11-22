@@ -34,13 +34,17 @@ public enum EngineCapabilities
 }
 
 /// <summary>An engine as detected when connecting.</summary>
+/// <param name="SwarmNodeId">The engine's node in its swarm, when it's in one: how a swarm node is matched to the endpoint that reaches it.</param>
+/// <param name="SwarmClusterId">The swarm's ID. Set on managers only (workers don't know it).</param>
 public sealed record EngineDescriptor(
     EngineKind Kind,
     string Version,
     Version ApiVersion,
     string? Os,
     string? Architecture,
-    EngineCapabilities Capabilities)
+    EngineCapabilities Capabilities,
+    string? SwarmNodeId = null,
+    string? SwarmClusterId = null)
 {
     public bool Has(EngineCapabilities capability) => (Capabilities & capability) == capability;
 
@@ -75,6 +79,8 @@ public sealed record EngineDescriptor(
             negotiatedApiVersion,
             version.Os ?? info.OsType,
             version.Arch ?? info.Architecture,
-            capabilities);
+            capabilities,
+            capabilities.HasFlag(EngineCapabilities.Swarm) && info.Swarm?.NodeId is { Length: > 0 } node ? node : null,
+            capabilities.HasFlag(EngineCapabilities.Swarm) && info.Swarm?.Cluster?.Id is { Length: > 0 } cluster ? cluster : null);
     }
 }

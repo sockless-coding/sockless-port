@@ -38,6 +38,9 @@ public sealed record NetworkSummary
 
     /// <summary>Built in to the engine (or to swarm mode), so it can't be removed and isn't pruned.</summary>
     public bool IsPredefined => Ingress || PredefinedNames.Contains(Name);
+
+    /// <summary>Overlay traffic between nodes is encrypted (IPsec), set with the <c>encrypted</c> driver option.</summary>
+    public bool IsEncrypted => Options?.ContainsKey(NetworkOptions.Encrypted) == true;
 }
 
 public sealed record NetworkIpam
@@ -57,6 +60,12 @@ public sealed record NetworkIpamConfig
     public string? IpRange { get; init; }
 
     public string? Gateway { get; init; }
+}
+
+public static class NetworkOptions
+{
+    /// <summary>Overlay driver option: encrypt traffic between nodes. Its value is empty.</summary>
+    public const string Encrypted = "encrypted";
 }
 
 /// <summary>A container's endpoint in <see cref="NetworkSummary.Containers"/>.</summary>
@@ -84,6 +93,9 @@ public sealed record NetworkCreateRequest
     public string? Driver { get; init; }
     public bool Internal { get; init; }
     public bool Attachable { get; init; }
+
+    /// <summary>Overlay only: the routing mesh's network. A swarm has one; replace it only after removing the old one.</summary>
+    public bool Ingress { get; init; }
 
     [JsonPropertyName("EnableIPv6")]
     public bool EnableIpv6 { get; init; }

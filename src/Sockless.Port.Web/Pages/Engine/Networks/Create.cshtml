@@ -66,8 +66,16 @@
                 <div class="flex flex-wrap gap-6">
                     <label class="flex items-center gap-2"><input asp-for="Input.Internal" class="accent-accent" /> Internal (no route out)</label>
                     <label class="flex items-center gap-2" data-drivers="overlay"><input asp-for="Input.Attachable" class="accent-accent" /> Attachable by standalone containers (overlay)</label>
+                    <label class="flex items-center gap-2" data-drivers="overlay"><input asp-for="Input.Encrypted" class="accent-accent" /> Encrypted between nodes (overlay)</label>
+                    <label class="flex items-center gap-2" data-drivers="overlay"><input asp-for="Input.Ingress" class="accent-accent" /> Routing mesh (ingress)</label>
                 </div>
                 <partial name="_FieldError" model='"Input_Attachable"' />
+                <partial name="_FieldError" model='"Input_Encrypted"' />
+                <partial name="_FieldError" model='"Input_Ingress"' />
+                <p class="hint" data-drivers="overlay">
+                    Encrypted: IPsec between nodes, at some cost in throughput; Windows nodes can't join. Routing mesh: the network published ports arrive on.
+                    A swarm has one; to replace it, remove the old ingress network first (no service may publish ports meanwhile).
+                </p>
             </section>
 
             <section class="card space-y-4" aria-labelledby="network-addresses">

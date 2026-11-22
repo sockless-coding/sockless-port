@@ -1,0 +1,42 @@
+@page "/endpoints/{endpointId:int}/swarm/services/{serviceId}/edit"
+@model Sockless.Port.Web.Pages.Engine.Swarm.Services.EditModel
+@{
+    ViewData["Title"] = $"Edit {Model.DisplayName}";
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <partial name="_ServiceHeader" model="Model" />
+
+    @if (Model.Service is not null && Model.Manager is not null)
+    {
+        @if (Model.Service.IsJob)
+        {
+            <div class="callout">
+                <icon name="information-circle" class="h-5 w-5" />
+                <p>@Model.DisplayName is a job. Jobs can't be edited here; use docker service update.</p>
+            </div>
+        }
+        else
+        {
+            @if (Model.Service.Stack is { } stack)
+            {
+                <div class="callout warning mb-4">
+                    <icon name="exclamation-triangle" class="h-5 w-5" />
+                    <p>
+                        This service belongs to the stack
+                        <a asp-page="/Engine/Stacks/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-stackName="@stack" class="font-mono hover:underline">@stack</a>.
+                        Its next deploy sets it back to what the stack's file says: change the file to keep a change.
+                    </p>
+                </div>
+            }
+            <form method="post" class="space-y-6" novalidate>
+                <p class="text-secondary">Settings not shown here (healthcheck, restart policy, log driver, …) are kept as they are.</p>
+                <partial name="_ServiceForm" model="Model" />
+                <div class="flex justify-end gap-2">
+                    <a asp-page="/Engine/Swarm/Services/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-serviceId="@Model.ServiceId" class="btn-soft">Cancel</a>
+                    <button type="submit" class="btn-primary"><icon name="rocket-launch" class="h-4 w-4" /> Save and roll out</button>
+                </div>
+            </form>
+        }
+    }
+</div>

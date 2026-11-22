@@ -277,7 +277,7 @@ public sealed class ComposeCli(IOptions<PortOptions> options, RegistryCredential
         return (parts[0], parts[1..]);
     }
 
-    private static ProcessStartInfo StartInfo(string file, IEnumerable<string> arguments)
+    internal static ProcessStartInfo StartInfo(string file, IEnumerable<string> arguments)
     {
         var start = new ProcessStartInfo(file)
         {
@@ -294,7 +294,7 @@ public sealed class ComposeCli(IOptions<PortOptions> options, RegistryCredential
         return start;
     }
 
-    private static async Task<ComposeResult> ExecuteAsync(ProcessStartInfo start, Action<string>? onLine, CancellationToken cancellationToken)
+    internal static async Task<ComposeResult> ExecuteAsync(ProcessStartInfo start, Action<string>? onLine, CancellationToken cancellationToken)
     {
         var output = new List<string>();
         var stdout = new StringBuilder();
@@ -345,7 +345,7 @@ public sealed class ComposeCli(IOptions<PortOptions> options, RegistryCredential
             return new ComposeResult(process.ExitCode, [.. output], stdout.ToString());
     }
 
-    private static void CreatePrivateDirectory(string path)
+    internal static void CreatePrivateDirectory(string path)
     {
         // The folder briefly holds registry credentials and TLS keys: owner only.
         if (OperatingSystem.IsWindows())

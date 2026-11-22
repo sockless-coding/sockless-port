@@ -1,6 +1,6 @@
 namespace Sockless.Port.Stacks;
 
-/// <summary>How a stack is deployed. Swarm stacks (<c>docker stack deploy</c>) arrive in Phase 7.</summary>
+/// <summary>How a stack is deployed: <c>docker compose up</c>, or <c>docker stack deploy</c> on a swarm manager.</summary>
 public enum StackKind
 {
     Compose,

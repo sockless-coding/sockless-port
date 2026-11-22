@@ -1,0 +1,75 @@
+@* The create page of a secret or config. Model: its create page. *@
+@model Sockless.Port.Web.Infrastructure.SwarmObjectCreateModel
+@{
+    var folder = SwarmObjects.Folder(Model.Kind);
+    var secret = Model.Kind == SwarmObjectKind.Secret;
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+        <a asp-page="@($"{folder}/Index")" asp-route-endpointId="@Model.EndpointId" class="hover:underline">@SwarmObjects.Title(Model.Kind)</a>
+        <span class="text-line-accent" aria-hidden="true">/</span>
+        <span aria-current="page">Create</span>
+    </nav>
+    <div class="mb-6">
+        <h2 class="page-title">Create @Model.Noun</h2>
+        <p class="mt-1 text-secondary">
+            @(secret
+                ? "The value is sent to the swarm, which keeps it encrypted and gives it only to tasks of services that use it. It can't be read back or changed: to change it, create a new secret and switch services over."
+                : "A config can't be changed once created: to change it, create a new one and switch services over.")
+        </p>
+    </div>
+
+    <partial name="_SwarmCallout" model="Model" />
+
+    @if (Model.Manager is not null)
+    {
+        <form method="post" enctype="multipart/form-data" class="space-y-6" novalidate>
+            <section class="card space-y-4" aria-labelledby="object-basics">
+                <h3 id="object-basics" class="section-title">@(secret ? "Secret" : "Config")</h3>
+                <div class="field max-w-md">
+                    <label asp-for="Name">Name</label>
+                    <input asp-for="Name" class="font-mono" placeholder="@(secret ? "db_password" : "nginx.conf")" maxlength="64" autocomplete="off" spellcheck="false" aria-describedby="object-name-hint" />
+                    <p class="hint" id="object-name-hint">@(secret ? "Tasks read it at /run/secrets/{name}." : "Tasks read it at /{name}, unless a service says otherwise.")</p>
+                    <partial name="_FieldError" model='"Name"' />
+                </div>
+                <div class="field">
+                    <label for="Value">Value</label>
+                    @if (secret)
+                    {
+                        @* Never rendered back, not even after a validation error. *@
+                        var valueError = ViewContext.ViewData.ModelState.TryGetValue("Value", out var entry) && entry.Errors.Count > 0;
+                        <textarea id="Value" name="Value" class="font-mono" rows="8" spellcheck="false" autocomplete="off"
+                                  aria-describedby="object-value-hint@(valueError ? " " + FieldAccessibilityTagHelper.ErrorId("Value") : "")" aria-invalid="@(valueError ? "true" : null)"></textarea>
+                    }
+                    else
+                    {
+                        <textarea asp-for="Value" class="font-mono" rows="8" spellcheck="false" autocomplete="off" aria-describedby="object-value-hint"></textarea>
+                    }
+                    <p class="hint" id="object-value-hint">
+                        Up to @Format.BinaryBytes(SwarmObjects.MaxSize(Model.Kind)). Saved as typed, with Unix line ends and no newline added at the end.
+                        @if (secret && (Model.Error is not null || !ViewContext.ViewData.ModelState.IsValid))
+                        {
+                            <text>For safety, the value isn't shown again: enter it once more.</text>
+                        }
+                    </p>
+                    <partial name="_FieldError" model='"Value"' />
+                </div>
+                <div class="field">
+                    <label asp-for="Upload">Or from a file</label>
+                    <input asp-for="Upload" type="file" aria-describedby="object-file-hint" />
+                    <p class="hint" id="object-file-hint">A file is used as it is, byte for byte, instead of the text above: certificates and keys, for example.</p>
+                    <partial name="_FieldError" model='"Upload"' />
+                </div>
+                <div class="field">
+                    <label asp-for="Labels">Labels</label>
+                    <textarea asp-for="Labels" class="font-mono" rows="2" placeholder="team=infra" spellcheck="false"></textarea>
+                    <partial name="_FieldError" model='"Labels"' />
+                </div>
+            </section>
+            <div class="flex justify-end">
+                <button type="submit" class="btn-primary">Create @Model.Noun</button>
+            </div>
+        </form>
+    }
+</div>

@@ -1,0 +1,92 @@
+@model Sockless.Port.Web.Pages.Engine.Swarm.Services.IndexModel
+@{
+    var refreshUrl = Url.Page("/Engine/Swarm/Services/Index", "Table", Model.Filters);
+    // Tasks on other nodes send no events to this manager: poll while something is still settling.
+    var trigger = Model.AnySettling ? "engine-changed from:body, endpoint-state from:body, every 5s" : "engine-changed from:body, endpoint-state from:body, every 30s";
+}
+<div id="service-table" hx-get="@refreshUrl" hx-trigger="@trigger" hx-swap="outerHTML">
+    @if (Model.Error is not null)
+    {
+        <div class="callout danger" role="alert">
+            <icon name="exclamation-triangle" class="h-5 w-5" />
+            <p>@Model.Error</p>
+        </div>
+    }
+    else if (Model.Rows.Count == 0)
+    {
+        <section class="card">
+            <div class="empty-state">
+                <icon name="squares-2x2" class="h-12 w-12" stroke-width="1.5" />
+                @if (Model.Filtered && Model.Total > 0)
+                {
+                    <p class="text-base text-heading">No services match these filters</p>
+                    <p class="text-secondary"><a asp-page="/Engine/Swarm/Services/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Clear the filters</a> to see all @Model.Total.</p>
+                }
+                else
+                {
+                    <p class="text-base text-heading">No services yet</p>
+                    <p class="text-secondary">Create one here, or deploy a swarm stack from Stacks.</p>
+                }
+            </div>
+        </section>
+    }
+    else
+    {
+        <form id="service-row-actions" method="post" asp-page="/Engine/Swarm/Services/Index" asp-page-handler="Remove" asp-route-endpointId="@Model.EndpointId"></form>
+        <p class="mb-3 text-secondary">@Model.Rows.Count of @Model.Total shown</p>
+        <div class="table-wrap">
+            <table class="table">
+                <caption class="sr-only">Services</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Service</th>
+                        <th scope="col">State</th>
+                        <th scope="col">Mode</th>
+                        <th scope="col">Image</th>
+                        <th scope="col">Ports</th>
+                        <th scope="col" class="num"><span class="sr-only">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var service in Model.Rows)
+                    {
+                        var ports = service.Endpoint?.Ports ?? [];
+                        <tr>
+                            <th scope="row" class="max-w-[20rem]">
+                                <a asp-page="/Engine/Swarm/Services/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-serviceId="@service.Id"
+                                   class="break-all font-mono text-xs font-semibold hover:underline">@service.Name</a>
+                                @if (service.Stack is { } stack)
+                                {
+                                    <span class="mt-1 flex flex-wrap gap-1">
+                                        <a asp-page="/Engine/Stacks/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-stackName="@stack"
+                                           class="badge-stat hover:underline" title="Stack">@stack</a>
+                                    </span>
+                                }
+                            </th>
+                            <td><partial name="_StatusBadge" model="SwarmDisplay.ServiceState(service)" /></td>
+                            <td class="whitespace-nowrap">@SwarmDisplay.Mode(service)</td>
+                            <td class="break-all font-mono text-xs">@(service.Image ?? "—")</td>
+                            <td class="font-mono text-xs">
+                                @if (ports.Count == 0)
+                                {
+                                    <span class="text-secondary">—</span>
+                                }
+                                @foreach (var port in ports)
+                                {
+                                    <span class="block">@SwarmDisplay.Port(port)</span>
+                                }
+                            </td>
+                            <td class="num">
+                                <button type="submit" form="service-row-actions" class="btn-soft danger" aria-label="Remove @service.Name"
+                                        formaction="@Url.Page("/Engine/Swarm/Services/Index", "Remove", new { endpointId = Model.EndpointId, Model.Q, Model.Stack, id = service.Id, name = service.Name })"
+                                        data-confirm="Remove the service @service.Name? Its tasks stop on every node.@(service.Stack is { } s ? $" It belongs to the stack {s}, which brings it back at its next deploy." : "")">
+                                    <icon name="trash" class="h-4 w-4" /> Remove
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

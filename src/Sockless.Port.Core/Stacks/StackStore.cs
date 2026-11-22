@@ -31,7 +31,8 @@ public sealed class StackStore(IServiceScopeFactory scopes, IOptions<PortOptions
     }
 
     /// <exception cref="StackRejectedException">The name is invalid or taken.</exception>
-    public async Task<StackDefinition> CreateAsync(int endpointId, string name, StackContent content, bool adopted, CancellationToken cancellationToken = default)
+    /// <param name="kind">How it deploys: Compose, or <c>docker stack deploy</c> on a swarm.</param>
+    public async Task<StackDefinition> CreateAsync(int endpointId, string name, StackContent content, bool adopted, StackKind kind, CancellationToken cancellationToken = default)
     {
         if (StackNames.Problem(name) is { } problem)
             throw new StackRejectedException(problem);
@@ -42,7 +43,7 @@ public sealed class StackStore(IServiceScopeFactory scopes, IOptions<PortOptions
             throw new StackRejectedException($"There's already a stack named {name} on this endpoint.");
 
         var now = time.GetUtcNow();
-        var stack = new StackDefinition { EndpointId = endpointId, Name = name, Adopted = adopted, CreatedAt = now, UpdatedAt = now };
+        var stack = new StackDefinition { EndpointId = endpointId, Name = name, Kind = kind, Adopted = adopted, CreatedAt = now, UpdatedAt = now };
         // Files first: a row without files would be a stack that can't be opened.
         await Files.WriteAsync(endpointId, name, content, cancellationToken);
         db.Stacks.Add(stack);

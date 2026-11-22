@@ -1,0 +1,236 @@
+@* The fields of a service, for creating and editing. Model: the create or edit page. *@
+@model Sockless.Port.Web.Infrastructure.IServiceFormPage
+@using Sockless.Port.Swarm
+@{
+    var input = Model.Input;
+    var refs = Model.References;
+}
+
+<section class="card space-y-4" aria-labelledby="service-basics">
+    <h3 id="service-basics" class="section-title">Service</h3>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        @if (!Model.Editing)
+        {
+            <div class="field">
+                <label asp-for="Input.Name">Name</label>
+                <input asp-for="Input.Name" class="font-mono" placeholder="web" autocomplete="off" spellcheck="false" aria-describedby="name-hint" />
+                <p class="hint" id="name-hint">Other services on the same network reach it by this name. It can't change later.</p>
+                <partial name="_FieldError" model='"Input_Name"' />
+            </div>
+        }
+        <div class="field">
+            <label asp-for="Input.Image">Image</label>
+            <input asp-for="Input.Image" class="font-mono" placeholder="nginx:1.27" autocomplete="off" spellcheck="false" aria-describedby="image-hint" />
+            <p class="hint" id="image-hint">Pinned to the digest its tag points at when saved, so every node runs the same image. Private registries use the stored credentials.</p>
+            <partial name="_FieldError" model='"Input_Image"' />
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <fieldset>
+            <legend class="label-caps mb-1">Mode</legend>
+            @if (Model.Editing)
+            {
+                <input type="hidden" asp-for="Input.Mode" />
+                <p>@(input.Mode == "global" ? "Global: one task on every node that fits" : "Replicated") <span class="text-secondary">(fixed once created)</span></p>
+            }
+            else
+            {
+                <label class="flex items-center gap-2"><input type="radio" asp-for="Input.Mode" value="replicated" class="accent-accent" /> Replicated: a number of tasks, placed by the swarm</label>
+                <label class="flex items-center gap-2"><input type="radio" asp-for="Input.Mode" value="global" class="accent-accent" /> Global: one task on every node that fits</label>
+            }
+            <partial name="_FieldError" model='"Input_Mode"' />
+        </fieldset>
+        @if (!Model.Editing || input.Mode == "replicated")
+        {
+            <div class="field max-w-[10rem]">
+                <label asp-for="Input.Replicas">Replicas</label>
+                <input asp-for="Input.Replicas" type="number" min="0" max="10000" inputmode="numeric" class="font-mono" aria-describedby="replicas-hint" />
+                <p class="hint" id="replicas-hint">Replicated only.</p>
+                <partial name="_FieldError" model='"Input_Replicas"' />
+            </div>
+        }
+    </div>
+
+    <div class="field">
+        <label asp-for="Input.Command">Command</label>
+        <input asp-for="Input.Command" class="font-mono" placeholder="The image's own command" autocomplete="off" spellcheck="false" aria-describedby="command-hint" />
+        <p class="hint" id="command-hint">Replaces the image's command. Quote words with spaces: sh -c "echo hi".</p>
+        <partial name="_FieldError" model='"Input_Command"' />
+    </div>
+</section>
+
+<section class="card space-y-4" aria-labelledby="service-network">
+    <h3 id="service-network" class="section-title">Ports and networks</h3>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div class="field">
+            <label asp-for="Input.Ports">Published ports</label>
+            <textarea asp-for="Input.Ports" class="font-mono" rows="3" placeholder="8080:80" spellcheck="false" aria-describedby="ports-hint"></textarea>
+            <p class="hint" id="ports-hint">
+                One <span class="font-mono">published:target</span> per line, <span class="font-mono">/udp</span> for UDP. Every node answers on the published port (routing mesh);
+                add <span class="font-mono">host</span> after a space to publish only where a task runs.
+            </p>
+            <partial name="_FieldError" model='"Input_Ports"' />
+        </div>
+        <fieldset>
+            <legend class="label-caps mb-1">Networks</legend>
+            @if (refs.Networks.Count == 0 && input.Networks.Count == 0)
+            {
+                <p class="text-secondary">No overlay networks yet. Without one, the service is reachable through its published ports only. <a asp-page="/Engine/Networks/Create" asp-route-endpointId="@ViewContext.RouteData.Values["endpointId"]" class="hover:underline">Create an overlay network</a>.</p>
+            }
+            @foreach (var name in refs.Networks.Keys.Union(input.Networks).Order(StringComparer.Ordinal))
+            {
+                <label class="flex items-center gap-2 font-mono text-xs">
+                    <input type="checkbox" name="Input.Networks" value="@name" checked="@input.Networks.Contains(name)" class="accent-accent" /> @name
+                </label>
+            }
+            <p class="hint">Services on a shared network reach each other by service name.</p>
+            <partial name="_FieldError" model='"Input_Networks"' />
+        </fieldset>
+    </div>
+</section>
+
+<section class="card space-y-4" aria-labelledby="service-env">
+    <h3 id="service-env" class="section-title">Environment, files and storage</h3>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div class="field">
+            <label asp-for="Input.Environment">Environment</label>
+            <textarea asp-for="Input.Environment" class="font-mono" rows="4" placeholder="LOG_LEVEL=info" spellcheck="false" aria-describedby="env-hint"></textarea>
+            <p class="hint" id="env-hint">One <span class="font-mono">NAME=value</span> per line. Use a secret for passwords: anyone who can inspect the service sees these.</p>
+            <partial name="_FieldError" model='"Input_Environment"' />
+        </div>
+        <div class="field">
+            <label asp-for="Input.Mounts">Mounts</label>
+            <textarea asp-for="Input.Mounts" class="font-mono" rows="4" placeholder="data:/var/lib/app" spellcheck="false" aria-describedby="mounts-hint"></textarea>
+            <p class="hint" id="mounts-hint">
+                One per line: <span class="font-mono">volume:/path</span>, <span class="font-mono">/host/path:/path</span> or <span class="font-mono">/path</span>, optionally <span class="font-mono">:ro</span>.
+                A volume is created on each node a task runs on, so its data isn't shared between nodes. Other mounts (tmpfs) are kept as they are.
+            </p>
+            <partial name="_FieldError" model='"Input_Mounts"' />
+        </div>
+    </div>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <fieldset>
+            <legend class="label-caps mb-1">Secrets</legend>
+            @if (refs.Secrets.Count == 0 && input.Secrets.Count == 0)
+            {
+                <p class="text-secondary">No secrets yet.</p>
+            }
+            @foreach (var name in refs.Secrets.Keys.Union(input.Secrets).Order(StringComparer.Ordinal))
+            {
+                <label class="flex items-center gap-2 font-mono text-xs">
+                    <input type="checkbox" name="Input.Secrets" value="@name" checked="@input.Secrets.Contains(name)" class="accent-accent" /> @name
+                </label>
+            }
+            <p class="hint">Each one is a file in <span class="font-mono">/run/secrets/</span>, readable only inside the task.</p>
+            <partial name="_FieldError" model='"Input_Secrets"' />
+        </fieldset>
+        <fieldset>
+            <legend class="label-caps mb-1">Configs</legend>
+            @if (refs.Configs.Count == 0 && input.Configs.Count == 0)
+            {
+                <p class="text-secondary">No configs yet.</p>
+            }
+            @foreach (var name in refs.Configs.Keys.Union(input.Configs).Order(StringComparer.Ordinal))
+            {
+                <label class="flex items-center gap-2 font-mono text-xs">
+                    <input type="checkbox" name="Input.Configs" value="@name" checked="@input.Configs.Contains(name)" class="accent-accent" /> @name
+                </label>
+            }
+            <p class="hint">New ones appear as <span class="font-mono">/name</span>; ones the service already has keep their path.</p>
+            <partial name="_FieldError" model='"Input_Configs"' />
+        </fieldset>
+    </div>
+    <div class="field">
+        <label asp-for="Input.Labels">Service labels</label>
+        <textarea asp-for="Input.Labels" class="font-mono" rows="2" placeholder="team=infra" spellcheck="false"></textarea>
+        <partial name="_FieldError" model='"Input_Labels"' />
+    </div>
+</section>
+
+<section class="card space-y-4" aria-labelledby="service-placement">
+    <h3 id="service-placement" class="section-title">Placement and resources</h3>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div class="field">
+            <label asp-for="Input.Constraints">Constraints</label>
+            <textarea asp-for="Input.Constraints" class="font-mono" rows="3" placeholder="node.role==worker" spellcheck="false" aria-describedby="constraints-hint"></textarea>
+            <p class="hint" id="constraints-hint">One per line, all must hold: <span class="font-mono">node.role==manager</span>, <span class="font-mono">node.hostname!=db1</span>, <span class="font-mono">node.labels.zone==a</span>.</p>
+            <partial name="_FieldError" model='"Input_Constraints"' />
+        </div>
+        <div class="field">
+            <label asp-for="Input.Preferences">Spread</label>
+            <textarea asp-for="Input.Preferences" class="font-mono" rows="3" placeholder="spread=node.labels.zone" spellcheck="false" aria-describedby="preferences-hint"></textarea>
+            <p class="hint" id="preferences-hint">Spread tasks evenly over the values of a node label, e.g. across zones. Nodes without the label count as one more group.</p>
+            <partial name="_FieldError" model='"Input_Preferences"' />
+        </div>
+    </div>
+    <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div class="field">
+            <label asp-for="Input.CpuLimit">CPU limit</label>
+            <input asp-for="Input.CpuLimit" class="font-mono" placeholder="0.5" inputmode="decimal" autocomplete="off" />
+            <partial name="_FieldError" model='"Input_CpuLimit"' />
+        </div>
+        <div class="field">
+            <label asp-for="Input.MemoryLimit">Memory limit</label>
+            <input asp-for="Input.MemoryLimit" class="font-mono" placeholder="512M" autocomplete="off" />
+            <partial name="_FieldError" model='"Input_MemoryLimit"' />
+        </div>
+        <div class="field">
+            <label asp-for="Input.CpuReservation">CPU reserved</label>
+            <input asp-for="Input.CpuReservation" class="font-mono" placeholder="0.25" inputmode="decimal" autocomplete="off" />
+            <partial name="_FieldError" model='"Input_CpuReservation"' />
+        </div>
+        <div class="field">
+            <label asp-for="Input.MemoryReservation">Memory reserved</label>
+            <input asp-for="Input.MemoryReservation" class="font-mono" placeholder="256M" autocomplete="off" />
+            <partial name="_FieldError" model='"Input_MemoryReservation"' />
+        </div>
+    </div>
+    <p class="hint">Limits cap a task. Reservations decide where it fits: a task only goes to a node with that much unreserved.</p>
+</section>
+
+<section class="card space-y-4" aria-labelledby="service-updates">
+    <h3 id="service-updates" class="section-title">Updates and rollbacks</h3>
+    <p class="text-secondary">How tasks are replaced when the service changes, and when an update is rolled back.</p>
+    @foreach (var (prefix, title, actions) in new[] { ("Update", "Updates", ServiceSpecBuilder.UpdateFailureActions), ("Rollback", "Rollbacks", ServiceSpecBuilder.RollbackFailureActions) })
+    {
+        var parallelism = prefix == "Update" ? input.UpdateParallelism : input.RollbackParallelism;
+        var delay = prefix == "Update" ? input.UpdateDelay : input.RollbackDelay;
+        var failure = prefix == "Update" ? input.UpdateFailureAction : input.RollbackFailureAction;
+        var order = prefix == "Update" ? input.UpdateOrder : input.RollbackOrder;
+        <fieldset class="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <legend class="label-caps col-span-full mb-1">@title</legend>
+            <div class="field">
+                <label for="Input_@(prefix)Parallelism">At a time</label>
+                <input id="Input_@(prefix)Parallelism" name="Input.@(prefix)Parallelism" type="number" min="0" inputmode="numeric" value="@parallelism" class="font-mono" />
+                <partial name="_FieldError" model='$"Input_{prefix}Parallelism"' />
+            </div>
+            <div class="field">
+                <label for="Input_@(prefix)Delay">Delay between</label>
+                <input id="Input_@(prefix)Delay" name="Input.@(prefix)Delay" value="@delay" class="font-mono" placeholder="10s" autocomplete="off" />
+                <partial name="_FieldError" model='$"Input_{prefix}Delay"' />
+            </div>
+            <div class="field">
+                <label for="Input_@(prefix)FailureAction">On failure</label>
+                <select id="Input_@(prefix)FailureAction" name="Input.@(prefix)FailureAction">
+                    @foreach (var action in actions)
+                    {
+                        <option value="@action" selected="@(action == failure)">@action</option>
+                    }
+                </select>
+                <partial name="_FieldError" model='$"Input_{prefix}FailureAction"' />
+            </div>
+            <div class="field">
+                <label for="Input_@(prefix)Order">Order</label>
+                <select id="Input_@(prefix)Order" name="Input.@(prefix)Order">
+                    @foreach (var option in ServiceSpecBuilder.Orders)
+                    {
+                        <option value="@option" selected="@(option == order)">@(option == "start-first" ? "start-first (overlap)" : "stop-first")</option>
+                    }
+                </select>
+                <partial name="_FieldError" model='$"Input_{prefix}Order"' />
+            </div>
+        </fieldset>
+    }
+    <p class="hint">0 at a time replaces every task at once. start-first starts the new task before stopping the old one, so the service stays up; it needs room for both.</p>
+</section>

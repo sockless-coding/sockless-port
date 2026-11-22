@@ -606,6 +606,14 @@
     color: var(--sl-text-secondary);
     user-select: none;
   }
+  /* The task a service log line came from (web.2 on node-1). */
+  .log-source {
+    margin-right: 0.75rem;
+    color: var(--sl-text-secondary);
+  }
+  .log-source::after {
+    content: " |";
+  }
 
   /* The command a stack job ran, above its output. */
   .log-line.log-command {

@@ -15,6 +15,15 @@ public static class StackDisplay
         _ => new(project.State.ToString(), ""),
     };
 
+    public static StatusBadge State(Swarm.SwarmStack stack) => stack.State switch
+    {
+        StackState.Running => new($"Running {stack.Running.ToString(CultureInfo.InvariantCulture)}/{stack.Desired.ToString(CultureInfo.InvariantCulture)}", "success"),
+        StackState.Partial => new($"Partly running {stack.Running.ToString(CultureInfo.InvariantCulture)}/{stack.Desired.ToString(CultureInfo.InvariantCulture)}", "warning"),
+        StackState.Stopped => new(stack.Desired == 0 ? "Scaled to 0" : "Not running", stack.Desired == 0 ? "" : "danger"),
+        StackState.Down => new("Not deployed", ""),
+        _ => new(stack.State.ToString(), ""),
+    };
+
     public static StatusBadge JobBadge(StackJobStatus status, StackOperation operation) => status switch
     {
         StackJobRunning => new($"{Running(operation)}…", "warning"),

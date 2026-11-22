@@ -1,4 +1,6 @@
-// Container logs: streams lines over SignalR into [data-logs-output], with search, follow and wrap.
+// Container and service logs: streams lines over SignalR into [data-logs-output], with search, follow and wrap.
+// [data-container] streams one container's logs; [data-service] streams every task of a swarm service,
+// each line tagged with the task it came from.
 (() => {
   'use strict';
 
@@ -31,6 +33,12 @@
         time.className = 'log-time';
         time.textContent = message.time;
         line.append(time);
+      }
+      if (message.source) {
+        const source = document.createElement('span');
+        source.className = 'log-source';
+        source.textContent = message.source;
+        line.append(source);
       }
       line.append(document.createTextNode(message.text.replace(ANSI, '')));
       if (!matches(line)) line.hidden = true;
@@ -66,12 +74,18 @@
       await SocklessPort.ready;
       if (!root.isConnected) return;
 
-      const stream = SocklessPort.connection.stream('StreamLogs', Number(root.dataset.endpoint), root.dataset.container,
-        Number(tail.value), timestamps.checked);
+      const service = root.dataset.service;
+      const stream = service
+        ? SocklessPort.connection.stream('StreamServiceLogs', Number(root.dataset.endpoint), service, Number(tail.value), timestamps.checked)
+        : SocklessPort.connection.stream('StreamLogs', Number(root.dataset.endpoint), root.dataset.container, Number(tail.value), timestamps.checked);
       status.textContent = 'Following new output.';
       subscription = stream.subscribe({
         next: add,
-        complete: () => { status.textContent = 'The log stream ended: the container stopped. Start it again and the stream resumes on reload.'; },
+        complete: () => {
+          status.textContent = service
+            ? 'The log stream ended. Reload to follow the service again.'
+            : 'The log stream ended: the container stopped. Start it again and the stream resumes on reload.';
+        },
         error: (err) => { status.textContent = `The log stream failed: ${SocklessPort.message(err)}`; },
       });
     }

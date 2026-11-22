@@ -1,0 +1,102 @@
+@model Sockless.Port.Web.Infrastructure.SwarmObjectsIndexModel
+@{
+    var folder = SwarmObjects.Folder(Model.Kind);
+}
+<div id="swarm-object-table" hx-get="@Url.Page($"{folder}/Index", "Table", Model.Filters)" hx-trigger="engine-changed from:body, endpoint-state from:body" hx-swap="outerHTML">
+    @if (Model.Error is not null)
+    {
+        <div class="callout danger" role="alert">
+            <icon name="exclamation-triangle" class="h-5 w-5" />
+            <p>@Model.Error</p>
+        </div>
+    }
+    else if (Model.Rows.Count == 0)
+    {
+        <section class="card">
+            <div class="empty-state">
+                <icon name="@SwarmObjects.Icon(Model.Kind)" class="h-12 w-12" stroke-width="1.5" />
+                @if (Model.Total > 0)
+                {
+                    <p class="text-base text-heading">No @(Model.Noun)s match</p>
+                    <p class="text-secondary"><a asp-page="@($"{folder}/Index")" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Clear the search</a> to see all @Model.Total.</p>
+                }
+                else
+                {
+                    <p class="text-base text-heading">No @(Model.Noun)s yet</p>
+                    <p class="text-secondary">Create one here, or let a swarm stack create its own.</p>
+                }
+            </div>
+        </section>
+    }
+    else
+    {
+        <form id="swarm-object-row-actions" method="post" action="@Url.Page($"{folder}/Index", "Remove", Model.Filters)"></form>
+        <p class="mb-3 text-secondary">@Model.Rows.Count of @Model.Total shown</p>
+        <div class="table-wrap">
+            <table class="table">
+                <caption class="sr-only">@SwarmObjects.Title(Model.Kind)</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col">Used by</th>
+                        <th scope="col">Created</th>
+                        <th scope="col" class="num"><span class="sr-only">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.Rows)
+                    {
+                        var users = Model.Uses[item.Id].Select(u => u.Service.Name).Distinct(StringComparer.Ordinal).ToList();
+                        var stack = item.Labels.GetValueOrDefault(Sockless.Port.Docker.Models.ServiceSpec.StackNamespaceLabel);
+                        <tr>
+                            <th scope="row" class="max-w-[22rem]">
+                                <a asp-page="@($"{folder}/Detail")" asp-route-endpointId="@Model.EndpointId" asp-route-objectId="@item.Id"
+                                   class="break-all font-mono text-xs font-semibold hover:underline">@item.Name</a>
+                                @if (stack is { Length: > 0 } || item.Driver is not null)
+                                {
+                                    <span class="mt-1 flex flex-wrap gap-1">
+                                        @if (stack is { Length: > 0 })
+                                        {
+                                            <span class="badge-stat" title="Stack">@stack</span>
+                                        }
+                                        @if (item.Driver is { } driver)
+                                        {
+                                            <span class="badge-stat" title="Kept by a secret store plugin">@driver</span>
+                                        }
+                                    </span>
+                                }
+                            </th>
+                            <td>
+                                @if (users.Count == 0)
+                                {
+                                    <span class="text-secondary">No service</span>
+                                }
+                                else
+                                {
+                                    <span class="font-mono text-xs">@string.Join(", ", users.Take(3))</span>
+                                    @if (users.Count > 3)
+                                    {
+                                        <span class="block text-xs text-secondary">and @(users.Count - 3) more</span>
+                                    }
+                                }
+                            </td>
+                            <td class="whitespace-nowrap text-secondary">
+                                @if (Format.EngineTime(item.CreatedAt) is { } created)
+                                {
+                                    <span title="@Format.Timestamp(created)">@Format.Relative(created)</span>
+                                }
+                            </td>
+                            <td class="num">
+                                <button type="submit" form="swarm-object-row-actions" class="btn-soft danger" aria-label="Remove @item.Name"
+                                        formaction="@Url.Page($"{folder}/Index", "Remove", new { endpointId = Model.EndpointId, Model.Q, id = item.Id, name = item.Name })"
+                                        data-confirm="Remove the @Model.Noun @item.Name?@(users.Count > 0 ? $" {string.Join(", ", users)} {(users.Count == 1 ? "uses" : "use")} it, so the engine will refuse until {(users.Count == 1 ? "that service no longer does" : "they no longer do")}." : "")">
+                                    <icon name="trash" class="h-4 w-4" /> Remove
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

@@ -32,6 +32,10 @@ ARG COMPOSE_SHA256_AMD64=7758048ad38e580f22559603312874fec8bb638d021a9e64182385f
 ARG COMPOSE_SHA256_ARM64=15861535d14e26555736b49376c95e14bfd94285366c8446bfac7156a972e76f
 RUN set -eu;     case "$TARGETARCH" in       amd64) arch=x86_64; sum="$COMPOSE_SHA256_AMD64" ;;       arm64) arch=aarch64; sum="$COMPOSE_SHA256_ARM64" ;;       *) echo "No Compose build for $TARGETARCH" >&2; exit 1 ;;     esac;     curl -fsSL -o /docker-compose "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-${arch}";     echo "${sum}  /docker-compose" | sha256sum -c -;     chmod 755 /docker-compose
 
+# ---- docker CLI, for swarm stacks (docker stack deploy): the official image, pinned by digest ----
+# Bump deliberately: update the tag and the index digest (docker buildx imagetools inspect docker:<version>-cli).
+FROM docker:29.10.0-cli@sha256:34507eb5069d8be82c95dd3b6987d4250fd5fee49b82e2509b7d7a7030740d6d AS docker-cli
+
 # ---- runtime ----
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime
 LABEL org.opencontainers.image.title="Sockless Port" \
@@ -50,6 +54,8 @@ ENV ASPNETCORE_HTTP_PORTS=8080 \
 
 # Stacks run through the standalone Compose binary (Port:Compose defaults to docker-compose).
 COPY --from=compose /docker-compose /usr/local/bin/docker-compose
+# Swarm stacks run through the Docker CLI's stack commands (Port:DockerCli defaults to docker).
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 
 WORKDIR /app
 COPY --from=build /app .

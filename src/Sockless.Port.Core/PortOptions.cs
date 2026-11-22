@@ -33,6 +33,12 @@ public sealed class PortOptions
     public string? Compose { get; set; }
 
     /// <summary>
+    /// The Docker CLI, for swarm stacks (<c>docker stack deploy</c>): <c>docker</c> or a full path.
+    /// When empty, <c>docker</c> on the search path. The image bundles it.
+    /// </summary>
+    public string? DockerCli { get; set; }
+
+    /// <summary>
     /// The agent image the install commands use. When empty, the image matching this server's
     /// version (<c>ghcr.io/sockless-coding/sockless-port-agent:{version}</c>).
     /// </summary>

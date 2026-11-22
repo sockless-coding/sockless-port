@@ -1,0 +1,51 @@
+@page "/endpoints/{endpointId:int}/swarm/services"
+@model Sockless.Port.Web.Pages.Engine.Swarm.Services.IndexModel
+@{
+    ViewData["Title"] = "Services";
+    var tableUrl = Url.Page("/Engine/Swarm/Services/Index", "Table", new { endpointId = Model.EndpointId });
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <h2 class="page-title">Services</h2>
+            <p class="mt-1 text-secondary">What the swarm runs: each service keeps its tasks running on the nodes that fit it.</p>
+        </div>
+        @if (Model.Manager is not null)
+        {
+            <a asp-page="/Engine/Swarm/Services/Create" asp-route-endpointId="@Model.EndpointId" class="btn-soft secondary">
+                <icon name="plus" class="h-4 w-4" /> Create service
+            </a>
+        }
+    </div>
+
+    @if (Model.Manager is null)
+    {
+        <partial name="_SwarmCallout" model="Model" />
+    }
+    else
+    {
+        <form method="get" role="search" aria-label="Filter services" class="mb-4 flex flex-wrap items-end gap-3"
+              hx-get="@tableUrl" hx-target="#service-table" hx-swap="outerHTML"
+              hx-trigger="change, input changed delay:300ms from:find input[type=search], submit">
+            <div class="field min-w-[14rem] flex-1">
+                <label for="filter-q">Search</label>
+                <input id="filter-q" type="search" name="q" value="@Model.Q" placeholder="Name, ID, image or published port" autocomplete="off" />
+            </div>
+            <div class="field">
+                <label for="filter-stack">Stack</label>
+                <select id="filter-stack" name="stack">
+                    <option value="" selected="@string.IsNullOrEmpty(Model.Stack)">All</option>
+                    <option value="-" selected="@(Model.Stack == "-")">Not in a stack</option>
+                    @foreach (var stack in Model.Stacks)
+                    {
+                        <option value="@stack" selected="@(Model.Stack == stack)">@stack</option>
+                    }
+                </select>
+            </div>
+            <noscript><button type="submit" class="btn-soft">Filter</button></noscript>
+        </form>
+
+        <partial name="_ServiceTable" model="Model" />
+    }
+</div>

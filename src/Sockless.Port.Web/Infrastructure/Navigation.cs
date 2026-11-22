@@ -1,3 +1,5 @@
+using Sockless.Port.Docker.Engine;
+
 namespace Sockless.Port.Web.Infrastructure;
 
 public enum NavScope
@@ -11,7 +13,12 @@ public enum NavScope
 
 /// <summary>A sidebar entry. <see cref="Page"/> is the Razor page path, e.g. <c>/Engine/Index</c>.</summary>
 /// <param name="MatchSubPages">Also highlight on pages in the same folder (e.g. a detail page).</param>
-public sealed record NavItem(string Label, string Page, string Icon, NavScope Scope = NavScope.Global, bool MatchSubPages = true);
+/// <param name="Requires">Shown only while the current endpoint is online with these capabilities.</param>
+public sealed record NavItem(string Label, string Page, string Icon, NavScope Scope = NavScope.Global, bool MatchSubPages = true,
+    EngineCapabilities Requires = EngineCapabilities.None)
+{
+    public bool IsAvailable(EngineDescriptor? engine) => Requires == EngineCapabilities.None || engine?.Has(Requires) == true;
+}
 
 public static class Navigation
 {
@@ -24,6 +31,16 @@ public static class Navigation
         new("Images", "/Engine/Images/Index", "square-3-stack-3d", NavScope.Endpoint),
         new("Volumes", "/Engine/Volumes/Index", "circle-stack", NavScope.Endpoint),
         new("Networks", "/Engine/Networks/Index", "share", NavScope.Endpoint),
+    ];
+
+    /// <summary>The current endpoint's swarm, shown under their own heading on swarm engines.</summary>
+    public static IReadOnlyList<NavItem> Swarm { get; } =
+    [
+        new("Cluster", "/Engine/Swarm/Index", "globe-alt", NavScope.Endpoint, MatchSubPages: false, Requires: EngineCapabilities.Swarm),
+        new("Services", "/Engine/Swarm/Services/Index", "squares-2x2", NavScope.Endpoint, Requires: EngineCapabilities.SwarmManager),
+        new("Nodes", "/Engine/Swarm/Nodes/Index", "server", NavScope.Endpoint, Requires: EngineCapabilities.SwarmManager),
+        new("Secrets", "/Engine/Swarm/Secrets/Index", "lock-closed", NavScope.Endpoint, Requires: EngineCapabilities.SwarmManager),
+        new("Configs", "/Engine/Swarm/Configs/Index", "document-text", NavScope.Endpoint, Requires: EngineCapabilities.SwarmManager),
     ];
 
     /// <summary>Rarely used administration items, shown below a divider.</summary>
