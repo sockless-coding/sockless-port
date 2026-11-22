@@ -82,6 +82,29 @@
                 </div>
             }
 
+            @if (Model.Client is not null && Model.ServicesWithUpdates is { Count: > 0 } outdated)
+            {
+                <div class="callout warning">
+                    <icon name="arrow-up-circle" class="h-5 w-5" />
+                    <p>
+                        The registry has a newer image for @(outdated.Count == 1 ? "the service" : "the services")
+                        <span class="font-mono">@string.Join(", ", outdated)</span>.
+                        @if (definition is not null)
+                        {
+                            @:To update, use <span class="font-semibold">@(swarm ? "Update images" : "Pull and update")</span>.
+                        }
+                        else if (swarm)
+                        {
+                            @:To update, run <span class="font-mono">docker stack deploy</span> again where the stack's file is, or update the services one by one.
+                        }
+                        else
+                        {
+                            @:To update, run <span class="font-mono">docker compose pull</span> and <span class="font-mono">docker compose up -d</span> where the project's file is, or adopt it to update it from here.
+                        }
+                    </p>
+                </div>
+            }
+
             <section class="card" aria-labelledby="services-title">
                 <div class="mb-4 flex flex-wrap items-baseline justify-between gap-2">
                     <h3 id="services-title" class="section-title mb-0">Services</h3>
@@ -127,7 +150,10 @@
                                         </th>
                                         <td><partial name="_StatusBadge" model="SwarmDisplay.ServiceState(service)" /></td>
                                         <td class="whitespace-nowrap">@SwarmDisplay.Mode(service)</td>
-                                        <td class="break-all font-mono text-xs">@(service.Image ?? "—")</td>
+                                        <td class="break-all font-mono text-xs">
+                                            @(service.Image ?? "—")
+                                            <partial name="_UpdateFlag" model="Model.UpdateOf(service)" />
+                                        </td>
                                         <td class="font-mono text-xs">@(ports.Count > 0 ? string.Join(", ", ports.Select(SwarmDisplay.Port)) : "—")</td>
                                     </tr>
                                 }
@@ -137,6 +163,7 @@
                     <p class="mt-3 text-xs text-secondary">
                         <a asp-page="/Engine/Swarm/Services/Index" asp-route-endpointId="@Model.EndpointId" asp-route-stack="@Model.StackName" class="hover:underline">Open in Services</a>
                         to scale or update single services. The next deploy sets them back to what the file says.
+                        Image updates: @ImageDisplay.LastChecked(Model.Updates, "The images")
                     </p>
                 }
                 else if (project.Services.Count == 0)
@@ -185,7 +212,10 @@
                                                     }
                                                 </span>
                                             </td>
-                                            <td class="break-all font-mono text-xs">@(container.Image ?? "—")</td>
+                                            <td class="break-all font-mono text-xs">
+                                                @(container.Image ?? "—")
+                                                <partial name="_UpdateFlag" model="Model.UpdateOf(container)" />
+                                            </td>
                                             <td class="font-mono text-xs">@(ports.Count > 0 ? string.Join(", ", ports) : "—")</td>
                                         </tr>
                                         first = false;
@@ -197,6 +227,7 @@
                     <p class="mt-3 text-xs text-secondary">
                         <a asp-page="/Engine/Containers/Index" asp-route-endpointId="@Model.EndpointId" asp-route-stack="@Model.StackName" class="hover:underline">Open in Containers</a>
                         to act on single containers. Compose recreates what differs from the files at the next deploy.
+                        Image updates: @ImageDisplay.LastChecked(Model.Updates, "The images")
                     </p>
                 }
             </section>

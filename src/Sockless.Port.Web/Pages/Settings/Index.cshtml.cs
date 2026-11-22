@@ -29,6 +29,9 @@ public sealed class IndexModel(PortSettings settings, HttpsCertificates https, I
     public int AuditRetentionDays { get; set; }
 
     [BindProperty]
+    public int ImageUpdateCheckHours { get; set; }
+
+    [BindProperty]
     public IFormFile? Backup { get; set; }
 
     public HttpsStatus Https { get; private set; } = null!;
@@ -46,7 +49,7 @@ public sealed class IndexModel(PortSettings settings, HttpsCertificates https, I
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
-        var problems = await settings.SaveAsync(new AppSettings(TimeDisplay, SessionTimeoutMinutes, AuditRetentionDays), cancellationToken);
+        var problems = await settings.SaveAsync(new AppSettings(TimeDisplay, SessionTimeoutMinutes, AuditRetentionDays, ImageUpdateCheckHours), cancellationToken);
         if (problems.Count > 0)
         {
             foreach (var problem in problems)
@@ -123,6 +126,7 @@ public sealed class IndexModel(PortSettings settings, HttpsCertificates https, I
             TimeDisplay = current.TimeDisplay;
             SessionTimeoutMinutes = current.SessionTimeoutMinutes;
             AuditRetentionDays = current.AuditRetentionDays;
+            ImageUpdateCheckHours = current.ImageUpdateCheckHours;
         }
         Https = https.Status();
     }

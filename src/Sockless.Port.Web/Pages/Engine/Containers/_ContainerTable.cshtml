@@ -115,7 +115,10 @@
                                     </span>
                                     <span class="mt-1 block text-xs text-secondary">@row.Summary.Status</span>
                                 </td>
-                                <td class="max-w-[16rem] break-all font-mono text-xs">@row.Summary.Image</td>
+                                <td class="max-w-[16rem] break-all font-mono text-xs">
+                                    @row.Summary.Image
+                                    <partial name="_UpdateFlag" model="row.Update" />
+                                </td>
                                 <td class="font-mono text-xs">
                                     @foreach (var port in row.Ports)
                                     {

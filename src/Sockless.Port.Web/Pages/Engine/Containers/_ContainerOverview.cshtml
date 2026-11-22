@@ -13,13 +13,21 @@
         var restart = c.HostConfig?.RestartPolicy;
         var command = Sockless.Port.Containers.ContainerSpecBuilder.JoinShellWords(new[] { c.Path }.Concat(c.Args ?? []).Where(s => !string.IsNullOrEmpty(s)).Select(s => s!));
 
-        @if (Model.ImageUpdate is Sockless.Port.Images.UpdateAvailable && Model.SwarmService is null)
+        @if (Model.ImageUpdate is Sockless.Port.Images.UpdateAvailable)
         {
             <div class="callout warning mb-6">
                 <icon name="arrow-up-circle" class="h-5 w-5" />
                 <p>
                     The registry has a newer image for <span class="font-mono">@c.Config?.Image</span>.
-                    @if (Model.Pod is { } member)
+                    @if (Model.SwarmService is { } service)
+                    {
+                        @:This container is a task of the swarm service <span class="font-mono">@service</span>: to update, update the service, and the swarm replaces its tasks.
+                    }
+                    else if (Model.Stack is { } stack)
+                    {
+                        @:To update, use <span class="font-semibold">Pull and update</span> on the stack <a asp-page="/Engine/Stacks/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-stackName="@stack" class="font-mono hover:underline">@stack</a>, or <span class="font-semibold">Recreate</span> under More with “Pull the image first” checked.
+                    }
+                    else if (Model.Pod is { } member)
                     {
                         @:To update, pull it and recreate the container in its pod with <span class="font-mono">podman run --pod @member.Pod.Name</span>.
                     }
@@ -51,6 +59,28 @@
                         {
                             @:—
                         }
+                    </dd>
+                    <dt>Image update</dt>
+                    <dd>
+                        <span class="flex flex-wrap items-start gap-3">
+                            @if (Model.ImageUpdate is { } update)
+                            {
+                                <partial name="_UpdateBadge" model="update" />
+                            }
+                            else
+                            {
+                                <span class="text-secondary">Not checked</span>
+                            }
+                            @if (Model.Client is not null && c.Image is not null)
+                            {
+                                <form sp-can="write" method="post" asp-page="/Engine/Containers/Detail" asp-page-handler="CheckUpdate"
+                                      asp-route-endpointId="@Model.EndpointId" asp-route-containerId="@Model.ContainerId">
+                                    <button type="submit" class="btn-soft" title="Ask the registry whether it serves a newer image for this reference. Nothing is pulled.">
+                                        <icon name="arrow-up-circle" class="h-4 w-4" /> @(Model.ImageUpdate is null ? "Check" : "Check again")
+                                    </button>
+                                </form>
+                            }
+                        </span>
                     </dd>
                     <dt>Command</dt>
                     <dd class="break-all font-mono">@(command.Length > 0 ? command : "—")</dd>

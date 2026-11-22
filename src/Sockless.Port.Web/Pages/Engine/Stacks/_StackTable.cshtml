@@ -63,6 +63,12 @@
                                     {
                                         <span class="badge-stat" title="Sockless Port runs in this stack">Sockless Port</span>
                                     }
+                                    @if (row.Updates > 0)
+                                    {
+                                        var what = row.IsSwarm ? (row.Updates == 1 ? "service" : "services") : (row.Updates == 1 ? "container" : "containers");
+                                        <span class="badge warning" title="The registry has a newer image for @row.Updates @what">Update available</span>
+                                        <span class="sr-only">for @row.Updates @what</span>
+                                    }
                                 </span>
                             </th>
                             <td>

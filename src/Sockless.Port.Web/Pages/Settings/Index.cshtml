@@ -47,7 +47,7 @@
     <partial name="_FormErrors" />
     <section class="card space-y-4" aria-labelledby="general-title">
         <h3 id="general-title" class="section-title">General</h3>
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div class="field">
                 <label asp-for="TimeDisplay">Show times in</label>
                 <select asp-for="TimeDisplay" aria-describedby="time-hint">
@@ -65,6 +65,19 @@
                 <label asp-for="AuditRetentionDays">Keep the audit log (days)</label>
                 <input asp-for="AuditRetentionDays" type="number" min="@AppSettings.MinAuditRetention" max="@AppSettings.MaxAuditRetention" aria-describedby="retention-hint" />
                 <p class="hint" id="retention-hint">Older entries are deleted once a day.</p>
+            </div>
+            <div class="field">
+                <label asp-for="ImageUpdateCheckHours">Check for image updates</label>
+                <select asp-for="ImageUpdateCheckHours" aria-describedby="image-check-hint">
+                    @foreach (var hours in AppSettings.ImageUpdateCheckChoices)
+                    {
+                        <option value="@hours" selected="@(Model.ImageUpdateCheckHours == hours)">@(hours switch { 0 => "Only when asked", 24 => "Every day", 168 => "Every week", _ => $"Every {hours} hours" })</option>
+                    }
+                </select>
+                <p class="hint" id="image-check-hint">
+                    Compares what every online endpoint's containers and swarm services run with their registries; nothing is pulled.
+                    On Docker Hub, checks can count against the pull rate limit.
+                </p>
             </div>
         </div>
         <div class="flex justify-end">

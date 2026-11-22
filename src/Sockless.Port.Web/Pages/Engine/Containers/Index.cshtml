@@ -13,10 +13,18 @@
         </div>
         @if (Model.Client is not null)
         {
-            <a sp-can="write" asp-page="/Engine/Containers/Create" asp-route-endpointId="@Model.EndpointId" class="btn-soft secondary">
-                <icon name="plus" class="h-4 w-4" />
-                Create container
-            </a>
+            <div sp-can="write" class="flex flex-wrap items-center gap-2">
+                <form sp-can="write" method="post" asp-page="/Engine/Containers/Index" asp-page-handler="CheckUpdates" asp-route-endpointId="@Model.EndpointId"
+                      asp-route-state="@Model.State" asp-route-q="@Model.Q" asp-route-stack="@Model.Stack" asp-route-pod="@Model.Pod" asp-route-label="@Model.Label">
+                    <button type="submit" class="btn-soft" title="Ask each image's registry whether the shown containers run its current image. Nothing is pulled.">
+                        <icon name="arrow-up-circle" class="h-4 w-4" /> Check for updates
+                    </button>
+                </form>
+                <a sp-can="write" asp-page="/Engine/Containers/Create" asp-route-endpointId="@Model.EndpointId" class="btn-soft secondary">
+                    <icon name="plus" class="h-4 w-4" />
+                    Create container
+                </a>
+            </div>
         }
     </div>
 

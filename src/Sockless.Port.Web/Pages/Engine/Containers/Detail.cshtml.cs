@@ -22,7 +22,7 @@ public sealed partial class DetailModel(EngineConnections connections, RegistryC
     ];
 
     /// <summary>The last update check's result for the container's image, if it was checked.</summary>
-    public UpdateStatus? ImageUpdate => Container?.Image is { } image ? updates.ForImage(EndpointId, image) : null;
+    public UpdateStatus? ImageUpdate => updates.ForContainer(EndpointId, Container?.Image, Container?.Config?.Image);
 
     public void OnGet()
     {
@@ -53,6 +53,24 @@ public sealed partial class DetailModel(EngineConnections connections, RegistryC
         }
         await TryEngineAsync(client => client.RenameContainerAsync(ContainerId, name, HttpContext.RequestAborted), $"Renamed {DisplayName} to {name}.");
         return BackTo(tab);
+    }
+
+    /// <summary>Compares the container's image with its registry. Nothing is pulled.</summary>
+    public async Task<IActionResult> OnPostCheckUpdateAsync()
+    {
+        UpdateStatus? status = null;
+        var ok = await TryEngineAsync(async client => status = await updates.CheckContainerAsync(Connection, client, ContainerId, HttpContext.RequestAborted));
+        if (ok)
+        {
+            Flash.Success(TempData, status switch
+            {
+                null => $"{DisplayName} has no image reference to check.",
+                UpToDate => $"{DisplayName} runs the image its registry serves now.",
+                UpdateAvailable => $"The registry has a newer image for {DisplayName}.",
+                UpdateUnknown u => $"Couldn't check {DisplayName}'s image: {u.Reason}",
+            });
+        }
+        return BackTo(null);
     }
 
     /// <param name="pulled">images.js already pulled the image with live progress.</param>

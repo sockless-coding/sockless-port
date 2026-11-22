@@ -211,6 +211,12 @@ public sealed partial class LiveSwarmTests : IAsyncLifetime
         var list = WebUtility.HtmlDecode(await _browser.GetStringAsync("/endpoints/1/stacks", Ct));
         Assert.Contains(_name, list);
         Assert.Contains("Swarm", list);
+
+        // docker stack deploy pins the service to a digest, which the update check compares with the registry.
+        var check = await PostAsync($"/endpoints/1/stacks/{_name}", $"/endpoints/1/stacks/{_name}?handler=CheckUpdates", []);
+        Assert.Equal(HttpStatusCode.Redirect, check.StatusCode);
+        var checkedPage = WebUtility.HtmlDecode(await _browser.GetStringAsync(check.Headers.Location!.OriginalString, Ct));
+        Assert.Matches("Checked 1 service: (all up to date|1 with an update available)", checkedPage);
     }
 
     [Fact]

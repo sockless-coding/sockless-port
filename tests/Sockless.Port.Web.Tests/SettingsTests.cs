@@ -45,17 +45,27 @@ public sealed class SettingsTests : IDisposable
             ["SessionTimeoutMinutes"] = "1",
             ["AuditRetentionDays"] = "30",
         }), TestContext.Current.CancellationToken);
+        var badInterval = await admin.PostAsync("/settings", PortFactory.Form(token, new()
+        {
+            ["TimeDisplay"] = "Utc",
+            ["SessionTimeoutMinutes"] = "60",
+            ["AuditRetentionDays"] = "30",
+            ["ImageUpdateCheckHours"] = "5",
+        }), TestContext.Current.CancellationToken);
         var good = await admin.PostAsync("/settings", PortFactory.Form(token, new()
         {
             ["TimeDisplay"] = "Utc",
             ["SessionTimeoutMinutes"] = "60",
             ["AuditRetentionDays"] = "30",
+            ["ImageUpdateCheckHours"] = "24",
         }), TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, bad.StatusCode);
         Assert.Contains("session timeout must be between", await bad.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         Assert.Equal(HttpStatusCode.Redirect, good.StatusCode);
-        Assert.Equal(new AppSettings(TimeDisplay.Utc, 60, 30), factory.Services.GetRequiredService<PortSettings>().Current);
+        Assert.Contains("how often to check for image updates", await badInterval.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(HttpStatusCode.Redirect, good.StatusCode);
+        Assert.Equal(new AppSettings(TimeDisplay.Utc, 60, 30, 24), factory.Services.GetRequiredService<PortSettings>().Current);
     }
 
     [Fact]

@@ -11,9 +11,19 @@
             <h2 class="page-title">Stacks</h2>
             <p class="mt-1 text-secondary">Compose projects on @Model.Connection.Name: the ones deployed from here, and the ones found by their labels.</p>
         </div>
-        <a sp-can="write" asp-page="/Engine/Stacks/Create" asp-route-endpointId="@Model.EndpointId" class="btn-soft secondary">
-            <icon name="plus" class="h-4 w-4" /> Create stack
-        </a>
+        <div sp-can="write" class="flex flex-wrap items-center gap-2">
+            @if (Model.Client is not null)
+            {
+                <form sp-can="write" method="post" asp-page="/Engine/Stacks/Index" asp-page-handler="CheckUpdates" asp-route-endpointId="@Model.EndpointId" asp-route-q="@Model.Q">
+                    <button type="submit" class="btn-soft" title="Ask each image's registry whether the stacks run its current image. Nothing is pulled.">
+                        <icon name="arrow-up-circle" class="h-4 w-4" /> Check for updates
+                    </button>
+                </form>
+            }
+            <a sp-can="write" asp-page="/Engine/Stacks/Create" asp-route-endpointId="@Model.EndpointId" class="btn-soft secondary">
+                <icon name="plus" class="h-4 w-4" /> Create stack
+            </a>
+        </div>
     </div>
 
     @if (Model.ComposeProblem is not null)

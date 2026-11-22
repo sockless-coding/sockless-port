@@ -2,20 +2,22 @@ using Microsoft.AspNetCore.Mvc;
 using Sockless.Port.Containers;
 using Sockless.Port.Docker.Models;
 using Sockless.Port.Engines;
+using Sockless.Port.Images;
 using Sockless.Port.Pods;
 using Sockless.Port.Web.Infrastructure;
 
 namespace Sockless.Port.Web.Pages.Engine.Containers;
 
 /// <param name="Pod">The Podman pod it's in, if any.</param>
+/// <param name="Update">The last update check's result for what it runs, if it was checked.</param>
 public sealed record ContainerRow(ContainerSummary Summary, StatusBadge State, StatusBadge? Health, string? Stack, string? SwarmService, IReadOnlyList<string> Ports,
-    PodMember? Pod = null)
+    PodMember? Pod = null, UpdateStatus? Update = null)
 {
     public string Name => Summary.DisplayName;
     public bool Running => Summary.State is "running";
 }
 
-public sealed class IndexModel(EngineConnections connections) : EndpointPageModel(connections)
+public sealed class IndexModel(EngineConnections connections, ImageUpdates updates) : EndpointPageModel(connections)
 {
     public static readonly IReadOnlyList<(string Value, string Label)> States =
         [("", "All"), ("running", "Running"), ("stopped", "Stopped"), ("paused", "Paused")];
@@ -98,6 +100,25 @@ public sealed class IndexModel(EngineConnections connections) : EndpointPageMode
         return RedirectToPage(Filters);
     }
 
+    /// <summary>Compares what the shown containers run with their registries. Nothing is pulled.</summary>
+    public async Task<IActionResult> OnPostCheckUpdatesAsync(CancellationToken cancellationToken)
+    {
+        await LoadRowsAsync(cancellationToken);
+        if (Error is not null)
+        {
+            Flash.Error(TempData, Error);
+            return RedirectToPage(Filters);
+        }
+        UpdateCheckSummary? summary = null;
+        await TryEngineAsync(async client => summary = await updates.CheckContainersAsync(Connection, client, [.. Rows.Select(r => r.Summary)], cancellationToken));
+        if (summary is not null)
+            Flash.Success(TempData, Describe(summary));
+        return RedirectToPage(Filters);
+    }
+
+    internal static string Describe(UpdateCheckSummary summary) =>
+        ImageDisplay.CheckMessage(summary, "container", "containers", "No container to check.", "each container's page");
+
     private async Task<string> NameOfAsync(string id, CancellationToken cancellationToken)
     {
         try
@@ -171,9 +192,10 @@ public sealed class IndexModel(EngineConnections connections) : EndpointPageMode
         return true;
     }
 
-    private static ContainerRow ToRow(ContainerSummary c, PodMember? pod)
+    private ContainerRow ToRow(ContainerSummary c, PodMember? pod)
     {
         var (state, health) = ContainerStatus.FromSummary(c);
-        return new ContainerRow(c, state, health, ContainerLabels.Stack(c.Labels), ContainerLabels.SwarmServiceName(c.Labels), ContainerStatus.PublishedPorts(c.Ports), pod);
+        return new ContainerRow(c, state, health, ContainerLabels.Stack(c.Labels), ContainerLabels.SwarmServiceName(c.Labels), ContainerStatus.PublishedPorts(c.Ports), pod,
+            updates.ForContainer(EndpointId, c));
     }
 }

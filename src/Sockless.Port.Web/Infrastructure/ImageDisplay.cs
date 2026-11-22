@@ -48,4 +48,31 @@ public static class ImageDisplay
         UpdateAvailable a => $"The registry has a newer image ({ImageActions.ShortId(a.RemoteDigest)}), checked {Format.Relative(a.CheckedAt)}.",
         UpdateUnknown n => n.Reason,
     };
+
+    /// <summary>"Checked 3 containers: 1 with an update available, 2 up to date."</summary>
+    /// <param name="one">What was checked, singular: "tag in use", "container".</param>
+    /// <param name="nothing">What to say when there was nothing to check.</param>
+    /// <param name="why">Where the reasons for unknown results are shown: "the table", "their pages".</param>
+    public static string CheckMessage(UpdateCheckSummary summary, string one, string many, string nothing, string why)
+    {
+        if (summary.Checked == 0)
+            return nothing;
+        var what = $"{summary.Checked} {(summary.Checked == 1 ? one : many)}";
+        if (summary.UpToDate == summary.Checked)
+            return $"Checked {what}: all up to date.";
+        var parts = new List<string>();
+        if (summary.Updates > 0)
+            parts.Add($"{summary.Updates} with an update available");
+        if (summary.UpToDate > 0)
+            parts.Add($"{summary.UpToDate} up to date");
+        if (summary.Unknown > 0)
+            parts.Add($"{summary.Unknown} couldn't be checked ({why} says why)");
+        return $"Checked {what}: {string.Join(", ", parts)}.";
+    }
+
+    /// <summary>"Last checked 5 minutes ago." for the newest of the results, or that nothing was checked yet.</summary>
+    public static string LastChecked(IEnumerable<UpdateStatus?> statuses, string what) =>
+        statuses.OfType<UpdateStatus>().Select(s => (DateTimeOffset?)s.CheckedAt).Max() is { } at
+            ? $"Last checked {Format.Relative(at)}."
+            : $"{what} haven't been checked since Sockless Port started.";
 }

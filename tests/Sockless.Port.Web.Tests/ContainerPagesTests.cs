@@ -65,6 +65,22 @@ public sealed class ContainerPagesTests : IDisposable
         Assert.Contains("The engine is offline, so nothing was changed.", html);
     }
 
+    [Theory]
+    [InlineData("/endpoints/1/containers")]
+    [InlineData("/endpoints/1/stacks")]
+    public async Task Update_checks_while_offline_say_the_engine_is_offline(string page)
+    {
+        var browser = await _factory.CreateSignedInBrowserAsync();
+        var csrf = await PortFactory.GetAntiforgeryTokenAsync(browser, page);
+
+        var post = await browser.PostAsync($"{page}?handler=CheckUpdates", PortFactory.Form(csrf, []), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Redirect, post.StatusCode);
+
+        var html = await browser.GetStringAsync(post.Headers.Location!.OriginalString, TestContext.Current.CancellationToken);
+        Assert.Contains("The engine is offline", html);
+        Assert.DoesNotContain("Check for updates", html);
+    }
+
     [Fact]
     public async Task Pages_carry_a_style_nonce_matching_the_policy()
     {

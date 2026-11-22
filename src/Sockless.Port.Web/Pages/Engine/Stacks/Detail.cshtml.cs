@@ -1,12 +1,15 @@
 using Microsoft.AspNetCore.Mvc;
+using Sockless.Port.Docker.Models;
 using Sockless.Port.Engines;
+using Sockless.Port.Images;
 using Sockless.Port.Stacks;
 using Sockless.Port.Web.Infrastructure;
 
 namespace Sockless.Port.Web.Pages.Engine.Stacks;
 
 /// <summary>A stack's services and containers, its last job, and the handlers for its actions.</summary>
-public sealed class DetailModel(EngineConnections connections, StackStore store, StackJobs jobs, ComposeCli compose, DockerCli docker) : StackPageModel(connections, store, jobs)
+public sealed class DetailModel(EngineConnections connections, StackStore store, StackJobs jobs, ComposeCli compose, DockerCli docker, ImageUpdates updates)
+    : StackPageModel(connections, store, jobs)
 {
     /// <summary>The stack's tabs: route suffix → (page, label). The editor exists only for managed stacks.</summary>
     public static readonly IReadOnlyList<(string Tab, string Page, string Label)> Tabs =
@@ -20,6 +23,20 @@ public sealed class DetailModel(EngineConnections connections, StackStore store,
 
     /// <summary>Why nothing can be deployed from here: Compose (or, for swarm stacks, the Docker CLI) is missing, or this isn't a manager.</summary>
     public string? ToolProblem { get; private set; }
+
+    /// <summary>The last update check's result for what a container runs.</summary>
+    public UpdateStatus? UpdateOf(ContainerSummary container) => updates.ForContainer(EndpointId, container);
+
+    /// <summary>The last update check's result for the digest a service is pinned to.</summary>
+    public UpdateStatus? UpdateOf(SwarmService service) => updates.ForService(EndpointId, service);
+
+    /// <summary>The results for the stack's containers or services, unchecked ones as null.</summary>
+    public IReadOnlyList<UpdateStatus?> Updates => IsSwarm ? [.. Swarm.Services.Select(UpdateOf)] : [.. Project.Containers.Select(UpdateOf)];
+
+    /// <summary>Compose services (by name) or swarm services with a newer image in the registry.</summary>
+    public IReadOnlyList<string> ServicesWithUpdates => IsSwarm
+        ? [.. Swarm.Services.Where(s => UpdateOf(s) is UpdateAvailable).Select(s => SwarmDisplay.InStack(s.Name, StackName))]
+        : [.. Project.Services.Where(s => s.Containers.Any(c => UpdateOf(c) is UpdateAvailable)).Select(s => s.Name)];
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -59,6 +76,25 @@ public sealed class DetailModel(EngineConnections connections, StackStore store,
         }
 
         await TryStartAsync(op, new StackJobOptions(RemoveVolumes: removeVolumes, Down: !keepRunning));
+        return Back();
+    }
+
+    /// <summary>Compares what the stack's containers or services run with their registries. Nothing is pulled.</summary>
+    public async Task<IActionResult> OnPostCheckUpdatesAsync(CancellationToken cancellationToken)
+    {
+        if (Error is not null)
+        {
+            Flash.Error(TempData, Error);
+            return Back();
+        }
+        UpdateCheckSummary? summary = null;
+        await TryEngineAsync(async client => summary = IsSwarm
+            ? await updates.CheckServicesAsync(Connection, client, Swarm.Services, cancellationToken)
+            : await updates.CheckContainersAsync(Connection, client, Project.Containers, cancellationToken));
+        if (summary is not null)
+            Flash.Success(TempData, IsSwarm
+                ? ImageDisplay.CheckMessage(summary, "service", "services", $"{StackName} has no services to check.", "the table")
+                : ImageDisplay.CheckMessage(summary, "container", "containers", $"{StackName} has no containers to check.", "the table"));
         return Back();
     }
 

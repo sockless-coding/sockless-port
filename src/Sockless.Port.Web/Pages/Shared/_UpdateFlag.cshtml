@@ -1,0 +1,10 @@
+@* In tables, below the image: a badge only when the registry has a newer image, with the check's detail. Model: UpdateStatus?. *@
+@model Sockless.Port.Images.UpdateStatus?
+@if (Model is Sockless.Port.Images.UpdateAvailable)
+{
+    var detail = ImageDisplay.UpdateDetail(Model);
+    <span class="mt-1 flex font-sans">
+        <span class="badge warning" title="@detail">Update available</span>
+        <span class="sr-only">@detail</span>
+    </span>
+}

@@ -139,22 +139,8 @@ public sealed class IndexModel(EngineConnections connections, ImageJobs jobs, Im
     }
 
     /// <summary>"Checked 3 tags in use: 1 with an update available, 2 up to date."</summary>
-    internal static string Describe(UpdateCheckSummary summary)
-    {
-        if (summary.Checked == 0)
-            return "No image in use has a tag to check.";
-        var upToDate = summary.Checked - summary.Updates - summary.Unknown;
-        if (upToDate == summary.Checked)
-            return $"Checked {summary.Checked} {(summary.Checked == 1 ? "tag" : "tags")} in use: all up to date.";
-        var parts = new List<string>();
-        if (summary.Updates > 0)
-            parts.Add($"{summary.Updates} with an update available");
-        if (upToDate > 0)
-            parts.Add($"{upToDate} up to date");
-        if (summary.Unknown > 0)
-            parts.Add($"{summary.Unknown} couldn't be checked (the table says why)");
-        return $"Checked {summary.Checked} {(summary.Checked == 1 ? "tag" : "tags")} in use: {string.Join(", ", parts)}.";
-    }
+    internal static string Describe(UpdateCheckSummary summary) =>
+        ImageDisplay.CheckMessage(summary, "tag in use", "tags in use", "No image in use has a tag to check.", "the table");
 
     private async Task<Dictionary<string, long>> SizesAsync(DockerClient client, CancellationToken cancellationToken)
     {

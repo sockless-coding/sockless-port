@@ -85,6 +85,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<RegistryCredentials>();
         services.AddSingleton<ImageJobs>();
         services.AddSingleton<ImageUpdates>();
+        services.AddHostedService<ImageUpdateSchedule>();
         services.AddSingleton<VolumeBrowser>();
 
         services.AddSingleton<ComposeCli>();
