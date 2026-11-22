@@ -1,0 +1,176 @@
+@page "/endpoints/{endpointId:int}/volumes/{volumeName}/files"
+@model Sockless.Port.Web.Pages.Engine.Volumes.FilesModel
+@using Sockless.Port.Volumes
+@{
+    ViewData["Title"] = $"{VolumePageModel.ShortName(Model.VolumeName)} files";
+    var path = Model.CurrentPath ?? "/";
+    var volumeName = VolumePageModel.ShortName(Model.VolumeName);
+    string? PathArg(string p) => p == "/" ? null : p;
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <partial name="_VolumeHeader" model="Model" />
+
+    @if (Model.Volume is not null)
+    {
+        <section class="card" aria-labelledby="files-title">
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <h3 id="files-title" class="section-title mb-0">Files</h3>
+                @if (!Model.Closed)
+                {
+                    <div class="flex flex-wrap items-center gap-2">
+                        @if (Model.Listing?.Self.Kind is VolumeEntryKind.Directory)
+                        {
+                            <a asp-page="/Engine/Volumes/Files" asp-page-handler="Archive" asp-route-endpointId="@Model.EndpointId"
+                               asp-route-volumeName="@Model.VolumeName" asp-route-path="@PathArg(path)" class="btn-soft" hx-boost="false" download>
+                                <icon name="arrow-down-tray" class="h-4 w-4" /> Download @(path == "/" ? "everything" : "this folder") (.tar)
+                            </a>
+                        }
+                        <form method="post" asp-page="/Engine/Volumes/Files" asp-page-handler="Close"
+                              asp-route-endpointId="@Model.EndpointId" asp-route-volumeName="@Model.VolumeName">
+                            <button type="submit" class="btn-soft"><icon name="x-mark" class="h-4 w-4" /> Close browser</button>
+                        </form>
+                    </div>
+                }
+            </div>
+
+            <nav aria-label="Folder" class="mb-4 break-all font-mono text-xs text-secondary">
+                <a asp-page="/Engine/Volumes/Files" asp-route-endpointId="@Model.EndpointId" asp-route-volumeName="@Model.VolumeName"
+                   class="hover:underline" aria-current="@(path == "/" ? "page" : null)">@volumeName</a>
+                @foreach (var (segment, segmentPath) in VolumePath.Ancestors(path))
+                {
+                    <span class="text-line-accent" aria-hidden="true">/</span>
+                    <a asp-page="/Engine/Volumes/Files" asp-route-endpointId="@Model.EndpointId" asp-route-volumeName="@Model.VolumeName"
+                       asp-route-path="@segmentPath" class="hover:underline" aria-current="@(segmentPath == path ? "page" : null)">@segment</a>
+                }
+            </nav>
+
+            @if (Model.Closed)
+            {
+                <div class="empty-state">
+                    <icon name="folder" class="h-12 w-12" stroke-width="1.5" />
+                    <p class="text-base text-heading">The file browser isn't open</p>
+                    <p class="max-w-xl text-secondary">
+                        Browsing starts a small helper container from <span class="font-mono">@Model.HelperImage</span> that mounts this volume
+                        read-only, without a network. Nothing in the volume can be changed through it. It's removed when you close it,
+                        or after 5 minutes without use.
+                    </p>
+                    <form method="post" asp-page="/Engine/Volumes/Files" asp-page-handler="Open"
+                          asp-route-endpointId="@Model.EndpointId" asp-route-volumeName="@Model.VolumeName" class="mt-2">
+                        <input type="hidden" name="path" value="@path" />
+                        <button type="submit" class="btn-soft secondary"><icon name="folder" class="h-4 w-4" /> Open the file browser</button>
+                    </form>
+                </div>
+            }
+            else if (Model.BrowseError is not null)
+            {
+                <div class="callout danger" role="alert">
+                    <icon name="exclamation-triangle" class="h-5 w-5" />
+                    <p>
+                        @Model.BrowseError
+                        <a asp-page="/Engine/Volumes/Files" asp-route-endpointId="@Model.EndpointId" asp-route-volumeName="@Model.VolumeName" class="hover:underline">Back to the top</a>
+                    </p>
+                </div>
+            }
+            else if (Model.Listing is { } listing)
+            {
+                var self = listing.Self;
+                @if (listing.Warning is not null)
+                {
+                    <div class="callout warning mb-4">
+                        <icon name="exclamation-triangle" class="h-5 w-5" />
+                        <p>Some entries couldn't be read: <span class="font-mono">@listing.Warning</span></p>
+                    </div>
+                }
+                @if (self.Kind != VolumeEntryKind.Directory)
+                {
+                    <dl class="details">
+                        <dt>Type</dt>
+                        <dd>@(self.Kind switch { VolumeEntryKind.File => "File", VolumeEntryKind.Link => "Symbolic link (not followed)", _ => "Special file (socket, pipe or device)" })</dd>
+                        <dt>Size</dt>
+                        <dd class="font-mono">@Format.Bytes(self.Size)</dd>
+                        <dt>Modified</dt>
+                        <dd>@Format.Relative(self.Modified) (@Format.Timestamp(self.Modified))</dd>
+                        <dt>Permissions</dt>
+                        <dd class="font-mono">@self.Mode · @self.Owner:@self.Group</dd>
+                    </dl>
+                    @if (self.Kind == VolumeEntryKind.File)
+                    {
+                        <a asp-page="/Engine/Volumes/Files" asp-page-handler="Download" asp-route-endpointId="@Model.EndpointId"
+                           asp-route-volumeName="@Model.VolumeName" asp-route-path="@path" class="btn-soft mt-4" hx-boost="false" download>
+                            <icon name="arrow-down-tray" class="h-4 w-4" /> Download @self.Name
+                        </a>
+                    }
+                }
+                else if (listing.Entries.Count == 0)
+                {
+                    <p class="text-secondary">This folder is empty.</p>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="table">
+                            <caption class="sr-only">Contents of @path</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Name</th>
+                                    <th scope="col" class="num">Size</th>
+                                    <th scope="col">Modified</th>
+                                    <th scope="col">Permissions</th>
+                                    <th scope="col" class="num"><span class="sr-only">Actions</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (VolumePath.Parent(path) is { } parent)
+                                {
+                                    <tr>
+                                        <th scope="row" colspan="5">
+                                            <a asp-page="/Engine/Volumes/Files" asp-route-endpointId="@Model.EndpointId" asp-route-volumeName="@Model.VolumeName"
+                                               asp-route-path="@PathArg(parent)" class="flex items-center gap-2 font-mono text-xs hover:underline">
+                                                <icon name="folder" class="h-4 w-4" /> ..<span class="sr-only"> (parent folder)</span>
+                                            </a>
+                                        </th>
+                                    </tr>
+                                }
+                                @foreach (var entry in listing.Entries)
+                                {
+                                    var icon = entry.Kind switch { VolumeEntryKind.Directory => "folder", VolumeEntryKind.Link => "link", _ => "document" };
+                                    <tr>
+                                        <th scope="row" class="max-w-[28rem]">
+                                            <a asp-page="/Engine/Volumes/Files" asp-route-endpointId="@Model.EndpointId" asp-route-volumeName="@Model.VolumeName"
+                                               asp-route-path="@entry.Path" class="flex items-center gap-2 break-all font-mono text-xs hover:underline">
+                                                <icon name="@icon" class="h-4 w-4 shrink-0" />
+                                                <span>@entry.Name@(entry.Kind == VolumeEntryKind.Directory ? "/" : "")</span>
+                                            </a>
+                                            @if (entry.Kind is VolumeEntryKind.Link or VolumeEntryKind.Other)
+                                            {
+                                                <span class="sr-only">(@(entry.Kind == VolumeEntryKind.Link ? "symbolic link" : "special file"))</span>
+                                            }
+                                        </th>
+                                        <td class="num font-mono text-xs">@(entry.Kind == VolumeEntryKind.File ? Format.Bytes(entry.Size) : "—")</td>
+                                        <td class="whitespace-nowrap text-secondary" title="@Format.Timestamp(entry.Modified)">@Format.Relative(entry.Modified)</td>
+                                        <td class="whitespace-nowrap font-mono text-xs">@entry.Mode · @entry.Owner:@entry.Group</td>
+                                        <td class="num">
+                                            @if (entry.Kind == VolumeEntryKind.File)
+                                            {
+                                                <a asp-page="/Engine/Volumes/Files" asp-page-handler="Download" asp-route-endpointId="@Model.EndpointId"
+                                                   asp-route-volumeName="@Model.VolumeName" asp-route-path="@entry.Path" class="btn-soft"
+                                                   aria-label="Download @entry.Name" hx-boost="false" download>
+                                                    <icon name="arrow-down-tray" class="h-4 w-4" /> Download
+                                                </a>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="mt-3 text-xs text-secondary">
+                        @listing.Entries.Count @(listing.Entries.Count == 1 ? "entry" : "entries")@(listing.Truncated ? $", the first {VolumeBrowser.MaxEntries} only: download the folder to see the rest" : "").
+                        Read-only: symbolic links are shown, not followed.
+                    </p>
+                }
+            }
+        </section>
+    }
+</div>

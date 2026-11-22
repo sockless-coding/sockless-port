@@ -1,0 +1,58 @@
+@page "/endpoints/{endpointId:int}/networks"
+@model Sockless.Port.Web.Pages.Engine.Networks.IndexModel
+@{
+    ViewData["Title"] = "Networks";
+    var tableUrl = Url.Page("/Engine/Networks/Index", "Table", new { endpointId = Model.EndpointId });
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <h2 class="page-title">Networks</h2>
+            <p class="mt-1 text-secondary">Networks on @Model.Connection.Name and the containers attached to them.</p>
+        </div>
+        @if (Model.Client is not null)
+        {
+            <div class="flex flex-wrap items-center gap-2">
+                <form method="post" asp-page="/Engine/Networks/Index" asp-page-handler="Prune" asp-route-endpointId="@Model.EndpointId"
+                      asp-route-q="@Model.Q" asp-route-kind="@Model.Kind">
+                    <button type="submit" class="btn-soft danger"
+                            data-confirm="Remove every network on @Model.Connection.Name that no container is attached to? @(Model.Unused == 1 ? "1 network is unused." : $"{Model.Unused} networks are unused.") Built-in networks are kept.">
+                        <icon name="trash" class="h-4 w-4" /> Prune unused
+                    </button>
+                </form>
+                <a asp-page="/Engine/Networks/Create" asp-route-endpointId="@Model.EndpointId" class="btn-soft secondary">
+                    <icon name="plus" class="h-4 w-4" /> Create network
+                </a>
+            </div>
+        }
+    </div>
+
+    @if (Model.Client is null)
+    {
+        <partial name="_EndpointStateCallout" model="Model.Connection" />
+    }
+    else
+    {
+        <form method="get" role="search" aria-label="Filter networks" class="mb-4 flex flex-wrap items-end gap-3"
+              hx-get="@tableUrl" hx-target="#network-table" hx-swap="outerHTML"
+              hx-trigger="change, input changed delay:300ms from:find input[type=search], submit">
+            <div class="field min-w-[14rem] flex-1">
+                <label for="filter-q">Search</label>
+                <input id="filter-q" type="search" name="q" value="@Model.Q" placeholder="Name, ID, driver, subnet or container" autocomplete="off" />
+            </div>
+            <div class="field">
+                <label for="filter-kind">Show</label>
+                <select id="filter-kind" name="kind">
+                    @foreach (var (value, label) in IndexModel.Kinds)
+                    {
+                        <option value="@value" selected="@(value == (Model.Kind ?? ""))">@label</option>
+                    }
+                </select>
+            </div>
+            <noscript><button type="submit" class="btn-soft">Filter</button></noscript>
+        </form>
+
+        <partial name="_NetworkTable" model="Model" />
+    }
+</div>

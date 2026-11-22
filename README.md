@@ -2,7 +2,7 @@
 
 Self-hosted container management for Docker, Docker Swarm and Podman. Sockless Port runs as a container and manages containers, stacks, images, volumes and networks on the local engine. A lightweight agent will let it manage remote engines too.
 
-> **Status:** early development. Phase 1 is done: it connects to the local engine and shows a live dashboard. The roadmap is in [docs/plan.md](docs/plan.md).
+> **Status:** early development. Phases 0 to 4 are done: it manages containers, images, volumes and networks on the local engine. The roadmap is in [docs/plan.md](docs/plan.md).
 
 ## Run it
 
@@ -20,6 +20,10 @@ The app runs as a non-root user, so it needs the group that owns the engine sock
 ### Which engine it manages
 
 On first start Sockless Port looks for an engine in this order: `DOCKER_HOST`, `/var/run/docker.sock`, `/run/podman/podman.sock`, `$XDG_RUNTIME_DIR/podman/podman.sock`. It uses the first that answers. To choose one explicitly, set `Port__LocalEngine` (for example `unix:///run/podman/podman.sock` or `tcp://10.0.0.5:2375`). That setting also replaces the stored address on every start.
+
+### Volume file browser
+
+Browsing a volume's files starts a short-lived helper container that mounts the volume read-only, without a network. It uses `busybox:1.37`, pulled when missing. On hosts without internet access, set `Port__HelperImage` to an image the engine already has that provides `find` and `stat`.
 
 ### Podman
 

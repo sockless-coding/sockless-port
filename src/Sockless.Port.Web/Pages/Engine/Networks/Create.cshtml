@@ -1,0 +1,127 @@
+@page "/endpoints/{endpointId:int}/networks/create"
+@model Sockless.Port.Web.Pages.Engine.Networks.CreateModel
+@{
+    ViewData["Title"] = "Create network";
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+        <a asp-page="/Engine/Networks/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Networks</a>
+        <span class="text-line-accent" aria-hidden="true">/</span>
+        <span aria-current="page">Create</span>
+    </nav>
+    <div class="mb-6">
+        <h2 class="page-title">Create network</h2>
+        <p class="mt-1 text-secondary">A network on @Model.Connection.Name. Containers on the same network reach each other by name.</p>
+    </div>
+
+    @if (Model.Client is null)
+    {
+        <partial name="_EndpointStateCallout" model="Model.Connection" />
+    }
+    else
+    {
+        @if (Model.Error is not null)
+        {
+            <div class="callout danger mb-4" role="alert">
+                <icon name="exclamation-triangle" class="h-5 w-5" />
+                <p>@Model.Error</p>
+            </div>
+        }
+
+        @* networks.js hides the fields that don't apply to the chosen driver (data-drivers). *@
+        <form method="post" class="space-y-6" novalidate data-network-form>
+            <section class="card space-y-4" aria-labelledby="network-basics">
+                <h3 id="network-basics" class="section-title">Network</h3>
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div class="field">
+                        <label asp-for="Input.Name">Name</label>
+                        <input asp-for="Input.Name" class="font-mono" placeholder="backend" autocomplete="off" spellcheck="false" />
+                        <partial name="_FieldError" model='"Input_Name"' />
+                    </div>
+                    <div class="field">
+                        <label asp-for="Input.Driver">Driver</label>
+                        <select asp-for="Input.Driver" aria-describedby="driver-hint" data-network-driver>
+                            @foreach (var driver in Model.Drivers)
+                            {
+                                <option value="@driver" selected="@(driver == Model.Input.Driver)">@driver</option>
+                            }
+                        </select>
+                        <p class="hint" id="driver-hint">
+                            bridge: a private network on this host. macvlan and ipvlan: containers appear on a host interface's own network.
+                            @if (Model.Drivers.Contains("overlay"))
+                            {
+                                <text>overlay: one network across every node of the swarm.</text>
+                            }
+                        </p>
+                        <partial name="_FieldError" model='"Input_Driver"' />
+                    </div>
+                    <div class="field" data-drivers="macvlan ipvlan">
+                        <label asp-for="Input.Parent">Host interface</label>
+                        <input asp-for="Input.Parent" class="font-mono" placeholder="eth0" autocomplete="off" spellcheck="false" aria-describedby="parent-hint" />
+                        <p class="hint" id="parent-hint">macvlan and ipvlan only. Without one, the network is isolated on a dummy interface.</p>
+                        <partial name="_FieldError" model='"Input_Parent"' />
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-6">
+                    <label class="flex items-center gap-2"><input asp-for="Input.Internal" class="accent-accent" /> Internal (no route out)</label>
+                    <label class="flex items-center gap-2" data-drivers="overlay"><input asp-for="Input.Attachable" class="accent-accent" /> Attachable by standalone containers (overlay)</label>
+                </div>
+                <partial name="_FieldError" model='"Input_Attachable"' />
+            </section>
+
+            <section class="card space-y-4" aria-labelledby="network-addresses">
+                <h3 id="network-addresses" class="section-title">Addresses</h3>
+                <p class="text-secondary">Leave these empty to let the engine choose a free subnet.</p>
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div class="field">
+                        <label asp-for="Input.Subnet">Subnet</label>
+                        <input asp-for="Input.Subnet" class="font-mono" placeholder="172.30.0.0/24" autocomplete="off" spellcheck="false" />
+                        <partial name="_FieldError" model='"Input_Subnet"' />
+                    </div>
+                    <div class="field">
+                        <label asp-for="Input.Gateway">Gateway</label>
+                        <input asp-for="Input.Gateway" class="font-mono" placeholder="The subnet's first address" autocomplete="off" spellcheck="false" />
+                        <partial name="_FieldError" model='"Input_Gateway"' />
+                    </div>
+                    <div class="field">
+                        <label asp-for="Input.IpRange">Container address range</label>
+                        <input asp-for="Input.IpRange" class="font-mono" placeholder="172.30.0.128/25" autocomplete="off" spellcheck="false" aria-describedby="range-hint" />
+                        <p class="hint" id="range-hint">Part of the subnet; the rest stays free for fixed addresses.</p>
+                        <partial name="_FieldError" model='"Input_IpRange"' />
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <label class="flex items-center gap-2 md:mt-6"><input asp-for="Input.EnableIpv6" class="accent-accent" /> Enable IPv6</label>
+                    <div class="field">
+                        <label asp-for="Input.Ipv6Subnet">IPv6 subnet</label>
+                        <input asp-for="Input.Ipv6Subnet" class="font-mono" placeholder="fd00:30::/64" autocomplete="off" spellcheck="false" />
+                        <partial name="_FieldError" model='"Input_Ipv6Subnet"' />
+                    </div>
+                </div>
+            </section>
+
+            <section class="card space-y-4" aria-labelledby="network-options">
+                <h3 id="network-options" class="section-title">Options and labels</h3>
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div class="field">
+                        <label asp-for="Input.Options">Driver options</label>
+                        <textarea asp-for="Input.Options" class="font-mono" rows="4" spellcheck="false" aria-describedby="netopts-hint"
+                                  placeholder="com.docker.network.driver.mtu=1400"></textarea>
+                        <p class="hint" id="netopts-hint">One <span class="font-mono">key=value</span> per line, as <span class="font-mono">docker network create -o</span> takes them.</p>
+                        <partial name="_FieldError" model='"Input_Options"' />
+                    </div>
+                    <div class="field">
+                        <label asp-for="Input.Labels">Labels</label>
+                        <textarea asp-for="Input.Labels" class="font-mono" rows="4" placeholder="team=infra" spellcheck="false"></textarea>
+                        <partial name="_FieldError" model='"Input_Labels"' />
+                    </div>
+                </div>
+            </section>
+
+            <div class="flex justify-end">
+                <button type="submit" class="btn-primary">Create network</button>
+            </div>
+        </form>
+    }
+</div>

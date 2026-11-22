@@ -1,0 +1,11 @@
+@model Sockless.Port.Web.Pages.Engine.Volumes.DetailModel
+<span id="volume-size">
+    @if (Model.Size is { } size)
+    {
+        <span class="font-mono">@Format.Bytes(size)</span>
+    }
+    else
+    {
+        <span class="text-secondary">@(Model.SizeError ?? "—")</span>
+    }
+</span>

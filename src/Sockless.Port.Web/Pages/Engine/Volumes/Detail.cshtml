@@ -1,0 +1,10 @@
+@page "/endpoints/{endpointId:int}/volumes/{volumeName}"
+@model Sockless.Port.Web.Pages.Engine.Volumes.DetailModel
+@{
+    ViewData["Title"] = VolumePageModel.ShortName(Model.VolumeName);
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <partial name="_VolumeHeader" model="Model" />
+    <partial name="_VolumeOverview" model="Model" />
+</div>

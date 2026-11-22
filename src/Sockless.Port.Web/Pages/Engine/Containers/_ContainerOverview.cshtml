@@ -172,7 +172,10 @@
                                 @foreach (var (network, endpoint) in networks.OrderBy(n => n.Key, StringComparer.Ordinal))
                                 {
                                     <tr>
-                                        <th scope="row" class="font-mono">@network</th>
+                                        <th scope="row" class="font-mono">
+                                            <a asp-page="/Engine/Networks/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-networkId="@(endpoint.NetworkId is { Length: > 0 } nid ? nid : network)"
+                                               class="hover:underline">@network</a>
+                                        </th>
                                         <td class="font-mono">@(endpoint.IpAddress is { Length: > 0 } ip ? $"{ip}/{endpoint.IpPrefixLen}" : "—")@(endpoint.GlobalIPv6Address is { Length: > 0 } v6 ? $" {v6}" : "")</td>
                                         <td class="font-mono">@(endpoint.Gateway is { Length: > 0 } gw ? gw : "—")</td>
                                         <td class="font-mono">@(endpoint.MacAddress is { Length: > 0 } mac ? mac : "—")</td>
@@ -201,7 +204,16 @@
                                 {
                                     <tr>
                                         <td><span class="badge-stat">@(m.Type ?? "—")</span></td>
-                                        <td class="break-all font-mono text-xs">@(m.Type == "volume" && m.Name is { } volume ? volume : m.Source)</td>
+                                        <td class="break-all font-mono text-xs">
+                                            @if (m.Type == "volume" && m.Name is { } volume)
+                                            {
+                                                <a asp-page="/Engine/Volumes/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-volumeName="@volume" class="hover:underline">@VolumePageModel.ShortName(volume)</a>
+                                            }
+                                            else
+                                            {
+                                                @m.Source
+                                            }
+                                        </td>
                                         <th scope="row" class="break-all font-mono text-xs">@m.Destination</th>
                                         <td>@(m.ReadWrite ? "Read-write" : "Read-only")</td>
                                     </tr>

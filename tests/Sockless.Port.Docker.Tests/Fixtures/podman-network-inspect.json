@@ -1,0 +1,44 @@
+{
+    "Name": "fixture-net",
+    "Id": "f5778a9bf24682861a29c268c279650fc2176b38a2c0d0016ce748f2cdf9f3e1",
+    "Created": "2026-11-22T07:55:20.161586313Z",
+    "Scope": "local",
+    "Driver": "bridge",
+    "EnableIPv4": true,
+    "EnableIPv6": false,
+    "IPAM": {
+        "Driver": "default",
+        "Options": {
+            "driver": "host-local"
+        },
+        "Config": [
+            {
+                "Subnet": "10.77.0.0/24",
+                "IPRange": "10.77.0.128/25",
+                "Gateway": "10.77.0.1"
+            }
+        ]
+    },
+    "Internal": false,
+    "Attachable": false,
+    "Ingress": false,
+    "ConfigFrom": {
+        "Network": ""
+    },
+    "ConfigOnly": false,
+    "Options": {
+        "mtu": "1400"
+    },
+    "Labels": {
+        "team": "infra"
+    },
+    "Containers": {
+        "001c76572ea9b50ae3d3d49235f1937d47eba88cb8299abd05abd7fc9396bac2": {
+            "Name": "fixture-web",
+            "EndpointID": "",
+            "MacAddress": "52:fb:30:0d:da:60",
+            "IPv4Address": "10.77.0.129/24",
+            "IPv6Address": ""
+        }
+    }
+}

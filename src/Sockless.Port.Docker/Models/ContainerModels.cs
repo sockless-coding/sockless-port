@@ -278,3 +278,7 @@ public sealed record ExecInspect
     public bool Running { get; init; }
     public int? ExitCode { get; init; }
 }
+
+/// <summary>What a command run with <see cref="DockerClient.RunExecAsync"/> printed, and how it ended.</summary>
+/// <param name="ExitCode">Null when the output was truncated (the command may still be running) or the engine didn't report it.</param>
+public sealed record ExecResult(string Stdout, string Stderr, int? ExitCode, bool Truncated);

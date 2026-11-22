@@ -1,0 +1,68 @@
+[
+    {
+        "Name": "fixture-net",
+        "Id": "f5778a9bf24682861a29c268c279650fc2176b38a2c0d0016ce748f2cdf9f3e1",
+        "Created": "2026-11-22T07:55:20.161586313Z",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv4": true,
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": {
+                "driver": "host-local"
+            },
+            "Config": [
+                {
+                    "Subnet": "10.77.0.0/24",
+                    "IPRange": "10.77.0.128/25",
+                    "Gateway": "10.77.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Options": {
+            "mtu": "1400"
+        },
+        "Labels": {
+            "team": "infra"
+        }
+    },
+    {
+        "Name": "bridge",
+        "Id": "2f259bab93aaaaa2542ba43ef33eb990d0999ee1b9924b557b7be53c0b7a1bb9",
+        "Created": "2026-11-22T07:55:20.196572926Z",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv4": true,
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": {
+                "driver": "host-local"
+            },
+            "Config": [
+                {
+                    "Subnet": "10.88.0.0/16",
+                    "IPRange": "",
+                    "Gateway": "10.88.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Options": {},
+        "Labels": {}
+    }
+]

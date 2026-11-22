@@ -1,0 +1,42 @@
+{
+    "Name": "fixture-net",
+    "Id": "f969e40741ab5618ca01cd0e5ad76283c7d63fba82fc23b580aba8858d302d54",
+    "Created": "2026-11-22T07:55:18.206498794Z",
+    "Scope": "local",
+    "Driver": "bridge",
+    "EnableIPv4": true,
+    "EnableIPv6": false,
+    "IPAM": {
+        "Driver": "default",
+        "Options": null,
+        "Config": [
+            {
+                "Subnet": "10.77.0.0/24",
+                "IPRange": "10.77.0.128/25",
+                "Gateway": "10.77.0.1"
+            }
+        ]
+    },
+    "Internal": false,
+    "Attachable": false,
+    "Ingress": false,
+    "ConfigFrom": {
+        "Network": ""
+    },
+    "ConfigOnly": false,
+    "Options": {
+        "com.docker.network.driver.mtu": "1400"
+    },
+    "Labels": {
+        "team": "infra"
+    },
+    "Containers": {
+        "24e5279e7afb3a7bf7ab85a938ff19481499fbc8614b2f17f451e7b6a8b1fd32": {
+            "Name": "fixture-web",
+            "EndpointID": "b4c6c03a56b544cd3bc2b87727f993d3d30e95a9352d38c309e3badfedfa6af3",
+            "MacAddress": "7a:95:26:d0:c1:a0",
+            "IPv4Address": "10.77.0.128/24",
+            "IPv6Address": ""
+        }
+    }
+}

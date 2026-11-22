@@ -135,17 +135,9 @@ public sealed partial class DockerClient : IDisposable
     public async Task<IReadOnlyList<ImageSummary>> ListImagesAsync(CancellationToken cancellationToken = default) =>
         await GetAsync("/images/json", Json.ListImageSummary, cancellationToken);
 
-    public async Task<IReadOnlyList<VolumeSummary>> ListVolumesAsync(CancellationToken cancellationToken = default) =>
-        (await GetAsync("/volumes", Json.VolumeListResponse, cancellationToken)).Volumes ?? [];
-
-    public Task<VolumeSummary> CreateVolumeAsync(VolumeCreateRequest request, CancellationToken cancellationToken = default) =>
-        SendAsync(HttpMethod.Post, "/volumes/create", JsonContent.Create(request, Json.VolumeCreateRequest), Json.VolumeSummary, cancellationToken);
-
-    public Task RemoveVolumeAsync(string name, bool force = false, CancellationToken cancellationToken = default) =>
-        SendAsync(HttpMethod.Delete, Path($"/volumes/{Uri.EscapeDataString(name)}", Query(("force", force ? "true" : null))), content: null, cancellationToken);
-
-    public async Task<IReadOnlyList<NetworkSummary>> ListNetworksAsync(CancellationToken cancellationToken = default) =>
-        await GetAsync("/networks", Json.ListNetworkSummary, cancellationToken);
+    /// <summary>Containers matching engine filters, e.g. <c>{"label": ["key=value"]}</c>.</summary>
+    public async Task<IReadOnlyList<ContainerSummary>> ListContainersAsync(IReadOnlyDictionary<string, string[]> filters, bool all = true, CancellationToken cancellationToken = default) =>
+        await GetAsync(Path("/containers/json", Query(("all", all ? "true" : "false"), ("filters", Filters(filters)))), Json.ListContainerSummary, cancellationToken);
 
     // ---------------------------------------------------------------- plumbing
 

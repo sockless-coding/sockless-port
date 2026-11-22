@@ -1,0 +1,21 @@
+@page "/endpoints/{endpointId:int}/volumes/{volumeName}/inspect"
+@model Sockless.Port.Web.Pages.Engine.Volumes.InspectModel
+@{
+    ViewData["Title"] = $"{VolumePageModel.ShortName(Model.VolumeName)} inspect";
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <partial name="_VolumeHeader" model="Model" />
+
+    @if (Model.Pretty is { } json)
+    {
+        <section class="card" aria-labelledby="inspect-title">
+            <div class="mb-3 flex items-center justify-between gap-4">
+                <h3 id="inspect-title" class="section-title mb-0">Inspect</h3>
+                <button type="button" class="btn-soft" data-copy="#inspect-json">Copy</button>
+            </div>
+            <p class="mb-3 text-secondary">The engine's full description of the volume, as returned by the API.</p>
+            <pre id="inspect-json" class="code-block max-h-[70vh]" tabindex="0">@json</pre>
+        </section>
+    }
+</div>

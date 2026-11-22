@@ -22,6 +22,21 @@ public sealed record ContainerSummary
 
     public IReadOnlyList<ContainerPort>? Ports { get; init; }
 
+    /// <summary>Volumes and bind mounts, so volume usage needs no inspect per container.</summary>
+    public IReadOnlyList<MountPoint>? Mounts { get; init; }
+
+    /// <summary>Only <see cref="NetworkSettings.Networks"/> is filled in a list.</summary>
+    public NetworkSettings? NetworkSettings { get; init; }
+
+    /// <summary>Only <see cref="Models.HostConfig.NetworkMode"/> is filled in a list.</summary>
+    public HostConfig? HostConfig { get; init; }
+
+    /// <summary>
+    /// Whether the container can be connected to another network: not when it uses the host's
+    /// network, none, or another container's (<c>container:…</c>). Engines refuse those.
+    /// </summary>
+    public bool CanJoinNetworks => HostConfig?.NetworkMode is not ("host" or "none") && HostConfig?.NetworkMode?.StartsWith("container:", StringComparison.Ordinal) != true;
+
     public string DisplayName => Names is [var first, ..] && first.TrimStart('/') is { Length: > 0 } name ? name : Id[..Math.Min(12, Id.Length)];
 }
 
@@ -47,45 +62,6 @@ public sealed record ImageSummary
 
     /// <summary>No tag left: a leftover from a rebuild or re-pull, removed by a dangling prune.</summary>
     public bool IsDangling => Tags.Count == 0;
-}
-
-/// <summary><c>GET /volumes</c>.</summary>
-public sealed record VolumeListResponse
-{
-    public IReadOnlyList<VolumeSummary>? Volumes { get; init; }
-    public IReadOnlyList<string>? Warnings { get; init; }
-}
-
-/// <summary>A volume, as listed or created.</summary>
-public sealed record VolumeSummary
-{
-    public required string Name { get; init; }
-    public string? Driver { get; init; }
-    public string? Mountpoint { get; init; }
-    public string? CreatedAt { get; init; }
-    public string? Scope { get; init; }
-    public IReadOnlyDictionary<string, string>? Labels { get; init; }
-}
-
-/// <summary><c>POST /volumes/create</c>.</summary>
-public sealed record VolumeCreateRequest
-{
-    public string? Name { get; init; }
-    public string? Driver { get; init; }
-    public IReadOnlyDictionary<string, string>? DriverOpts { get; init; }
-    public IReadOnlyDictionary<string, string>? Labels { get; init; }
-}
-
-/// <summary>An item of <c>GET /networks</c>.</summary>
-public sealed record NetworkSummary
-{
-    public required string Id { get; init; }
-    public required string Name { get; init; }
-    public string? Driver { get; init; }
-    public string? Scope { get; init; }
-    public bool Internal { get; init; }
-    public bool Attachable { get; init; }
-    public IReadOnlyDictionary<string, string>? Labels { get; init; }
 }
 
 /// <summary>An item of the <c>GET /events</c> stream.</summary>

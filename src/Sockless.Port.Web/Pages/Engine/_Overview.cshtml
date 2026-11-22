@@ -47,12 +47,12 @@
             <section class="card stat-card" aria-label="Volumes">
                 <p class="label-caps">Volumes</p>
                 <p class="stat-value">@Format.Count(overview.Volumes)</p>
-                <p class="stat-meta">Named and anonymous</p>
+                <p class="stat-meta"><a asp-page="/Engine/Volumes/Index" asp-route-endpointId="@Model.Connection.Id" class="hover:underline">See volumes</a></p>
             </section>
             <section class="card stat-card" aria-label="Networks">
                 <p class="label-caps">Networks</p>
                 <p class="stat-value">@Format.Count(overview.Networks)</p>
-                <p class="stat-meta">Including built-in</p>
+                <p class="stat-meta"><a asp-page="/Engine/Networks/Index" asp-route-endpointId="@Model.Connection.Id" class="hover:underline">See networks</a> · including built-in</p>
             </section>
         </div>
 

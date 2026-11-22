@@ -1,0 +1,114 @@
+[
+    {
+        "Id": "001c76572ea9b50ae3d3d49235f1937d47eba88cb8299abd05abd7fc9396bac2",
+        "Names": [
+            "/fixture-web"
+        ],
+        "Image": "docker.io/library/busybox:1.37",
+        "ImageID": "sha256:30ecbe1509090b38ef3260f3609d64d8261230464eaa4d235901db496e9647fb",
+        "Command": "sleep 3000",
+        "Created": 1795334120,
+        "Ports": [],
+        "Labels": {},
+        "State": "running",
+        "Status": "Up 14 seconds",
+        "HostConfig": {
+            "NetworkMode": "bridge",
+            "Annotations": {
+                "io.container.manager": "libpod",
+                "org.opencontainers.image.stopSignal": "15",
+                "org.systemd.property.KillSignal": "15",
+                "org.systemd.property.TimeoutStopUSec": "uint64 10000000"
+            }
+        },
+        "NetworkSettings": {
+            "Networks": {
+                "fixture-net": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": [
+                        "web"
+                    ],
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "f5778a9bf24682861a29c268c279650fc2176b38a2c0d0016ce748f2cdf9f3e1",
+                    "EndpointID": "",
+                    "Gateway": "10.77.0.1",
+                    "IPAddress": "10.77.0.129",
+                    "MacAddress": "52:fb:30:0d:da:60",
+                    "IPPrefixLen": 24,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": [
+                        "fixture-web",
+                        "web",
+                        "001c76572ea9"
+                    ]
+                }
+            }
+        },
+        "Mounts": [
+            {
+                "Type": "volume",
+                "Name": "fixture-data",
+                "Source": "/var/lib/containers/storage/volumes/fixture-data/_data",
+                "Destination": "/data",
+                "Driver": "local",
+                "Mode": "",
+                "RW": true,
+                "Propagation": "rprivate"
+            }
+        ]
+    },
+    {
+        "Id": "3b43cc28dafdcaee647be4e750c7dfdaa1bf760374ed0b0b7bf1a08cbb38ebb6",
+        "Names": [
+            "/fixture-anon"
+        ],
+        "Image": "docker.io/library/busybox:1.37",
+        "ImageID": "sha256:30ecbe1509090b38ef3260f3609d64d8261230464eaa4d235901db496e9647fb",
+        "Command": "true",
+        "Created": 1795334120,
+        "Ports": [],
+        "Labels": {},
+        "State": "created",
+        "Status": "Created",
+        "HostConfig": {
+            "NetworkMode": "host"
+        },
+        "NetworkSettings": {
+            "Networks": {
+                "host": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": null,
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "host",
+                    "EndpointID": "",
+                    "Gateway": "",
+                    "IPAddress": "",
+                    "MacAddress": "",
+                    "IPPrefixLen": 0,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": null
+                }
+            }
+        },
+        "Mounts": [
+            {
+                "Type": "volume",
+                "Name": "6da4e6ab7ef890ac02aeeff652aac87c43c56b246c510c69ffe752b6450e9b1f",
+                "Source": "/var/lib/containers/storage/volumes/6da4e6ab7ef890ac02aeeff652aac87c43c56b246c510c69ffe752b6450e9b1f/_data",
+                "Destination": "/scratch",
+                "Driver": "local",
+                "Mode": "",
+                "RW": true,
+                "Propagation": "rprivate"
+            }
+        ]
+    }
+]

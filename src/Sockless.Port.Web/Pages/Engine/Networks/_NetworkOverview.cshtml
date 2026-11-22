@@ -1,0 +1,208 @@
+@model Sockless.Port.Web.Pages.Engine.Networks.DetailModel
+@{
+    var network = Model.Network;
+}
+<div id="network-overview" hx-get="@Url.Page("/Engine/Networks/Detail", "Overview", new { endpointId = Model.EndpointId, networkId = Model.NetworkId })"
+     hx-trigger="engine-changed from:body, endpoint-state from:body" hx-swap="outerHTML">
+    @if (network is not null)
+    {
+        var created = Format.EngineTime(network.Created);
+        // host and none take no endpoints, and a swarm overlay takes standalone containers only when attachable.
+        var connectable = network.Driver is not ("host" or "null") && (network.Scope != "swarm" || network.Attachable);
+        string Yes(bool value) => value ? "Yes" : "No";
+
+        <div class="grid grid-cols-1 gap-6">
+            <section class="card" aria-labelledby="attached-title">
+                <h3 id="attached-title" class="section-title">Containers</h3>
+                @if (Model.Attached.Count == 0)
+                {
+                    <p class="text-secondary">No container is attached to this network.</p>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="table">
+                            <caption class="sr-only">Containers attached to the network</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Container</th>
+                                    <th scope="col">State</th>
+                                    <th scope="col">IP address</th>
+                                    <th scope="col">MAC address</th>
+                                    <th scope="col" class="num"><span class="sr-only">Actions</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var container in Model.Attached)
+                                {
+                                    var (badge, _) = ContainerStatus.FromSummary(container);
+                                    var endpoint = Model.EndpointOf(container.Id);
+                                    <tr>
+                                        <th scope="row">
+                                            <a asp-page="/Engine/Containers/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-containerId="@container.Id"
+                                               class="font-mono hover:underline">@container.DisplayName</a>
+                                        </th>
+                                        <td><partial name="_StatusBadge" model="badge" /></td>
+                                        <td class="font-mono text-xs">
+                                            @if (endpoint is null)
+                                            {
+                                                <span class="text-secondary">Assigned when it starts</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="block">@(endpoint.Ipv4Address is { Length: > 0 } v4 ? v4 : "—")</span>
+                                                @if (endpoint.Ipv6Address is { Length: > 0 } v6)
+                                                {
+                                                    <span class="block">@v6</span>
+                                                }
+                                            }
+                                        </td>
+                                        <td class="font-mono text-xs">@(endpoint?.MacAddress is { Length: > 0 } mac ? mac : "—")</td>
+                                        <td class="num">
+                                            <form method="post" asp-page="/Engine/Networks/Detail" asp-page-handler="Disconnect"
+                                                  asp-route-endpointId="@Model.EndpointId" asp-route-networkId="@Model.NetworkId">
+                                                <input type="hidden" name="container" value="@container.Id" />
+                                                <button type="submit" class="btn-soft danger" aria-label="Disconnect @container.DisplayName"
+                                                        data-confirm="Disconnect @container.DisplayName from @network.Name? It loses its address on this network at once.">
+                                                    Disconnect
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
+                @if (connectable && Model.Others.Count > 0)
+                {
+                    <form method="post" asp-page="/Engine/Networks/Detail" asp-page-handler="Connect"
+                          asp-route-endpointId="@Model.EndpointId" asp-route-networkId="@Model.NetworkId"
+                          class="mt-4 flex flex-wrap items-end gap-3 border-t border-line pt-4">
+                        <div class="field min-w-[12rem]">
+                            <label for="connect-container">Connect a container</label>
+                            <select id="connect-container" name="container" required>
+                                @foreach (var other in Model.Others)
+                                {
+                                    <option value="@other.Id">@other.DisplayName</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="field min-w-[10rem] flex-1">
+                            <label for="connect-aliases">Aliases</label>
+                            <input id="connect-aliases" name="aliases" class="font-mono" placeholder="db primary" autocomplete="off" spellcheck="false" aria-describedby="connect-hint" />
+                        </div>
+                        <div class="field min-w-[10rem]">
+                            <label for="connect-address">Fixed address</label>
+                            <input id="connect-address" name="address" class="font-mono" placeholder="Automatic" autocomplete="off" spellcheck="false" />
+                        </div>
+                        <button type="submit" class="btn-soft secondary mb-1"><icon name="link" class="h-4 w-4" /> Connect</button>
+                    </form>
+                    <p id="connect-hint" class="mt-2 text-xs text-secondary">
+                        Aliases are extra names the container answers to on this network, separated by spaces. A fixed address must be in
+                        a subnet the network was created with.
+                    </p>
+                }
+                else if (!connectable)
+                {
+                    <p class="mt-4 text-xs text-secondary">
+                        @(network.Scope == "swarm" ? "Only swarm services join this network: it isn't attachable." : $"Containers use the {network.Name} network by being created with it, not by connecting.")
+                    </p>
+                }
+            </section>
+
+            <section class="card" aria-labelledby="summary-title">
+                <h3 id="summary-title" class="section-title">Summary</h3>
+                <dl class="details">
+                    <dt>ID</dt>
+                    <dd class="break-all font-mono text-xs">@network.Id</dd>
+                    <dt>Driver</dt>
+                    <dd class="font-mono">@(network.Driver ?? "—")</dd>
+                    <dt>Scope</dt>
+                    <dd>@(network.Scope switch { "local" => "This engine", "swarm" => "Every node of the swarm", { } other => other, null => "—" })</dd>
+                    <dt>Created</dt>
+                    <dd>@(created is { } cr ? $"{Format.Relative(cr)} ({Format.Timestamp(cr)})" : "—")</dd>
+                    <dt>Internal</dt>
+                    <dd>@(network.Internal ? "Yes: no route out of the network" : "No")</dd>
+                    <dt>IPv6</dt>
+                    <dd>@Yes(network.EnableIpv6)</dd>
+                    @if (network.Scope == "swarm")
+                    {
+                        <dt>Attachable</dt>
+                        <dd>@Yes(network.Attachable)</dd>
+                        <dt>Ingress</dt>
+                        <dd>@Yes(network.Ingress)</dd>
+                    }
+                </dl>
+            </section>
+
+            <section class="card" aria-labelledby="ipam-title">
+                <h3 id="ipam-title" class="section-title">Addresses</h3>
+                @if (network.Ipam?.Config is { Count: > 0 } configs)
+                {
+                    <div class="table-wrap">
+                        <table class="table">
+                            <caption class="sr-only">Subnets</caption>
+                            <thead><tr><th scope="col">Subnet</th><th scope="col">Gateway</th><th scope="col">Container range</th></tr></thead>
+                            <tbody>
+                                @foreach (var config in configs)
+                                {
+                                    <tr>
+                                        <th scope="row" class="font-mono">@(config.Subnet is { Length: > 0 } subnet ? subnet : "—")</th>
+                                        <td class="font-mono">@(config.Gateway is { Length: > 0 } gateway ? gateway : "—")</td>
+                                        <td class="font-mono">@(config.IpRange is { Length: > 0 } range ? range : "The whole subnet")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-secondary">No subnet: @(network.Driver is "host" or "null" ? "containers on it use the host's network, or none." : "the driver assigns addresses itself.")</p>
+                }
+                @if (network.Ipam?.Driver is { Length: > 0 } ipamDriver && ipamDriver != "default")
+                {
+                    <p class="mt-2 text-xs text-secondary">IPAM driver: <span class="font-mono">@ipamDriver</span></p>
+                }
+            </section>
+
+            <section class="card" aria-labelledby="options-title">
+                <h3 id="options-title" class="section-title">Driver options</h3>
+                @if (network.Options is { Count: > 0 } options)
+                {
+                    <dl class="details">
+                        @foreach (var (key, value) in options.OrderBy(o => o.Key, StringComparer.Ordinal))
+                        {
+                            <dt class="break-all font-mono text-xs">@key</dt>
+                            <dd class="break-all font-mono text-xs">@value</dd>
+                        }
+                    </dl>
+                }
+                else
+                {
+                    <p class="text-secondary">None.</p>
+                }
+            </section>
+
+            <section class="card" aria-labelledby="labels-title">
+                <h3 id="labels-title" class="section-title">Labels</h3>
+                @if (network.Labels is { Count: > 0 } labels)
+                {
+                    <dl class="details">
+                        @foreach (var (key, value) in labels.OrderBy(l => l.Key, StringComparer.Ordinal))
+                        {
+                            <dt class="break-all font-mono text-xs">@key</dt>
+                            <dd class="break-all font-mono text-xs">@(value.Length > 0 ? value : "—")</dd>
+                        }
+                    </dl>
+                }
+                else
+                {
+                    <p class="text-secondary">None.</p>
+                }
+            </section>
+        </div>
+    }
+</div>

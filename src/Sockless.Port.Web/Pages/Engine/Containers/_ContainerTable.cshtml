@@ -90,6 +90,10 @@
                                         {
                                             <span class="badge-stat" title="Managed by this swarm service">Swarm: @row.SwarmService</span>
                                         }
+                                        @if (Sockless.Port.Containers.ContainerLabels.IsHelper(row.Summary.Labels))
+                                        {
+                                            <span class="badge-stat" title="Started by Sockless Port to read a volume's files. It's removed when the file browser closes.">File browser helper</span>
+                                        }
                                     </span>
                                 </th>
                                 <td>

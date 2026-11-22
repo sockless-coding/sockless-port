@@ -21,6 +21,8 @@ public static class Navigation
         new("Dashboard", "/Engine/Index", "home", NavScope.Endpoint, MatchSubPages: false),
         new("Containers", "/Engine/Containers/Index", "cube", NavScope.Endpoint),
         new("Images", "/Engine/Images/Index", "square-3-stack-3d", NavScope.Endpoint),
+        new("Volumes", "/Engine/Volumes/Index", "circle-stack", NavScope.Endpoint),
+        new("Networks", "/Engine/Networks/Index", "share", NavScope.Endpoint),
     ];
 
     /// <summary>Rarely used administration items, shown below a divider.</summary>

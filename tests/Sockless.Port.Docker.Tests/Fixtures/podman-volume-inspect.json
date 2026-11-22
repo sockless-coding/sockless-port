@@ -1,0 +1,11 @@
+{
+    "CreatedAt": "2026-11-22T07:55:20Z",
+    "Driver": "local",
+    "Labels": {
+        "team": "infra"
+    },
+    "Mountpoint": "/var/lib/containers/storage/volumes/fixture-data/_data",
+    "Name": "fixture-data",
+    "Options": {},
+    "Scope": "local"
+}

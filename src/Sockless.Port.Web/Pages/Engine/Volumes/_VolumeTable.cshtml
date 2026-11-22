@@ -1,0 +1,136 @@
+@model Sockless.Port.Web.Pages.Engine.Volumes.IndexModel
+@{
+    var refreshUrl = Url.Page("/Engine/Volumes/Index", "Table", Model.Filters);
+}
+@* Live: refreshes on engine events, but not while rows are selected (data-pause-when-selected). *@
+<div id="volume-table" hx-get="@refreshUrl" hx-trigger="engine-changed from:body, endpoint-state from:body"
+     hx-swap="outerHTML" data-pause-when-selected>
+
+    @if (Model.Error is not null)
+    {
+        <div class="callout danger" role="alert">
+            <icon name="exclamation-triangle" class="h-5 w-5" />
+            <p>@Model.Error</p>
+        </div>
+    }
+    else if (Model.Rows.Count == 0)
+    {
+        <section class="card">
+            <div class="empty-state">
+                <icon name="circle-stack" class="h-12 w-12" stroke-width="1.5" />
+                @if (Model.Filtered && Model.Total > 0)
+                {
+                    <p class="text-base text-heading">No volumes match these filters</p>
+                    <p class="text-secondary"><a asp-page="/Engine/Volumes/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Clear the filters</a> to see all @Model.Total.</p>
+                }
+                else
+                {
+                    <p class="text-base text-heading">No volumes yet</p>
+                    <p class="text-secondary">Create one, or let a container create one when it starts.</p>
+                }
+            </div>
+        </section>
+    }
+    else
+    {
+        @if (Model.SizeError is not null)
+        {
+            <div class="callout warning mb-4">
+                <icon name="exclamation-triangle" class="h-5 w-5" />
+                <p>@Model.SizeError</p>
+            </div>
+        }
+
+        @* Row buttons submit through this form so they don't also send the bulk selection. *@
+        <form id="volume-row-actions" method="post" asp-page="/Engine/Volumes/Index" asp-page-handler="Remove" asp-route-endpointId="@Model.EndpointId"></form>
+
+        <form id="volume-bulk-form" method="post" asp-page="/Engine/Volumes/Index" asp-page-handler="Remove"
+              asp-route-endpointId="@Model.EndpointId" asp-route-q="@Model.Q" asp-route-usage="@Model.Usage" asp-route-sizes="@(Model.Sizes ? "true" : null)"
+              data-bulk-noun="volumes">
+            <div class="mb-3 flex flex-wrap items-center gap-3" data-bulk-toolbar>
+                <span class="text-secondary" data-bulk-count aria-live="polite">@Model.Rows.Count of @Model.Total shown@(Model.TotalSize is { } total ? $" · {Format.Bytes(total)} in all" : "")</span>
+                <span class="flex-1"></span>
+                <button type="submit" class="btn-soft danger" data-bulk-action disabled
+                        data-confirm-bulk="Remove {list}? Their data is deleted. Volumes that containers use are kept.">
+                    <icon name="trash" class="h-4 w-4" /> Remove
+                </button>
+            </div>
+
+            <div class="table-wrap">
+                <table class="table">
+                    <caption class="sr-only">Volumes</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col" class="w-8"><input type="checkbox" data-select-all aria-label="Select all shown volumes" /></th>
+                            <th scope="col">Volume</th>
+                            <th scope="col">Driver</th>
+                            @if (Model.Sizes)
+                            {
+                                <th scope="col" class="num">Size</th>
+                            }
+                            <th scope="col">Created</th>
+                            <th scope="col">Used by</th>
+                            <th scope="col" class="num"><span class="sr-only">Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in Model.Rows)
+                        {
+                            var created = Format.EngineTime(row.Summary.CreatedAt);
+                            <tr>
+                                <td><input type="checkbox" name="ids" value="@row.Name" data-name="@row.ShortName" aria-label="Select @row.ShortName" /></td>
+                                <th scope="row" class="max-w-[22rem]">
+                                    <a asp-page="/Engine/Volumes/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-volumeName="@row.Name"
+                                       class="break-all font-mono text-xs font-semibold hover:underline" title="@row.Name">@row.ShortName</a>
+                                    @if (row.Summary.IsAnonymous || row.Stack is not null)
+                                    {
+                                        <span class="mt-1 flex flex-wrap gap-1">
+                                            @if (row.Summary.IsAnonymous)
+                                            {
+                                                <span class="badge-stat" title="Created for a container, not by name">Anonymous</span>
+                                            }
+                                            @if (row.Stack is not null)
+                                            {
+                                                <span class="badge-stat" title="Stack">@row.Stack</span>
+                                            }
+                                        </span>
+                                    }
+                                </th>
+                                <td class="font-mono text-xs">@(row.Summary.Driver ?? "—")</td>
+                                @if (Model.Sizes)
+                                {
+                                    <td class="num font-mono text-xs">@(row.Size is { } size ? Format.Bytes(size) : "—")</td>
+                                }
+                                <td class="whitespace-nowrap text-secondary" title="@(created is { } c ? Format.Timestamp(c) : null)">@(created is { } cr ? Format.Relative(cr) : "—")</td>
+                                <td>
+                                    @{
+                                        var users = row.UsedBy.Select(u => u.Container.DisplayName).Distinct().ToList();
+                                    }
+                                    @if (users.Count == 0)
+                                    {
+                                        <span class="text-secondary">Unused</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="font-mono text-xs">@string.Join(", ", users.Take(3))</span>
+                                        @if (users.Count > 3)
+                                        {
+                                            <span class="block text-xs text-secondary">and @(users.Count - 3) more</span>
+                                        }
+                                    }
+                                </td>
+                                <td class="num">
+                                    <button type="submit" form="volume-row-actions" class="btn-soft danger" aria-label="Remove @row.ShortName"
+                                            formaction="@Url.Page("/Engine/Volumes/Index", "Remove", new { endpointId = Model.EndpointId, Model.Q, Model.Usage, sizes = Model.Sizes ? "true" : null, ids = row.Name })"
+                                            data-confirm="Remove volume @row.ShortName? Its data is deleted.@(row.UsedBy.Count > 0 ? " Containers use it, so the engine will refuse." : "")">
+                                        <icon name="trash" class="h-4 w-4" /> Remove
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </form>
+    }
+</div>

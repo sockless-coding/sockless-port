@@ -1,0 +1,36 @@
+{
+    "Volumes": [
+        {
+            "CreatedAt": "2026-11-22T07:55:18Z",
+            "Driver": "local",
+            "Labels": {
+                "team": "infra"
+            },
+            "Mountpoint": "/var/lib/docker/volumes/fixture-data/_data",
+            "Name": "fixture-data",
+            "Options": null,
+            "Scope": "local"
+        },
+        {
+            "CreatedAt": "2026-11-22T07:55:18Z",
+            "Driver": "local",
+            "Labels": null,
+            "Mountpoint": "/var/lib/docker/volumes/fixture-unused/_data",
+            "Name": "fixture-unused",
+            "Options": null,
+            "Scope": "local"
+        },
+        {
+            "CreatedAt": "2026-11-22T07:55:18Z",
+            "Driver": "local",
+            "Labels": {
+                "com.docker.volume.anonymous": ""
+            },
+            "Mountpoint": "/var/lib/docker/volumes/9e2188ce4e9bd693c14b365eac96ba9f2d9102942313643c8247d5e81af34719/_data",
+            "Name": "9e2188ce4e9bd693c14b365eac96ba9f2d9102942313643c8247d5e81af34719",
+            "Options": null,
+            "Scope": "local"
+        }
+    ],
+    "Warnings": null
+}

@@ -1,0 +1,116 @@
+[
+    {
+        "Name": "none",
+        "Id": "3c5e35858f5b04e3bcc7b947190b17693856b1d619286719967b4084be4b4b00",
+        "Created": "2026-11-22T07:54:57.672942776Z",
+        "Scope": "local",
+        "Driver": "null",
+        "EnableIPv4": true,
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": null,
+            "Config": null
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Options": {},
+        "Labels": {}
+    },
+    {
+        "Name": "host",
+        "Id": "023e7254c8aebd961c9efea7f86853b95218148fcb9f265d18d91f83e67ee795",
+        "Created": "2026-11-22T07:54:57.678652145Z",
+        "Scope": "local",
+        "Driver": "host",
+        "EnableIPv4": true,
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": null,
+            "Config": null
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Options": {},
+        "Labels": {}
+    },
+    {
+        "Name": "bridge",
+        "Id": "01a007963ba00920081d000d44521e07d3687a60d47bd6e7d04da9da27cc8113",
+        "Created": "2026-11-22T07:54:57.685262806Z",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv4": true,
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": null,
+            "Config": [
+                {
+                    "Subnet": "172.18.0.0/16",
+                    "Gateway": "172.18.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Options": {
+            "com.docker.network.bridge.default_bridge": "true",
+            "com.docker.network.bridge.enable_icc": "true",
+            "com.docker.network.bridge.enable_ip_masquerade": "true",
+            "com.docker.network.bridge.host_binding_ipv4": "0.0.0.0",
+            "com.docker.network.bridge.name": "docker0",
+            "com.docker.network.driver.mtu": "1500"
+        },
+        "Labels": {}
+    },
+    {
+        "Name": "fixture-net",
+        "Id": "f969e40741ab5618ca01cd0e5ad76283c7d63fba82fc23b580aba8858d302d54",
+        "Created": "2026-11-22T07:55:18.206498794Z",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv4": true,
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": null,
+            "Config": [
+                {
+                    "Subnet": "10.77.0.0/24",
+                    "IPRange": "10.77.0.128/25",
+                    "Gateway": "10.77.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Options": {
+            "com.docker.network.driver.mtu": "1400"
+        },
+        "Labels": {
+            "team": "infra"
+        }
+    }
+]

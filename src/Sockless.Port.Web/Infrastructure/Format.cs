@@ -1,9 +1,13 @@
 using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Sockless.Port.Web.Infrastructure;
 
 public static class Format
 {
+    private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
+
     private static readonly string[] DecimalUnits = ["B", "kB", "MB", "GB", "TB", "PB"];
     private static readonly string[] BinaryUnits = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
 
@@ -61,4 +65,7 @@ public static class Format
     /// <summary>UTC until the time-zone preference arrives (Phase 9).</summary>
     public static string Timestamp(DateTimeOffset value) =>
         value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture);
+
+    /// <summary>The engine's JSON, indented for the inspect tabs.</summary>
+    public static string? Json(string? json) => json is null ? null : JsonNode.Parse(json)?.ToJsonString(IndentedJson);
 }

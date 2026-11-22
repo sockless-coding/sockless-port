@@ -7,7 +7,7 @@ Sockless Port is a self-hosted container management UI for Docker, Docker Swarm 
 | Path | What |
 |---|---|
 | `src/Sockless.Port.Docker` | Thin Engine API client: transports (unix socket, named pipe, TCP/TLS), version negotiation, models, streams, engine detection. No ASP.NET dependencies; AOT-compatible (the agent will share it) |
-| `src/Sockless.Port.Core` | Options, EF Core model (SQLite), Identity, first-run setup, endpoints (`Engines/`: connections, state, monitor, local detection) |
+| `src/Sockless.Port.Core` | Options, EF Core model (SQLite), Identity, first-run setup, endpoints (`Engines/`: connections, state, monitor, local detection), and per resource: `Containers/`, `Images/`, `Volumes/` (create form, usage, file browser), `Networks/` (create form, usage), `Registries/` |
 | `src/Sockless.Port.Web` | Razor Pages UI, htmx, SignalR hub, Tailwind styles, static assets |
 | `tests/*` | xUnit v3 on Microsoft.Testing.Platform (`dotnet test`) |
 | `build/Tailwind.targets` | Downloads the pinned Tailwind 3 standalone CLI to `.tools/` and builds `wwwroot/css/app.css` |
@@ -36,6 +36,7 @@ SOCKLESS_PORT_TEST_ENGINE=unix:///var/run/docker.sock SOCKLESS_PORT_TEST_EXPECT=
 - Engine differences (Podman vs Docker) are handled inside `Sockless.Port.Docker` (e.g. `Streams/EventNormalizer.cs`), never in pages.
 - New API models go in `Docker/Models` and must be registered in `DockerJsonContext`. Check them against real responses: fixtures in `tests/Sockless.Port.Docker.Tests/Fixtures`, captured only from throwaway engines.
 - Container operations that need care (recreate, create bodies) live in `Core/Containers` and work on raw inspect JSON (`JsonObject`), so settings the UI doesn't model survive. Engine quirks found by the integration tests are handled there too (e.g. no `Hostname` with host networking, no `ShmSize` with host IPC).
+- Helper containers Sockless Port starts for itself (the volume file browser) carry the `sockless-port.helper` label, are started only from a POST, mount what they need read-only with no network, and end by themselves (`sleep`). They never count as a resource's users (`ContainerLabels.IsHelper`), and are released before removing or pruning what they mount.
 - Form posts that call the engine go through `EndpointPageModel.TryEngineAsync`: failures become a flash message, success a confirmation, then post/redirect/get.
 - Live updates: the monitor forwards engine events to `EngineHub`, and `site.js` turns them into the htmx body events `engine-changed` (current endpoint's resources changed), `endpoint-state` (current endpoint's connection changed) and `endpoints-changed` (any endpoint's state). Make a fragment live with `hx-get` + `hx-trigger="engine-changed from:body"`. htmx trigger filters (`[...]`) need eval, which the CSP forbids.
 

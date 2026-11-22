@@ -77,16 +77,6 @@ public sealed partial class DockerClient
         SendAsync(HttpMethod.Post, Path("/containers/create", Query(("name", string.IsNullOrWhiteSpace(name) ? null : name))),
             new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"), Json.ContainerCreateResponse, cancellationToken);
 
-    /// <summary>Connects a container to a network, optionally with endpoint settings (aliases, static IP).</summary>
-    public Task ConnectNetworkAsync(string network, string containerId, JsonObject? endpointConfig = null, CancellationToken cancellationToken = default)
-    {
-        var body = new JsonObject { ["Container"] = containerId };
-        if (endpointConfig is not null)
-            body["EndpointConfig"] = endpointConfig;
-        return SendAsync(HttpMethod.Post, $"/networks/{Escape(network)}/connect",
-            new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"), cancellationToken);
-    }
-
     // ---------------------------------------------------------------- logs and stats
 
     public async IAsyncEnumerable<LogLine> StreamLogsAsync(string id, LogOptions options, [EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -161,12 +151,85 @@ public sealed partial class DockerClient
         }
     }
 
+    /// <summary>
+    /// Runs a command in a running container without a TTY and collects its output (a non-hijacked
+    /// exec: the engine streams multiplexed frames in the response and closes it when the command ends).
+    /// </summary>
+    /// <param name="maxOutputBytes">Stop reading once stdout and stderr together reach this; the result is then <see cref="ExecResult.Truncated"/>.</param>
+    public async Task<ExecResult> RunExecAsync(string containerId, IReadOnlyList<string> command, int maxOutputBytes = 4 * 1024 * 1024,
+        TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(timeout ?? _requestTimeout);
+        var execId = await CreateExecAsync(containerId, new ExecCreateRequest { Cmd = command, AttachStdin = false, Tty = false }, cts.Token);
+
+        // Fixed-length body: see StartExecAsync.
+        var start = new StringContent(
+            System.Text.Json.JsonSerializer.Serialize(new ExecStartRequest { Detach = false, Tty = false }, Json.ExecStartRequest),
+            Encoding.UTF8, "application/json");
+        var stdout = new MemoryStream();
+        var stderr = new MemoryStream();
+        var truncated = false;
+        using (var response = await SendCoreAsync(HttpMethod.Post, $"/exec/{Escape(execId)}/start", start, cts.Token, HttpCompletionOption.ResponseHeadersRead))
+        await using (var stream = await response.Content.ReadAsStreamAsync(cts.Token))
+        {
+            await foreach (var frame in MultiplexedStream.ReadFramesAsync(stream, cts.Token))
+            {
+                var target = frame.Kind == StreamKind.Stderr ? stderr : stdout;
+                var room = maxOutputBytes - (int)(stdout.Length + stderr.Length);
+                target.Write(frame.Payload.Span[..Math.Min(room, frame.Payload.Length)]);
+                if (frame.Payload.Length > room)
+                {
+                    truncated = true;
+                    break;
+                }
+            }
+        }
+
+        // The stream ends when the process does, but the engine records the exit code a moment later.
+        int? exitCode = null;
+        for (var attempt = 0; attempt < 20 && !truncated; attempt++)
+        {
+            var inspect = await InspectExecAsync(execId, cts.Token);
+            if (!inspect.Running && inspect.ExitCode is { } code)
+            {
+                exitCode = code;
+                break;
+            }
+            await Task.Delay(25, cts.Token);
+        }
+        return new ExecResult(Encoding.UTF8.GetString(stdout.GetBuffer(), 0, (int)stdout.Length),
+            Encoding.UTF8.GetString(stderr.GetBuffer(), 0, (int)stderr.Length), exitCode, truncated);
+    }
+
     public Task ResizeExecAsync(string execId, int rows, int columns, CancellationToken cancellationToken = default) =>
         SendAsync(HttpMethod.Post, Path($"/exec/{Escape(execId)}/resize",
             Query(("h", rows.ToString(CultureInfo.InvariantCulture)), ("w", columns.ToString(CultureInfo.InvariantCulture)))), content: null, cancellationToken);
 
     public Task<ExecInspect> InspectExecAsync(string execId, CancellationToken cancellationToken = default) =>
         GetAsync($"/exec/{Escape(execId)}/json", Json.ExecInspect, cancellationToken);
+
+    // ---------------------------------------------------------------- files
+
+    /// <summary>
+    /// A file or directory from a container's filesystem (running or not) as an uncompressed tar
+    /// stream. Dispose it to release the connection. For a symbolic link Docker sends the link,
+    /// Podman the file it points to.
+    /// </summary>
+    public async Task<Stream> GetArchiveAsync(string containerId, string path, CancellationToken cancellationToken = default)
+    {
+        var response = await SendCoreAsync(HttpMethod.Get, Path($"/containers/{Escape(containerId)}/archive", Query(("path", path))), content: null,
+            cancellationToken, HttpCompletionOption.ResponseHeadersRead);
+        try
+        {
+            return new ResponseStream(await response.Content.ReadAsStreamAsync(cancellationToken), response);
+        }
+        catch
+        {
+            response.Dispose();
+            throw;
+        }
+    }
 
     // ---------------------------------------------------------------- helpers
 

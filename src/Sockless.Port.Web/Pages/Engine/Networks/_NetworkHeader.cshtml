@@ -1,0 +1,77 @@
+@* Name, badges and actions of a network, and its tabs. Model: any network page. *@
+@model Sockless.Port.Web.Infrastructure.NetworkPageModel
+@using Sockless.Port.Web.Pages.Engine.Networks
+@{
+    var current = ViewContext.RouteData.Values["page"] as string;
+    var tab = DetailModel.Tabs.FirstOrDefault(t => t.Page == current).Tab;
+    var network = Model.Network;
+    var name = Model.DisplayName;
+    var stack = Sockless.Port.Containers.ContainerLabels.Stack(network?.Labels);
+}
+
+<nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+    <a asp-page="/Engine/Networks/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Networks</a>
+    <span class="text-line-accent" aria-hidden="true">/</span>
+    <span aria-current="page">@name</span>
+</nav>
+
+<div class="mb-4 flex flex-wrap items-start justify-between gap-4">
+    <div class="min-w-0">
+        <h2 class="page-title break-all">@name</h2>
+        @if (network is not null)
+        {
+            <div class="mt-2 flex flex-wrap items-center gap-1">
+                @if (network.IsPredefined)
+                {
+                    <span class="badge-stat" title="Created by the engine; can't be removed">Built in</span>
+                }
+                <span class="badge-stat" title="Driver">@(network.Driver ?? "unknown driver")</span>
+                @if (network.Scope == "swarm")
+                {
+                    <span class="badge-stat" title="Spans every node of the swarm">Swarm</span>
+                }
+                @if (network.Internal)
+                {
+                    <span class="badge-stat" title="No route out of the network">Internal</span>
+                }
+                @if (stack is not null)
+                {
+                    <span class="badge-stat" title="Stack">@stack</span>
+                }
+                <span class="badge-stat">@(Model.Attached.Count == 0 ? "No containers" : $"{Model.Attached.Count} {(Model.Attached.Count == 1 ? "container" : "containers")}")</span>
+            </div>
+        }
+    </div>
+
+    @if (network is not null && !network.IsPredefined)
+    {
+        <form method="post" asp-page="/Engine/Networks/Detail" asp-page-handler="Remove"
+              asp-route-endpointId="@Model.EndpointId" asp-route-networkId="@Model.NetworkId">
+            <input type="hidden" name="tab" value="@tab" />
+            <button type="submit" class="btn-soft danger"
+                    data-confirm="Remove network @name?@(Model.Attached.Count > 0 ? " Containers are attached; disconnect them first, or the engine will refuse." : "")">
+                <icon name="trash" class="h-4 w-4" /> Remove network
+            </button>
+        </form>
+    }
+</div>
+
+<nav aria-label="Network" class="tabs mb-6">
+    @foreach (var (key, tabPage, label) in DetailModel.Tabs)
+    {
+        <a asp-page="@tabPage" asp-route-endpointId="@Model.EndpointId" asp-route-networkId="@Model.NetworkId"
+           class="tab" aria-current="@(key == tab ? "page" : null)">@label</a>
+    }
+</nav>
+
+@if (Model.Error is not null)
+{
+    <div class="callout danger mb-4" role="alert">
+        <icon name="exclamation-triangle" class="h-5 w-5" />
+        <p>@Model.Error</p>
+    </div>
+}
+else if (Model.Client is null)
+{
+    <div class="mb-4"><partial name="_EndpointStateCallout" model="Model.Connection" /></div>
+}

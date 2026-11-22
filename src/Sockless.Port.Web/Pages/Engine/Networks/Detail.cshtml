@@ -1,0 +1,10 @@
+@page "/endpoints/{endpointId:int}/networks/{networkId}"
+@model Sockless.Port.Web.Pages.Engine.Networks.DetailModel
+@{
+    ViewData["Title"] = Model.DisplayName;
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <partial name="_NetworkHeader" model="Model" />
+    <partial name="_NetworkOverview" model="Model" />
+</div>

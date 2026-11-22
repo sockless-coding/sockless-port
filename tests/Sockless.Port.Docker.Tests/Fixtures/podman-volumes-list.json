@@ -1,0 +1,34 @@
+{
+    "Volumes": [
+        {
+            "CreatedAt": "2026-11-22T07:55:20Z",
+            "Driver": "local",
+            "Labels": {
+                "team": "infra"
+            },
+            "Mountpoint": "/var/lib/containers/storage/volumes/fixture-data/_data",
+            "Name": "fixture-data",
+            "Options": {},
+            "Scope": "local"
+        },
+        {
+            "CreatedAt": "2026-11-22T07:55:20Z",
+            "Driver": "local",
+            "Labels": {},
+            "Mountpoint": "/var/lib/containers/storage/volumes/fixture-unused/_data",
+            "Name": "fixture-unused",
+            "Options": {},
+            "Scope": "local"
+        },
+        {
+            "CreatedAt": "2026-11-22T07:55:20Z",
+            "Driver": "local",
+            "Labels": {},
+            "Mountpoint": "/var/lib/containers/storage/volumes/6da4e6ab7ef890ac02aeeff652aac87c43c56b246c510c69ffe752b6450e9b1f/_data",
+            "Name": "6da4e6ab7ef890ac02aeeff652aac87c43c56b246c510c69ffe752b6450e9b1f",
+            "Options": {},
+            "Scope": "local"
+        }
+    ],
+    "Warnings": []
+}

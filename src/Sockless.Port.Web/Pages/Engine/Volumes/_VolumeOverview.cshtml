@@ -1,0 +1,107 @@
+@model Sockless.Port.Web.Pages.Engine.Volumes.DetailModel
+@{
+    var volume = Model.Volume;
+}
+<div id="volume-overview" hx-get="@Url.Page("/Engine/Volumes/Detail", "Overview", new { endpointId = Model.EndpointId, volumeName = Model.VolumeName })"
+     hx-trigger="engine-changed from:body, endpoint-state from:body" hx-swap="outerHTML">
+    @if (volume is not null)
+    {
+        var created = Format.EngineTime(volume.CreatedAt);
+        var scope = volume.Scope switch { "local" => "This engine", "global" => "Cluster-wide", { } other => other, null => "—" };
+        <div class="grid grid-cols-1 gap-6">
+            <section class="card" aria-labelledby="summary-title">
+                <h3 id="summary-title" class="section-title">Summary</h3>
+                <dl class="details">
+                    <dt>Name</dt>
+                    <dd class="break-all font-mono text-xs">@volume.Name</dd>
+                    <dt>Driver</dt>
+                    <dd class="font-mono">@(volume.Driver ?? "—")</dd>
+                    <dt>Scope</dt>
+                    <dd>@scope</dd>
+                    <dt>Created</dt>
+                    <dd>@(created is { } cr ? $"{Format.Relative(cr)} ({Format.Timestamp(cr)})" : "—")</dd>
+                    <dt>Size</dt>
+                    <dd>
+                        <span id="volume-size" hx-get="@Url.Page("/Engine/Volumes/Detail", "Size", new { endpointId = Model.EndpointId, volumeName = Model.VolumeName })"
+                              hx-trigger="load" hx-swap="outerHTML">
+                            <span class="text-secondary">Measuring…</span>
+                        </span>
+                    </dd>
+                    <dt>Host path</dt>
+                    <dd>
+                        <span class="block break-all font-mono text-xs">@(volume.Mountpoint is { Length: > 0 } mount ? mount : "—")</span>
+                        <span class="block text-xs text-secondary">On the engine's host, not inside Sockless Port. Use Files to look inside.</span>
+                    </dd>
+                </dl>
+            </section>
+
+            <section class="card" aria-labelledby="usedby-title">
+                <h3 id="usedby-title" class="section-title">Used by</h3>
+                @if (Model.UsedBy.Count == 0)
+                {
+                    <p class="text-secondary">No container mounts this volume.</p>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="table">
+                            <caption class="sr-only">Containers mounting the volume</caption>
+                            <thead><tr><th scope="col">Container</th><th scope="col">State</th><th scope="col">Mounted at</th><th scope="col">Access</th></tr></thead>
+                            <tbody>
+                                @foreach (var use in Model.UsedBy)
+                                {
+                                    var (badge, _) = ContainerStatus.FromSummary(use.Container);
+                                    <tr>
+                                        <th scope="row">
+                                            <a asp-page="/Engine/Containers/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-containerId="@use.Container.Id"
+                                               class="font-mono hover:underline">@use.Container.DisplayName</a>
+                                        </th>
+                                        <td><partial name="_StatusBadge" model="badge" /></td>
+                                        <td class="break-all font-mono text-xs">@(use.Destination ?? "—")</td>
+                                        <td>@(use.ReadWrite ? "Read-write" : "Read-only")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+
+            <section class="card" aria-labelledby="options-title">
+                <h3 id="options-title" class="section-title">Driver options</h3>
+                @if (volume.Options is { Count: > 0 } options)
+                {
+                    <dl class="details">
+                        @foreach (var (key, value) in options.OrderBy(o => o.Key, StringComparer.Ordinal))
+                        {
+                            <dt class="break-all font-mono text-xs">@key</dt>
+                            <dd class="break-all font-mono text-xs">@value</dd>
+                        }
+                    </dl>
+                }
+                else
+                {
+                    <p class="text-secondary">None: a plain volume of its driver.</p>
+                }
+            </section>
+
+            <section class="card" aria-labelledby="labels-title">
+                <h3 id="labels-title" class="section-title">Labels</h3>
+                @if (volume.Labels is { Count: > 0 } labels)
+                {
+                    <dl class="details">
+                        @foreach (var (key, value) in labels.OrderBy(l => l.Key, StringComparer.Ordinal))
+                        {
+                            <dt class="break-all font-mono text-xs">@key</dt>
+                            <dd class="break-all font-mono text-xs">@(value.Length > 0 ? value : "—")</dd>
+                        }
+                    </dl>
+                }
+                else
+                {
+                    <p class="text-secondary">None.</p>
+                }
+            </section>
+        </div>
+    }
+</div>

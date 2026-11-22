@@ -14,6 +14,7 @@ using Sockless.Port.Data;
 using Sockless.Port.Images;
 using Sockless.Port.Registries;
 using Sockless.Port.Setup;
+using Sockless.Port.Volumes;
 
 namespace Sockless.Port;
 
@@ -67,6 +68,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<RegistryCredentials>();
         services.AddSingleton<ImageJobs>();
         services.AddSingleton<ImageUpdates>();
+        services.AddSingleton<VolumeBrowser>();
         return services;
     }
 

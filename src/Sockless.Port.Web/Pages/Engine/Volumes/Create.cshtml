@@ -1,0 +1,83 @@
+@page "/endpoints/{endpointId:int}/volumes/create"
+@model Sockless.Port.Web.Pages.Engine.Volumes.CreateModel
+@{
+    ViewData["Title"] = "Create volume";
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+        <a asp-page="/Engine/Volumes/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Volumes</a>
+        <span class="text-line-accent" aria-hidden="true">/</span>
+        <span aria-current="page">Create</span>
+    </nav>
+    <div class="mb-6">
+        <h2 class="page-title">Create volume</h2>
+        <p class="mt-1 text-secondary">A named volume on @Model.Connection.Name. Containers mount it by name, and it outlives them.</p>
+    </div>
+
+    @if (Model.Client is null)
+    {
+        <partial name="_EndpointStateCallout" model="Model.Connection" />
+    }
+    else
+    {
+        @if (Model.Error is not null)
+        {
+            <div class="callout danger mb-4" role="alert">
+                <icon name="exclamation-triangle" class="h-5 w-5" />
+                <p>@Model.Error</p>
+            </div>
+        }
+
+        <form method="post" class="space-y-6" novalidate>
+            <section class="card space-y-4" aria-labelledby="volume-basics">
+                <h3 id="volume-basics" class="section-title">Volume</h3>
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div class="field">
+                        <label asp-for="Input.Name">Name</label>
+                        <input asp-for="Input.Name" class="font-mono" placeholder="Generated if empty" autocomplete="off" spellcheck="false" />
+                        <partial name="_FieldError" model='"Input_Name"' />
+                    </div>
+                    <div class="field">
+                        <label asp-for="Input.Driver">Driver</label>
+                        <input asp-for="Input.Driver" class="font-mono" list="volume-drivers" autocomplete="off" spellcheck="false" aria-describedby="driver-hint" />
+                        <datalist id="volume-drivers">
+                            @foreach (var driver in Model.Drivers)
+                            {
+                                <option value="@driver"></option>
+                            }
+                        </datalist>
+                        <p class="hint" id="driver-hint">This engine has: @string.Join(", ", Model.Drivers). Plugin drivers must be installed on the engine first.</p>
+                        <partial name="_FieldError" model='"Input_Driver"' />
+                    </div>
+                </div>
+            </section>
+
+            <section class="card space-y-4" aria-labelledby="volume-options">
+                <h3 id="volume-options" class="section-title">Options and labels</h3>
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div class="field">
+                        <label asp-for="Input.Options">Driver options</label>
+                        <textarea asp-for="Input.Options" class="font-mono" rows="4" spellcheck="false" aria-describedby="options-hint"
+                                  placeholder="type=nfs&#10;o=addr=10.0.0.5,rw,nfsvers=4&#10;device=:/export/data"></textarea>
+                        <p class="hint" id="options-hint">
+                            One <span class="font-mono">key=value</span> per line. Empty for a plain local volume. The local driver mounts
+                            NFS or CIFS shares with <span class="font-mono">type</span>, <span class="font-mono">o</span> and <span class="font-mono">device</span>,
+                            as <span class="font-mono">mount</span> would.
+                        </p>
+                        <partial name="_FieldError" model='"Input_Options"' />
+                    </div>
+                    <div class="field">
+                        <label asp-for="Input.Labels">Labels</label>
+                        <textarea asp-for="Input.Labels" class="font-mono" rows="4" placeholder="team=infra" spellcheck="false"></textarea>
+                        <partial name="_FieldError" model='"Input_Labels"' />
+                    </div>
+                </div>
+            </section>
+
+            <div class="flex justify-end">
+                <button type="submit" class="btn-primary">Create volume</button>
+            </div>
+        </form>
+    }
+</div>

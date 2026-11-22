@@ -18,6 +18,13 @@ public sealed class PortOptions
     /// </summary>
     public string? LocalEngine { get; set; }
 
+    /// <summary>
+    /// Image for the short-lived helper containers that read a volume's files. It needs
+    /// <c>find</c> and <c>stat</c> (busybox has both). Pulled when missing, so set one the engine
+    /// already has on hosts without internet access.
+    /// </summary>
+    public string HelperImage { get; set; } = "busybox:1.37";
+
     public string DatabasePath => Path.Combine(DataPath, "port.db");
 
     public string KeysPath => Path.Combine(DataPath, "keys");

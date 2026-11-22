@@ -49,7 +49,17 @@ public sealed record SystemInfo
     public string? CgroupVersion { get; init; }
     public string? CgroupDriver { get; init; }
     public SwarmInfo? Swarm { get; init; }
+    public PluginsInfo? Plugins { get; init; }
     public IReadOnlyList<string>? Warnings { get; init; }
+}
+
+/// <summary>The drivers the engine has, built in or from plugins.</summary>
+public sealed record PluginsInfo
+{
+    public IReadOnlyList<string>? Volume { get; init; }
+
+    /// <summary>E.g. <c>bridge</c>, <c>host</c>, <c>macvlan</c>, <c>overlay</c>.</summary>
+    public IReadOnlyList<string>? Network { get; init; }
 }
 
 public sealed record SwarmInfo

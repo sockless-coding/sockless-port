@@ -1,0 +1,77 @@
+@page "/endpoints/{endpointId:int}/volumes"
+@model Sockless.Port.Web.Pages.Engine.Volumes.IndexModel
+@{
+    ViewData["Title"] = "Volumes";
+    var tableUrl = Url.Page("/Engine/Volumes/Index", "Table", new { endpointId = Model.EndpointId });
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <h2 class="page-title">Volumes</h2>
+            <p class="mt-1 text-secondary">Volumes on @Model.Connection.Name and the containers that mount them.</p>
+        </div>
+        @if (Model.Client is not null)
+        {
+            <div class="flex flex-wrap items-center gap-2">
+                <details class="menu" data-menu>
+                    <summary class="btn-soft danger">Prune <icon name="chevron-down" class="h-4 w-4" /></summary>
+                    <div class="menu-panel w-80 space-y-3 p-3">
+                        @if (Model.CanPruneAnonymousOnly)
+                        {
+                            <form method="post" asp-page="/Engine/Volumes/Index" asp-page-handler="Prune" asp-route-endpointId="@Model.EndpointId">
+                                <p class="mb-2 text-xs text-secondary">Anonymous volumes were created for a container's <span class="font-mono">VOLUME</span> or a bare <span class="font-mono">-v /path</span>. @(Model.UnusedAnonymous == 1 ? "1 is unused." : $"{Model.UnusedAnonymous} are unused.")</p>
+                                <button type="submit" class="btn-soft danger" data-confirm="Remove every unused anonymous volume on @Model.Connection.Name? Their data is deleted.">
+                                    <icon name="trash" class="h-4 w-4" /> Remove unused anonymous volumes
+                                </button>
+                            </form>
+                        }
+                        <form method="post" asp-page="/Engine/Volumes/Index" asp-page-handler="Prune" asp-route-endpointId="@Model.EndpointId">
+                            <input type="hidden" name="all" value="true" />
+                            <p class="mb-2 text-xs text-secondary">Named volumes too. Stopped containers count as using their volumes. @(Model.Unused == 1 ? "1 volume is unused." : $"{Model.Unused} volumes are unused.")</p>
+                            <button type="submit" class="btn-soft danger"
+                                    data-confirm="Remove every volume on @Model.Connection.Name that no container uses, named ones included? Their data is deleted and can't be recovered.">
+                                <icon name="trash" class="h-4 w-4" /> Remove all unused volumes
+                            </button>
+                        </form>
+                    </div>
+                </details>
+                <a asp-page="/Engine/Volumes/Create" asp-route-endpointId="@Model.EndpointId" class="btn-soft secondary">
+                    <icon name="plus" class="h-4 w-4" /> Create volume
+                </a>
+            </div>
+        }
+    </div>
+
+    @if (Model.Client is null)
+    {
+        <partial name="_EndpointStateCallout" model="Model.Connection" />
+    }
+    else
+    {
+        <form method="get" role="search" aria-label="Filter volumes" class="mb-4 flex flex-wrap items-end gap-3"
+              hx-get="@tableUrl" hx-target="#volume-table" hx-swap="outerHTML"
+              hx-trigger="change, input changed delay:300ms from:find input[type=search], submit">
+            <div class="field min-w-[14rem] flex-1">
+                <label for="filter-q">Search</label>
+                <input id="filter-q" type="search" name="q" value="@Model.Q" placeholder="Volume, driver, stack or container" autocomplete="off" />
+            </div>
+            <div class="field">
+                <label for="filter-usage">Show</label>
+                <select id="filter-usage" name="usage">
+                    @foreach (var (value, label) in IndexModel.Usages)
+                    {
+                        <option value="@value" selected="@(value == (Model.Usage ?? ""))">@label</option>
+                    }
+                </select>
+            </div>
+            <label class="mb-2 flex items-center gap-2 text-secondary">
+                <input type="checkbox" name="sizes" value="true" checked="@Model.Sizes" class="accent-accent" aria-describedby="sizes-hint" /> Show sizes
+            </label>
+            <noscript><button type="submit" class="btn-soft">Filter</button></noscript>
+        </form>
+        <p id="sizes-hint" class="-mt-2 mb-4 text-xs text-secondary">Sizes make the engine measure every volume, which can take a while on large ones.</p>
+
+        <partial name="_VolumeTable" model="Model" />
+    }
+</div>
