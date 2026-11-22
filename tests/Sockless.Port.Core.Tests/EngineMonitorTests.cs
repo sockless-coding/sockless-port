@@ -26,7 +26,7 @@ public sealed class EngineMonitorTests
     {
         var connections = new EngineConnections();
         var address = new UnixSocketAddress("/nonexistent/sockless-port-monitor.sock");
-        connections.Add(new EngineConnection(1, "local", address, isLocal: true));
+        connections.Add(new EngineConnection(1, "local", address, EndpointKind.Local));
         var sink = new RecordingSink();
         using var monitor = new EngineMonitor(connections, sink, TimeProvider.System, NullLogger<EngineMonitor>.Instance);
 
@@ -50,7 +50,7 @@ public sealed class EngineMonitorTests
         using var monitor = new EngineMonitor(connections, sink, TimeProvider.System, NullLogger<EngineMonitor>.Instance);
         await monitor.StartAsync(TestContext.Current.CancellationToken);
 
-        connections.Add(new EngineConnection(7, "later", new UnixSocketAddress("/nonexistent/later.sock"), isLocal: false));
+        connections.Add(new EngineConnection(7, "later", new UnixSocketAddress("/nonexistent/later.sock"), EndpointKind.Local));
         var deadline = DateTime.UtcNow.AddSeconds(15);
         while (sink.States.IsEmpty && DateTime.UtcNow < deadline)
             await Task.Delay(50, TestContext.Current.CancellationToken);

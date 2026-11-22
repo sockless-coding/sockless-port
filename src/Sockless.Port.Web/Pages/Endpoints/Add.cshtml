@@ -1,0 +1,42 @@
+@page "/endpoints/add"
+@model Sockless.Port.Web.Pages.Endpoints.AddModel
+@{
+    ViewData["Title"] = "Add agent";
+}
+
+<nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+    <a asp-page="/Endpoints/Index" class="hover:underline">Endpoints</a>
+    <span class="text-line-accent" aria-hidden="true">/</span>
+    <span aria-current="page">Add agent</span>
+</nav>
+
+<div class="mb-6">
+    <h2 class="page-title">Add agent</h2>
+    <p class="mt-1 max-w-3xl text-secondary">
+        The agent runs as a container on the other host and passes the engine's API to Sockless Port over mutual TLS.
+        Sockless Port connects to it, so the agent's port must be reachable from here; the agent never connects back.
+    </p>
+</div>
+
+<section class="card max-w-3xl" aria-labelledby="add-title">
+    <h3 id="add-title" class="section-title">Endpoint</h3>
+    <form method="post" class="space-y-4" novalidate>
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div class="field">
+                <label asp-for="Name">Name</label>
+                <input asp-for="Name" maxlength="64" placeholder="web-1" autocomplete="off" spellcheck="false" />
+                <partial name="_FieldError" model='"Name"' />
+            </div>
+            <div class="field">
+                <label asp-for="Address">Agent address</label>
+                <input asp-for="Address" class="font-mono" placeholder="web-1.example.com" autocomplete="off" spellcheck="false" aria-describedby="address-hint" />
+                <p class="hint" id="address-hint">The host's name or IP address as Sockless Port reaches it, with <span class="font-mono">:port</span> if it isn't 9001. The agent's certificate is issued for this name.</p>
+                <partial name="_FieldError" model='"Address"' />
+            </div>
+        </div>
+        <div class="flex justify-end gap-2">
+            <a asp-page="/Endpoints/Index" class="btn-soft">Cancel</a>
+            <button type="submit" class="btn-primary">Create install command</button>
+        </div>
+    </form>
+</section>

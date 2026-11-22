@@ -1,0 +1,54 @@
+# syntax=docker/dockerfile:1
+# Sockless Port agent image: a Native AOT binary in a chiselled image (no shell, no package
+# manager). Build from the repository root:
+#   docker build -f docker/Dockerfile.agent -t sockless-port-agent .
+
+ARG DOTNET_VERSION=11.0
+
+# ---- build: Native AOT compiles for the platform it runs on (emulated in multi-arch builds) ----
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
+ARG VERSION=0.1.0-dev
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends clang zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+
+COPY global.json Directory.Build.props Directory.Packages.props ./
+COPY src/Sockless.Port.Docker/Sockless.Port.Docker.csproj src/Sockless.Port.Docker/
+COPY src/Sockless.Port.Agent/Sockless.Port.Agent.csproj src/Sockless.Port.Agent/
+RUN dotnet restore src/Sockless.Port.Agent/Sockless.Port.Agent.csproj
+
+COPY src/Sockless.Port.Docker/ src/Sockless.Port.Docker/
+COPY src/Sockless.Port.Agent/ src/Sockless.Port.Agent/
+RUN dotnet publish src/Sockless.Port.Agent/Sockless.Port.Agent.csproj \
+      --no-restore -c Release -o /app -p:Version=$VERSION \
+    && rm -f /app/*.dbg /app/*.pdb \
+    && mkdir -p /data-template
+
+# ---- runtime ----
+FROM mcr.microsoft.com/dotnet/runtime-deps:${DOTNET_VERSION}-resolute-chiseled AS runtime
+LABEL org.opencontainers.image.title="Sockless Port agent" \
+      org.opencontainers.image.description="Relays a Docker or Podman engine to Sockless Port over mutual TLS" \
+      org.opencontainers.image.source="https://github.com/sockless-coding/sockless-port" \
+      org.opencontainers.image.licenses="MIT"
+
+# The key and certificates from enrolment. A named volume copies this folder's owner (the
+# image's non-root "app" user, UID 1654) on first use. Socket access comes from the socket's
+# group at run time (--group-add), as for the server.
+COPY --from=build --chown=1654:1654 /data-template /data
+VOLUME /data
+
+# The base image sets ASPNETCORE_HTTP_PORTS=8080; the agent listens only where AGENT_PORT says.
+ENV ASPNETCORE_HTTP_PORTS="" \
+    AGENT_DATA=/data \
+    AGENT_PORT=9001
+
+WORKDIR /app
+COPY --from=build /app/sockless-port-agent /app/sockless-port-agent
+USER 1654
+EXPOSE 9001
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD ["/app/sockless-port-agent", "healthcheck"]
+
+ENTRYPOINT ["/app/sockless-port-agent"]

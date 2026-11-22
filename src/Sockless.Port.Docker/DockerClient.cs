@@ -29,12 +29,15 @@ public sealed partial class DockerClient : IDisposable
     private static readonly DockerJsonContext Json = DockerJsonContext.Default;
 
     private readonly HttpClient _http;
+    private readonly Func<HttpMessageHandler>? _hijackHandler;
     private readonly TimeSpan _requestTimeout;
     private readonly string _prefix;
 
-    private DockerClient(HttpClient http, DockerAddress address, Version apiVersion, VersionResponse version, TimeSpan requestTimeout)
+    private DockerClient(HttpClient http, DockerAddress address, Version apiVersion, VersionResponse version, TimeSpan requestTimeout,
+        Func<HttpMessageHandler>? hijackHandler)
     {
         _http = http;
+        _hijackHandler = hijackHandler;
         _requestTimeout = requestTimeout;
         Address = address;
         ApiVersion = apiVersion;
@@ -54,12 +57,13 @@ public sealed partial class DockerClient : IDisposable
     public static Task<DockerClient> ConnectAsync(DockerAddress address, DockerClientOptions? options = null, CancellationToken cancellationToken = default)
     {
         var (handler, baseAddress) = DockerTransport.Create(address);
-        return ConnectAsync(handler, baseAddress, address, options, cancellationToken);
+        return ConnectAsync(handler, baseAddress, address, options, cancellationToken, () => DockerTransport.Create(address).Handler);
     }
 
     /// <summary>Connects over a caller-supplied handler. Used by tests and, later, the agent tunnel.</summary>
     internal static async Task<DockerClient> ConnectAsync(
-        HttpMessageHandler handler, Uri baseAddress, DockerAddress address, DockerClientOptions? options, CancellationToken cancellationToken)
+        HttpMessageHandler handler, Uri baseAddress, DockerAddress address, DockerClientOptions? options, CancellationToken cancellationToken,
+        Func<HttpMessageHandler>? hijackHandler = null)
     {
         options ??= new DockerClientOptions();
         var http = new HttpClient(handler, disposeHandler: true)
@@ -80,7 +84,7 @@ public sealed partial class DockerClient : IDisposable
             var version = await response.Content.ReadFromJsonAsync(Json.VersionResponse, timeout.Token)
                           ?? throw new InvalidDataException("The engine returned an empty /version response.");
 
-            return new DockerClient(http, address, Negotiate(version), version, options.RequestTimeout);
+            return new DockerClient(http, address, Negotiate(version), version, options.RequestTimeout, hijackHandler);
         }
         catch
         {
@@ -125,6 +129,17 @@ public sealed partial class DockerClient : IDisposable
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         await foreach (var item in JsonLines.ReadAsync(stream, Json.DockerEvent, cancellationToken))
             yield return EventNormalizer.Normalize(item);
+    }
+
+    /// <summary>What a Sockless Port agent reports about itself. Fails on a plain engine, which has no such path.</summary>
+    public async Task<Agent.AgentInfo> GetAgentInfoAsync(CancellationToken cancellationToken = default)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(_requestTimeout);
+        using var response = await _http.GetAsync(Agent.AgentProtocol.InfoPath, cts.Token);
+        await EnsureSuccessAsync(response, Agent.AgentProtocol.InfoPath, cts.Token);
+        return await response.Content.ReadFromJsonAsync(Agent.AgentJsonContext.Default.AgentInfo, cts.Token)
+               ?? throw new InvalidDataException("The agent returned an empty info response.");
     }
 
     // ---------------------------------------------------------------- resources

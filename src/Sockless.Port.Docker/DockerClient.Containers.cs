@@ -128,7 +128,24 @@ public sealed partial class DockerClient
         request.Headers.Connection.Add("Upgrade");
         request.Headers.Upgrade.Add(new ProductHeaderValue("tcp"));
 
-        var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        // A connection of its own: once hijacked it belongs to the exec, and an agent can only
+        // relay a hijack that starts its connection (see the agent's HijackMiddleware).
+        HttpClient? own = null;
+        if (_hijackHandler is not null)
+        {
+            own = new HttpClient(_hijackHandler(), disposeHandler: true) { BaseAddress = _http.BaseAddress, Timeout = Timeout.InfiniteTimeSpan };
+            own.DefaultRequestHeaders.UserAgent.ParseAdd("sockless-port");
+        }
+        HttpResponseMessage response;
+        try
+        {
+            response = await (own ?? _http).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        }
+        catch
+        {
+            own?.Dispose();
+            throw;
+        }
         try
         {
             // 101 isn't a 2xx, so check it before error handling: reading an "error body" from a
@@ -142,11 +159,12 @@ public sealed partial class DockerClient
             var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             if (!stream.CanWrite)
                 throw new NotSupportedException("The engine's exec connection is read-only, so input can't be sent.");
-            return new ExecSession(execId, response, stream);
+            return new ExecSession(execId, response, stream, own);
         }
         catch
         {
             response.Dispose();
+            own?.Dispose();
             throw;
         }
     }

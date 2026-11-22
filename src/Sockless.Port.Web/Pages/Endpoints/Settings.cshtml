@@ -1,0 +1,72 @@
+@page "/endpoints/{endpointId:int}/settings"
+@model Sockless.Port.Web.Pages.Endpoints.SettingsModel
+@{
+    ViewData["Title"] = $"{Model.Connection.Name} settings";
+    var connection = Model.Connection;
+}
+
+<nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+    <a asp-page="/Endpoints/Index" class="hover:underline">Endpoints</a>
+    <span class="text-line-accent" aria-hidden="true">/</span>
+    <span aria-current="page">@connection.Name</span>
+</nav>
+
+<div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div>
+        <h2 class="page-title break-all">@connection.Name</h2>
+        <p class="mt-1 font-mono text-xs text-secondary">@connection.Address</p>
+    </div>
+    <a asp-page="/Engine/Index" asp-route-endpointId="@connection.Id" class="btn-soft"><icon name="home" class="h-4 w-4" /> Dashboard</a>
+</div>
+
+<partial name="_EndpointLive" model="Model" />
+
+<section class="card mt-6" aria-labelledby="name-title">
+    <h3 id="name-title" class="section-title">Name</h3>
+    <form method="post" asp-page-handler="Rename" asp-route-endpointId="@connection.Id" class="flex flex-wrap items-start gap-3" novalidate>
+        <div class="field min-w-[16rem] flex-1">
+            <label asp-for="Name" class="sr-only">Name</label>
+            <input asp-for="Name" maxlength="64" autocomplete="off" spellcheck="false" />
+            <partial name="_FieldError" model='"Name"' />
+        </div>
+        <button type="submit" class="btn-soft secondary">Rename</button>
+    </form>
+</section>
+
+@if (connection.IsAgent)
+{
+    <section class="card mt-6" aria-labelledby="reenrol-title">
+        <h3 id="reenrol-title" class="section-title">Enrol again</h3>
+        <p class="mb-4 max-w-3xl text-secondary">
+            For an agent that lost its data volume, moved to another address, or should no longer be trusted.
+            The current certificate stops working at once; the endpoint is back when an agent is started with the new command.
+        </p>
+        <form method="post" asp-page-handler="Reenrol" asp-route-endpointId="@connection.Id" asp-route-variant="@Model.Variant" class="flex flex-wrap items-start gap-3" novalidate>
+            <div class="field min-w-[16rem] flex-1">
+                <label asp-for="Address">Agent address</label>
+                <input asp-for="Address" value="@(Model.Address ?? Model.AddressText)" class="font-mono" autocomplete="off" spellcheck="false" />
+                <partial name="_FieldError" model='"Address"' />
+            </div>
+            <button type="submit" class="btn-soft danger mt-6"
+                    data-confirm="Enrol @connection.Name again? Its agent's certificate stops working until an agent is started with the new command.">
+                <icon name="arrow-path" class="h-4 w-4" /> New install command
+            </button>
+        </form>
+    </section>
+
+    <section class="card mt-6" aria-labelledby="remove-title">
+        <h3 id="remove-title" class="section-title">Remove</h3>
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <p class="max-w-3xl text-secondary">
+                Removes the endpoint and the stacks saved for it here. Nothing on the host changes: its containers and the agent keep running
+                (<span class="font-mono">docker rm -f sockless-port-agent</span> removes the agent).
+            </p>
+            <form method="post" asp-page-handler="Remove" asp-route-endpointId="@connection.Id">
+                <button type="submit" class="btn-soft danger"
+                        data-confirm="Remove the endpoint @connection.Name? Its saved stacks are deleted from Sockless Port.">
+                    <icon name="trash" class="h-4 w-4" /> Remove endpoint
+                </button>
+            </form>
+        </div>
+    </section>
+}

@@ -6,13 +6,14 @@ Sockless Port is a self-hosted container management UI for Docker, Docker Swarm 
 
 | Path | What |
 |---|---|
-| `src/Sockless.Port.Docker` | Thin Engine API client: transports (unix socket, named pipe, TCP/TLS), version negotiation, models, streams, engine detection. No ASP.NET dependencies; AOT-compatible (the agent will share it) |
-| `src/Sockless.Port.Core` | Options, EF Core model (SQLite), Identity, first-run setup, endpoints (`Engines/`: connections, state, monitor, local detection), and per resource: `Containers/`, `Images/`, `Volumes/` (create form, usage, file browser), `Networks/` (create form, usage), `Registries/`, `Stacks/` (files, Compose CLI runner, validation, jobs, diff, adoption) |
+| `src/Sockless.Port.Docker` | Thin Engine API client: transports (unix socket, named pipe, TCP/TLS), version negotiation, models, streams, engine detection, and the agent's wire protocol (`Agent/AgentProtocol.cs`). No ASP.NET dependencies; AOT-compatible (the agent shares it) |
+| `src/Sockless.Port.Agent` | The remote agent: a Native AOT minimal API that relays the Engine API to its local socket over mutual TLS, plus enrolment and `/agent/info`. No Core or Web dependencies |
+| `src/Sockless.Port.Core` | Options, EF Core model (SQLite), Identity, first-run setup, endpoints (`Engines/`: connections, state, monitor, local detection, `EndpointRegistry`), agents (`Agents/`: internal CA, enrolment, install commands), and per resource: `Containers/`, `Images/`, `Volumes/` (create form, usage, file browser), `Networks/` (create form, usage), `Registries/`, `Stacks/` (files, Compose CLI runner, validation, jobs, diff, adoption) |
 | `src/Sockless.Port.Web` | Razor Pages UI, htmx, SignalR hub, Tailwind styles, static assets |
 | `tests/*` | xUnit v3 on Microsoft.Testing.Platform (`dotnet test`) |
 | `build/Tailwind.targets` | Downloads the pinned Tailwind 3 standalone CLI to `.tools/` and builds `wwwroot/css/app.css` |
 | `build/codemirror/` | Source of the checked-in CodeMirror bundle (`wwwroot/lib/codemirror/`); rebuilt by hand with npm when bumping it |
-| `docker/` | Server `Dockerfile` and `compose.yaml` |
+| `docker/` | Server `Dockerfile`, agent `Dockerfile.agent` and `compose.yaml` |
 
 ## Commands
 
@@ -22,6 +23,7 @@ dotnet test
 dotnet run --project src/Sockless.Port.Web   # http://localhost:5080, data in src/Sockless.Port.Web/data
 dotnet ef migrations add <Name> --project src/Sockless.Port.Core --output-dir Data/Migrations
 docker build -f docker/Dockerfile -t sockless-port .
+docker build -f docker/Dockerfile.agent -t sockless-port-agent .
 
 # Integration tests against a real engine (skipped unless the variables are set):
 SOCKLESS_PORT_TEST_ENGINE=unix:///var/run/docker.sock SOCKLESS_PORT_TEST_EXPECT=docker \

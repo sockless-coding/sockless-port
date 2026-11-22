@@ -14,6 +14,13 @@ public sealed class DockerTls
 
     public string? ClientKeyPem { get; init; }
 
+    /// <summary>
+    /// SHA-256 thumbprint (hex) the engine's certificate must have, on top of chaining to
+    /// <see cref="CaCertificatePem"/> and matching the host name. Agents are pinned this way, so
+    /// only the certificate issued at enrolment is accepted.
+    /// </summary>
+    public string? PinnedCertificateSha256 { get; init; }
+
     public override string ToString() =>
-        $"DockerTls(CustomCa: {CaCertificatePem is not null}, ClientCertificate: {ClientCertificatePem is not null})";
+        $"DockerTls(CustomCa: {CaCertificatePem is not null}, ClientCertificate: {ClientCertificatePem is not null}, Pinned: {PinnedCertificateSha256 is not null})";
 }

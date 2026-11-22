@@ -29,6 +29,13 @@ public sealed class PortDbContext(DbContextOptions<PortDbContext> options) : Ide
             endpoint.HasIndex(e => e.Name).IsUnique();
             endpoint.Property(e => e.Address).HasMaxLength(512);
             endpoint.Property(e => e.CreatedAt).HasConversion(SortableUtc);
+            endpoint.Property(e => e.Kind).HasConversion<string>().HasMaxLength(16);
+            endpoint.Ignore(e => e.IsLocal);
+            endpoint.Property(e => e.AgentThumbprint).HasMaxLength(64);
+            endpoint.Property(e => e.AgentCertificateNotAfter).HasConversion(SortableUtc);
+            endpoint.Property(e => e.EnrolledAt).HasConversion(SortableUtc);
+            endpoint.Property(e => e.EnrolmentTokenId).HasMaxLength(32);
+            endpoint.Property(e => e.EnrolmentExpiresAt).HasConversion(SortableUtc);
         });
 
         builder.Entity<RegistryCredential>(registry =>

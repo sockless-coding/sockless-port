@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Sockless.Port.Docker;
@@ -8,17 +7,20 @@ using Sockless.Port.Docker.Models;
 namespace Sockless.Port.Engines;
 
 /// <summary>
-/// Keeps every endpoint connected: connects, detects the engine, streams its events to the
-/// <see cref="IEngineEventSink"/>, and reconnects with backoff when the engine goes away.
+/// Keeps every endpoint connected: enrols agents that are waiting for it, connects, detects the
+/// engine, streams its events to the <see cref="IEngineEventSink"/>, and reconnects with backoff
+/// when the engine goes away.
 /// </summary>
 public sealed partial class EngineMonitor(
     EngineConnections connections,
     IEngineEventSink sink,
     TimeProvider time,
-    ILogger<EngineMonitor> logger) : BackgroundService
+    ILogger<EngineMonitor> logger,
+    IAgentEnroller? enroller = null) : BackgroundService
 {
     internal static readonly TimeSpan InitialRetryDelay = TimeSpan.FromSeconds(1);
     internal static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(30);
+    internal static readonly TimeSpan MaxEnrolmentRetryDelay = TimeSpan.FromSeconds(10);
     internal static readonly TimeSpan WatchdogInterval = TimeSpan.FromSeconds(30);
 
     /// <summary>Event types forwarded to the UI. Everything else (plugins, daemon reloads) is ignored.</summary>
@@ -27,15 +29,21 @@ public sealed partial class EngineMonitor(
         ["type"] = ["container", "image", "volume", "network", "service", "node", "secret", "config"],
     };
 
-    private readonly ConcurrentDictionary<int, Task> _loops = new();
+    private sealed record Loop(CancellationTokenSource Cancel, Task Task);
+
+    private readonly Lock _loopGate = new();
+    private readonly Dictionary<int, Loop> _loops = [];
     private CancellationToken _stopping;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _stopping = stoppingToken;
-        connections.Added += Watch;
+        connections.Added += Start;
+        connections.Changed += Start;
+        connections.Removed += Stop;
+        connections.Updated += Announce;
         foreach (var connection in connections.All)
-            Watch(connection);
+            Start(connection);
 
         try
         {
@@ -44,54 +52,106 @@ public sealed partial class EngineMonitor(
         catch (OperationCanceledException)
         {
         }
-        await Task.WhenAll(_loops.Values);
+
+        Task[] running;
+        lock (_loopGate)
+            running = [.. _loops.Values.Select(l => l.Task)];
+        await Task.WhenAll(running);
     }
 
     public override Task StopAsync(CancellationToken cancellationToken)
     {
-        connections.Added -= Watch;
+        connections.Added -= Start;
+        connections.Changed -= Start;
+        connections.Removed -= Stop;
+        connections.Updated -= Announce;
         return base.StopAsync(cancellationToken);
     }
 
-    private void Watch(EngineConnection connection) =>
-        _loops.GetOrAdd(connection.Id, _ => Task.Run(() => RunAsync(connection, _stopping), CancellationToken.None));
+    /// <summary>Starts watching, or restarts after the previous loop for the endpoint has ended.</summary>
+    private void Start(EngineConnection connection)
+    {
+        lock (_loopGate)
+        {
+            if (_stopping.IsCancellationRequested)
+                return;
+            var previous = Task.CompletedTask;
+            if (_loops.Remove(connection.Id, out var old))
+            {
+                old.Cancel.Cancel();
+                previous = old.Task;
+            }
+            var cancel = CancellationTokenSource.CreateLinkedTokenSource(_stopping);
+            var task = Task.Run(async () =>
+            {
+                await previous;
+                await RunAsync(connection, cancel.Token);
+            }, CancellationToken.None);
+            _loops[connection.Id] = new Loop(cancel, task);
+        }
+    }
+
+    private void Stop(EngineConnection connection)
+    {
+        lock (_loopGate)
+        {
+            if (_loops.Remove(connection.Id, out var loop))
+                loop.Cancel.Cancel();
+        }
+        // Lists showing the endpoint refresh and leave it out.
+        Announce(connection);
+    }
+
+    private void Announce(EngineConnection connection) => _ = NotifyStateAsync(connection, _stopping);
 
     private async Task RunAsync(EngineConnection connection, CancellationToken stopping)
     {
         var delay = InitialRetryDelay;
+        var enrolDelay = InitialRetryDelay;
         while (!stopping.IsCancellationRequested)
         {
-            if (connection.State is not EndpointConnecting)
-            {
-                connection.SetConnecting(time.GetUtcNow());
-                await NotifyStateAsync(connection, stopping);
-            }
-
-            string reason;
             DockerClient? client = null;
+            string reason;
             try
             {
+                if (connection.IsAgent && !await PrepareAgentAsync(connection, enrolDelay, stopping))
+                {
+                    enrolDelay = TimeSpan.FromTicks(Math.Min(enrolDelay.Ticks * 2, MaxEnrolmentRetryDelay.Ticks));
+                    continue;
+                }
+
+                if (connection.State is not EndpointConnecting)
+                {
+                    connection.SetConnecting(time.GetUtcNow());
+                    await NotifyStateAsync(connection, stopping);
+                }
+
                 client = await DockerClient.ConnectAsync(connection.Address, cancellationToken: stopping);
                 var info = await client.GetInfoAsync(stopping);
                 var engine = EngineDescriptor.Detect(client.ServerVersion, info, client.ApiVersion);
+                if (connection.IsAgent)
+                    await ReadAgentAsync(connection, client, stopping);
 
                 connection.SetOnline(client, engine, time.GetUtcNow());
                 LogOnline(logger, connection.Name, engine.DisplayName, engine.ApiVersion.ToString());
                 await NotifyStateAsync(connection, stopping);
                 delay = InitialRetryDelay;
+                enrolDelay = InitialRetryDelay;
 
                 await StreamEventsAsync(connection, client, stopping);
                 reason = $"The engine at {connection.Address} closed the connection.";
             }
             catch (OperationCanceledException) when (stopping.IsCancellationRequested)
             {
-                connection.SetOffline("Sockless Port is shutting down.", time.GetUtcNow(), DateTimeOffset.MaxValue);
+                // Removed or restarted: the next loop (if any) sets its own state.
+                if (_stopping.IsCancellationRequested)
+                    connection.SetOffline("Sockless Port is shutting down.", time.GetUtcNow(), DateTimeOffset.MaxValue);
                 client?.Dispose();
                 break;
             }
             catch (Exception ex)
             {
-                reason = EngineErrors.Describe(ex, connection.Address);
+                reason = ex is NotAnAgentException ? ex.Message : EngineErrors.Describe(ex, connection.Address);
             }
 
             var now = time.GetUtcNow();
@@ -114,13 +174,88 @@ public sealed partial class EngineMonitor(
     }
 
     /// <summary>
+    /// Enrols the agent if an enrolment is pending. Returns true when there's a certificate to
+    /// connect with; otherwise it has waited <paramref name="retryDelay"/> (or for a new enrolment).
+    /// </summary>
+    private async Task<bool> PrepareAgentAsync(EngineConnection connection, TimeSpan retryDelay, CancellationToken stopping)
+    {
+        var hasCertificate = connection.Agent?.Thumbprint is not null;
+        var now = time.GetUtcNow();
+        string? problem = null;
+
+        if (connection.Enrolment is { } pending)
+        {
+            if (now >= pending.ExpiresAt)
+            {
+                if (hasCertificate)
+                    return true;
+                await WaitForChangeAsync(connection, "The enrolment command expired before the agent was enrolled. Create a new one on the endpoint's page.", stopping);
+                return false;
+            }
+            if (enroller is null)
+                throw new InvalidOperationException("Agent endpoints need an enroller.");
+
+            switch (await enroller.EnrolAsync(connection, stopping))
+            {
+                case EnrolmentIssued:
+                    return true;
+                case EnrolmentAlreadyDone when connection.Agent?.Thumbprint is not null:
+                    return true;
+                case EnrolmentAlreadyDone done:
+                    problem = done.Message;
+                    break;
+                case EnrolmentFailed failed:
+                    problem = failed.Problem;
+                    break;
+            }
+
+            var changed = connection.State is not EndpointEnrolling { } current || current.Problem != problem;
+            connection.SetEnrolling(now, pending.ExpiresAt, problem);
+            if (changed)
+                await NotifyStateAsync(connection, stopping);
+            await Task.Delay(retryDelay, time, stopping);
+            return false;
+        }
+
+        if (hasCertificate)
+            return true;
+        await WaitForChangeAsync(connection, "This agent endpoint has no certificate. Create an enrolment command on the endpoint's page.", stopping);
+        return false;
+    }
+
+    /// <summary>Shows <paramref name="reason"/> and waits until the endpoint changes (which restarts this loop).</summary>
+    private async Task WaitForChangeAsync(EngineConnection connection, string reason, CancellationToken stopping)
+    {
+        connection.SetOffline(reason, time.GetUtcNow(), DateTimeOffset.MaxValue)?.Dispose();
+        await NotifyStateAsync(connection, stopping);
+        await Task.Delay(Timeout.InfiniteTimeSpan, time, stopping);
+    }
+
+    /// <summary>Reads what the agent reports about itself, and finishes a pending enrolment.</summary>
+    private async Task ReadAgentAsync(EngineConnection connection, DockerClient client, CancellationToken stopping)
+    {
+        try
+        {
+            connection.SetAgentInfo(await client.GetAgentInfoAsync(stopping));
+        }
+        catch (DockerApiException ex) when (ex.IsNotFound)
+        {
+            throw new NotAnAgentException($"The engine at {connection.Address} answered, but it isn't a Sockless Port agent.");
+        }
+        if (connection.Enrolment is not null && enroller is not null)
+            await enroller.CompleteAsync(connection, stopping);
+    }
+
+    private sealed class NotAnAgentException(string message) : Exception(message);
+
+    /// <summary>
     /// Forwards events until the stream ends. A watchdog pings the engine so a connection that
     /// died silently (no FIN, e.g. a dropped TCP link) is noticed within <see cref="WatchdogInterval"/>.
     /// </summary>
     private async Task StreamEventsAsync(EngineConnection connection, DockerClient client, CancellationToken stopping)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(stopping);
-        var watchdog = WatchdogAsync(client, linked, stopping);
+        var watchdog = WatchdogAsync(connection, client, linked, stopping);
         try
         {
             await foreach (var engineEvent in client.MonitorEventsAsync(EventFilters, linked.Token))
@@ -141,7 +276,7 @@ public sealed partial class EngineMonitor(
         }
     }
 
-    private async Task WatchdogAsync(DockerClient client, CancellationTokenSource events, CancellationToken stopping)
+    private async Task WatchdogAsync(EngineConnection connection, DockerClient client, CancellationTokenSource events, CancellationToken stopping)
     {
         while (!events.IsCancellationRequested)
         {
@@ -157,6 +292,8 @@ public sealed partial class EngineMonitor(
             try
             {
                 await client.GetVersionAsync(events.Token);
+                if (connection.IsAgent)
+                    connection.SetAgentInfo(await client.GetAgentInfoAsync(events.Token));
             }
             catch (Exception) when (!events.IsCancellationRequested)
             {

@@ -37,7 +37,7 @@ public sealed class ImageJobsIntegrationTests : IAsyncLifetime
 
         var address = DockerAddress.Parse(Address!);
         _client = await DockerClient.ConnectAsync(address, cancellationToken: ct);
-        _connection = new EngineConnection(1, "test", address, isLocal: true);
+        _connection = new EngineConnection(1, "test", address, EndpointKind.Local);
         _connection.SetOnline(_client, EngineDescriptor.Detect(_client.ServerVersion, await _client.GetInfoAsync(ct), _client.ApiVersion), DateTimeOffset.UtcNow);
 
         var registries = new RegistryCredentials(_services.GetRequiredService<IServiceScopeFactory>(), new EphemeralDataProtectionProvider(),

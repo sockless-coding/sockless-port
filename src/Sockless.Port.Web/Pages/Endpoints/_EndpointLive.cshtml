@@ -1,0 +1,141 @@
+@* The live part of an endpoint's settings: state, install command, agent details. Model: the page. *@
+@model Sockless.Port.Web.Pages.Endpoints.SettingsModel
+@using Sockless.Port.Agents
+@using Sockless.Port.Engines
+@{
+    var connection = Model.Connection;
+    var agent = connection.Agent;
+    var install = Model.InstallCommand;
+    var enrolment = connection.Enrolment;
+}
+<div id="endpoint-live" class="space-y-6"
+     hx-get="@Url.Page("/Endpoints/Settings", "Live", new { endpointId = connection.Id, variant = Model.Variant })"
+     hx-trigger="endpoints-changed from:body" hx-swap="outerHTML">
+
+    <section class="card" aria-labelledby="status-title">
+        <h3 id="status-title" class="section-title">Status</h3>
+        <dl class="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[12rem_1fr]">
+            <dt class="text-secondary">Kind</dt>
+            <dd>@(connection.IsLocal ? "Local engine" : "Agent")</dd>
+            <dt class="text-secondary">State</dt>
+            <dd class="flex flex-wrap items-center gap-2">
+                <partial name="_EndpointStateBadge" model="connection.State" />
+                <span class="font-mono text-xs text-secondary">since @Format.Timestamp(connection.State.Since)</span>
+            </dd>
+            @switch (connection.State)
+            {
+                case EndpointOffline offline:
+                    <dt class="text-secondary">Reason</dt>
+                    <dd>@offline.Reason</dd>
+                    break;
+                case EndpointEnrolling { Problem: { } problem }:
+                    <dt class="text-secondary">Last attempt</dt>
+                    <dd>@problem</dd>
+                    break;
+            }
+            @if (connection.Engine is { } engine)
+            {
+                <dt class="text-secondary">Engine</dt>
+                <dd><partial name="_EngineBadges" model="engine" /></dd>
+            }
+            @if (agent is not null)
+            {
+                <dt class="text-secondary">Agent</dt>
+                <dd class="flex flex-wrap items-center gap-2">
+                    @if (agent.Info?.Version is { } version)
+                    {
+                        <span class="badge-stat">@version</span>
+                        @if (AgentCommands.IsOutdated(version))
+                        {
+                            <span class="badge warning">Update available: @AgentCommands.ServerVersion</span>
+                        }
+                    }
+                    else
+                    {
+                        <span class="text-secondary">Not reported yet</span>
+                    }
+                </dd>
+                @if (agent.Info?.Engine is { } relayed)
+                {
+                    <dt class="text-secondary">Relays</dt>
+                    <dd class="font-mono text-xs">@relayed</dd>
+                }
+                <dt class="text-secondary">Certificate</dt>
+                <dd>
+                    @if (agent.Thumbprint is { } thumbprint)
+                    {
+                        <span class="block break-all font-mono text-xs" title="SHA-256 thumbprint">@thumbprint</span>
+                        @if (agent.CertificateNotAfter is { } notAfter)
+                        {
+                            <span class="mt-1 block text-xs text-secondary">Valid until @Format.Timestamp(notAfter)@(agent.EnrolledAt is { } enrolled ? $", enrolled {Format.Relative(enrolled, Model.Now)}" : "")</span>
+                        }
+                    }
+                    else
+                    {
+                        <span class="text-secondary">None yet: issued at enrolment</span>
+                    }
+                </dd>
+            }
+        </dl>
+    </section>
+
+    @if (connection.IsAgent && enrolment is not null)
+    {
+        <section class="card" aria-labelledby="install-title">
+            <h3 id="install-title" class="section-title">Install the agent</h3>
+            @if (install is null)
+            {
+                <div class="callout warning" role="status">
+                    <icon name="exclamation-triangle" class="h-5 w-5" />
+                    <p>The install command expired @Format.Relative(enrolment.ExpiresAt, Model.Now). Create a new one below.</p>
+                </div>
+            }
+            else
+            {
+                <p class="mb-4 max-w-3xl text-secondary">
+                    Run this on the agent's host. Sockless Port connects to it as soon as it starts and enrols it; this page updates when it's done.
+                    The command works once, until @Format.Timestamp(enrolment.ExpiresAt) (@Format.Until(enrolment.ExpiresAt, Model.Now)).
+                </p>
+                <nav class="tabs mb-4" aria-label="Engine on the agent's host">
+                    @foreach (var (variant, label) in AgentCommands.Variants)
+                    {
+                        <a asp-page="/Endpoints/Settings" asp-route-endpointId="@connection.Id" asp-route-variant="@variant" class="tab"
+                           aria-current="@(variant == Model.Variant ? "page" : null)">@label</a>
+                    }
+                </nav>
+                <div class="mb-2 flex justify-end">
+                    <button type="button" class="btn-soft" data-copy="#install-command">Copy</button>
+                </div>
+                <pre id="install-command" class="code-block" aria-label="Install command for @install.Label">@install.Text</pre>
+                <ul class="mt-3 list-disc space-y-1 pl-5 text-xs text-secondary">
+                    @foreach (var note in install.Notes)
+                    {
+                        <li>@note</li>
+                    }
+                </ul>
+                <p class="mt-3 text-xs text-secondary">The command contains a secret enrolment token. It's useless once the agent is enrolled or the hour is up.</p>
+            }
+        </section>
+    }
+    else if (connection.IsAgent && agent?.Info?.Version is { } current && AgentCommands.IsOutdated(current) && Model.UpdateCommand is { } update)
+    {
+        <section class="card" aria-labelledby="update-title">
+            <h3 id="update-title" class="section-title">Update the agent</h3>
+            <p class="mb-4 max-w-3xl text-secondary">
+                The agent runs @current and this server @AgentCommands.ServerVersion. Replace its container with the new image; its identity is in the
+                <span class="font-mono">@AgentCommands.VolumeName</span> volume, so it doesn't need enrolling again.
+            </p>
+            <nav class="tabs mb-4" aria-label="Engine on the agent's host">
+                @foreach (var (variant, label) in AgentCommands.Variants)
+                {
+                    <a asp-page="/Endpoints/Settings" asp-route-endpointId="@connection.Id" asp-route-variant="@variant" class="tab"
+                       aria-current="@(variant == Model.Variant ? "page" : null)">@label</a>
+                }
+            </nav>
+            <div class="mb-2 flex justify-end">
+                <button type="button" class="btn-soft" data-copy="#update-command">Copy</button>
+            </div>
+            <pre id="update-command" class="code-block" aria-label="Update command for @update.Label">@update.Text</pre>
+        </section>
+    }
+</div>

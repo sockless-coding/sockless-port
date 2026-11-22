@@ -14,5 +14,6 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Sockless.Port.Core.Tests" />
     <InternalsVisibleTo Include="Sockless.Port.Web.Tests" />
+    <InternalsVisibleTo Include="Sockless.Port.Agent.Tests" />
   </ItemGroup>
 </Project>

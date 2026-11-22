@@ -51,7 +51,7 @@ public sealed class StackHarness : IAsyncDisposable
         {
             var db = scope.ServiceProvider.GetRequiredService<PortDbContext>();
             await db.Database.MigrateAsync(ct);
-            db.Endpoints.Add(new EngineEndpoint { Name = "local", Address = "unix:///var/run/docker.sock", IsLocal = true });
+            db.Endpoints.Add(new EngineEndpoint { Name = "local", Address = "unix:///var/run/docker.sock", Kind = EndpointKind.Local });
             await db.SaveChangesAsync(ct);
         }
 

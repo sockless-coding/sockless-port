@@ -1,10 +1,12 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Sockless.Port.Agent/Sockless.Port.Agent.csproj" />
     <Project Path="src/Sockless.Port.Core/Sockless.Port.Core.csproj" />
     <Project Path="src/Sockless.Port.Docker/Sockless.Port.Docker.csproj" />
     <Project Path="src/Sockless.Port.Web/Sockless.Port.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Sockless.Port.Agent.Tests/Sockless.Port.Agent.Tests.csproj" />
     <Project Path="tests/Sockless.Port.Core.Tests/Sockless.Port.Core.Tests.csproj" />
     <Project Path="tests/Sockless.Port.Docker.Tests/Sockless.Port.Docker.Tests.csproj" />
     <Project Path="tests/Sockless.Port.Web.Tests/Sockless.Port.Web.Tests.csproj" />

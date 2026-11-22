@@ -11,5 +11,6 @@
     <InternalsVisibleTo Include="Sockless.Port.Docker.Tests" />
     <!-- Fake-engine tests of operations built on the client (e.g. recreate rollback). -->
     <InternalsVisibleTo Include="Sockless.Port.Core.Tests" />
+    <InternalsVisibleTo Include="Sockless.Port.Agent.Tests" />
   </ItemGroup>
 </Project>

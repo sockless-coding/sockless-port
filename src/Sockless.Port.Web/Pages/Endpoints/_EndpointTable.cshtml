@@ -1,4 +1,5 @@
 @model IReadOnlyList<Sockless.Port.Engines.EngineConnection>
+@using Sockless.Port.Agents
 @using Sockless.Port.Engines
 <div id="endpoint-table" class="table-wrap"
      hx-get="@Url.Page("/Endpoints/Index", "Table")" hx-trigger="endpoints-changed from:body" hx-swap="outerHTML">
@@ -11,18 +12,30 @@
                 <th scope="col">Engine</th>
                 <th scope="col">Status</th>
                 <th scope="col">Since</th>
+                <th scope="col" class="num"><span class="sr-only">Actions</span></th>
             </tr>
         </thead>
         <tbody>
             @foreach (var endpoint in Model)
             {
+                var agentVersion = endpoint.Agent?.Info?.Version;
                 <tr>
                     <th scope="row">
                         <a asp-page="/Engine/Index" asp-route-endpointId="@endpoint.Id" class="font-semibold hover:underline">@endpoint.Name</a>
-                        @if (endpoint.IsLocal)
-                        {
-                            <span class="badge-stat ml-1">Local</span>
-                        }
+                        <span class="mt-1 flex flex-wrap gap-1">
+                            @if (endpoint.IsLocal)
+                            {
+                                <span class="badge-stat">Local</span>
+                            }
+                            else
+                            {
+                                <span class="badge-stat">Agent@(agentVersion is null ? "" : $" {agentVersion}")</span>
+                                @if (AgentCommands.IsOutdated(agentVersion))
+                                {
+                                    <span class="badge warning">Update available</span>
+                                }
+                            }
+                        </span>
                     </th>
                     <td class="break-all font-mono text-xs">@endpoint.Address</td>
                     <td>
@@ -37,12 +50,22 @@
                     </td>
                     <td>
                         <partial name="_EndpointStateBadge" model="endpoint.State" />
-                        @if (endpoint.State is EndpointOffline offline)
+                        @switch (endpoint.State)
                         {
-                            <p class="mt-1 max-w-xs text-xs text-secondary">@offline.Reason</p>
+                            case EndpointOffline offline:
+                                <p class="mt-1 max-w-xs text-xs text-secondary">@offline.Reason</p>
+                                break;
+                            case EndpointEnrolling { Problem: { } problem }:
+                                <p class="mt-1 max-w-xs text-xs text-secondary">@problem</p>
+                                break;
                         }
                     </td>
                     <td class="whitespace-nowrap font-mono text-xs text-secondary">@Format.Timestamp(endpoint.State.Since)</td>
+                    <td class="num">
+                        <a asp-page="/Endpoints/Settings" asp-route-endpointId="@endpoint.Id" class="btn-soft" aria-label="Settings for @endpoint.Name">
+                            <icon name="cog-6-tooth" class="h-4 w-4" /> Settings
+                        </a>
+                    </td>
                 </tr>
             }
         </tbody>

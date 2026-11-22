@@ -16,6 +16,20 @@
                 <p class="font-semibold">The engine is offline</p>
                 <p class="mt-1">@offline.Reason</p>
                 <p class="mt-1 text-secondary">Offline since @Format.Timestamp(offline.Since). Sockless Port keeps retrying and updates this page when it reconnects.</p>
+                @if (!Model.IsLocal)
+                {
+                    <p class="mt-1"><a asp-page="/Endpoints/Settings" asp-route-id="@Model.Id" class="hover:underline">Endpoint settings</a></p>
+                }
+            </div>
+        </div>
+        break;
+    case EndpointEnrolling enrolling:
+        <div class="callout" role="status">
+            <icon name="link" class="h-5 w-5" />
+            <div>
+                <p class="font-semibold">Waiting for the agent</p>
+                <p class="mt-1">@(enrolling.Problem ?? "Run the install command on the agent's host.")</p>
+                <p class="mt-1"><a asp-page="/Endpoints/Settings" asp-route-id="@Model.Id" class="hover:underline">Show the install command</a></p>
             </div>
         </div>
         break;

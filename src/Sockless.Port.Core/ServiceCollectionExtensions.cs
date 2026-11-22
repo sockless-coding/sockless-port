@@ -7,7 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
-using Sockless.Port.Docker;
+using Sockless.Port.Agents;
 using Sockless.Port.Engines;
 using Microsoft.Extensions.Options;
 using Sockless.Port.Data;
@@ -64,6 +64,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<EngineConnections>();
         services.AddSingleton<LocalEngineDetector>();
         services.TryAddSingleton<IEngineEventSink, NullEngineEventSink>();
+        services.AddSingleton<InternalCa>();
+        services.AddSingleton<IAgentEnroller, AgentEnrolments>();
+        services.AddSingleton<EndpointRegistry>();
         services.AddHostedService<EngineMonitor>();
 
         services.AddSingleton<RegistryCredentials>();
@@ -103,24 +106,17 @@ public static class ServiceCollectionExtensions
     /// </summary>
     private static async Task RegisterEndpointsAsync(PortDbContext db, PortOptions port, IServiceProvider services, CancellationToken cancellationToken)
     {
-        var local = await db.Endpoints.FirstOrDefaultAsync(e => e.IsLocal, cancellationToken);
+        var local = await db.Endpoints.FirstOrDefaultAsync(e => e.Kind == EndpointKind.Local, cancellationToken);
         if (local is null || !string.IsNullOrWhiteSpace(port.LocalEngine))
         {
             var address = await services.GetRequiredService<LocalEngineDetector>().DetectAsync(port.LocalEngine, cancellationToken);
             if (local is null)
-                db.Endpoints.Add(new EngineEndpoint { Name = "local", Address = address.ToString(), IsLocal = true });
+                db.Endpoints.Add(new EngineEndpoint { Name = "local", Address = address.ToString(), Kind = EndpointKind.Local });
             else
                 local.Address = address.ToString();
             await db.SaveChangesAsync(cancellationToken);
         }
 
-        var connections = services.GetRequiredService<EngineConnections>();
-        var time = services.GetRequiredService<TimeProvider>();
-        foreach (var endpoint in await db.Endpoints.AsNoTracking().OrderBy(e => e.Id).ToListAsync(cancellationToken))
-        {
-            if (!DockerAddress.TryParse(endpoint.Address, out var address))
-                throw new InvalidDataException($"Endpoint '{endpoint.Name}' has an invalid address '{endpoint.Address}'.");
-            connections.Add(new EngineConnection(endpoint.Id, endpoint.Name, address, endpoint.IsLocal, time));
-        }
+        await services.GetRequiredService<EndpointRegistry>().RegisterAllAsync(db, cancellationToken);
     }
 }

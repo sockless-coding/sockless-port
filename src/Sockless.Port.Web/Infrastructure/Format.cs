@@ -54,6 +54,20 @@ public static class Format
         };
     }
 
+    /// <summary>"in 42 minutes", "in 3 hours" for a time ahead; "now" once it's passed.</summary>
+    public static string Until(DateTimeOffset value, DateTimeOffset? now = null)
+    {
+        var left = value - (now ?? DateTimeOffset.UtcNow);
+        return left switch
+        {
+            { TotalSeconds: <= 0 } => "now",
+            { TotalMinutes: < 2 } => "in a minute",
+            { TotalHours: < 2 } => $"in {(int)left.TotalMinutes} minutes",
+            { TotalDays: < 2 } => $"in {(int)left.TotalHours} hours",
+            _ => $"in {(int)left.TotalDays} days",
+        };
+    }
+
     public static DateTimeOffset FromUnix(long seconds) => DateTimeOffset.FromUnixTimeSeconds(seconds);
 
     /// <summary>Parses the engine's RFC 3339 timestamps; null for the zero time it uses for "never".</summary>

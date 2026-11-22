@@ -1,7 +1,15 @@
 using Sockless.Port.Docker;
+using Sockless.Port.Docker.Agent;
 using Sockless.Port.Docker.Engine;
 
 namespace Sockless.Port.Engines;
+
+/// <summary>An agent's certificate, and what it last reported about itself.</summary>
+/// <param name="Info">From <c>/agent/info</c> while online; null before the first connection.</param>
+public sealed record AgentStatus(string? Thumbprint, DateTimeOffset? CertificateNotAfter, DateTimeOffset? EnrolledAt, AgentInfo? Info = null);
+
+/// <summary>An enrolment waiting for its agent.</summary>
+public sealed record PendingEnrolment(AgentToken Token, DateTimeOffset ExpiresAt);
 
 /// <summary>
 /// One endpoint's connection: its address, current state and (while online) the client.
@@ -12,23 +20,52 @@ public sealed class EngineConnection
     private readonly Lock _gate = new();
     private EndpointState _state;
     private DockerClient? _client;
+    private string _name;
+    private DockerAddress _address;
+    private AgentStatus? _agent;
+    private PendingEnrolment? _enrolment;
 
-    public EngineConnection(int id, string name, DockerAddress address, bool isLocal, TimeProvider? time = null)
+    public EngineConnection(int id, string name, DockerAddress address, EndpointKind kind, TimeProvider? time = null)
     {
         Id = id;
-        Name = name;
-        Address = address;
-        IsLocal = isLocal;
+        _name = name;
+        _address = address;
+        Kind = kind;
         _state = new EndpointConnecting((time ?? TimeProvider.System).GetUtcNow());
+        if (kind == EndpointKind.Agent)
+            _agent = new AgentStatus(null, null, null);
     }
 
     public int Id { get; }
 
-    public string Name { get; }
+    public EndpointKind Kind { get; }
 
-    public DockerAddress Address { get; }
+    public bool IsLocal => Kind == EndpointKind.Local;
 
-    public bool IsLocal { get; }
+    public bool IsAgent => Kind == EndpointKind.Agent;
+
+    public string Name
+    {
+        get { lock (_gate) return _name; }
+    }
+
+    /// <summary>Where the engine is. For an agent this carries the TLS settings once it's enrolled.</summary>
+    public DockerAddress Address
+    {
+        get { lock (_gate) return _address; }
+    }
+
+    /// <summary>For agent endpoints: the certificate and the agent's last report. Null for other kinds.</summary>
+    public AgentStatus? Agent
+    {
+        get { lock (_gate) return _agent; }
+    }
+
+    /// <summary>The enrolment waiting for its agent, if any.</summary>
+    public PendingEnrolment? Enrolment
+    {
+        get { lock (_gate) return _enrolment; }
+    }
 
     public EndpointState State
     {
@@ -47,9 +84,42 @@ public sealed class EngineConnection
         get { lock (_gate) return _state is EndpointOnline ? _client : null; }
     }
 
+    internal void SetName(string name)
+    {
+        lock (_gate) _name = name;
+    }
+
+    internal void SetAgent(DockerAddress address, AgentStatus agent)
+    {
+        lock (_gate)
+        {
+            _address = address;
+            _agent = agent;
+        }
+    }
+
+    internal void SetAgentInfo(AgentInfo? info)
+    {
+        lock (_gate)
+        {
+            if (_agent is not null)
+                _agent = _agent with { Info = info };
+        }
+    }
+
+    internal void SetEnrolment(PendingEnrolment? enrolment)
+    {
+        lock (_gate) _enrolment = enrolment;
+    }
+
     internal void SetConnecting(DateTimeOffset now)
     {
         lock (_gate) _state = new EndpointConnecting(now);
+    }
+
+    internal void SetEnrolling(DateTimeOffset now, DateTimeOffset expiresAt, string? problem)
+    {
+        lock (_gate) _state = new EndpointEnrolling(_state is EndpointEnrolling previous ? previous.Since : now, expiresAt, problem);
     }
 
     internal void SetOnline(DockerClient client, EngineDescriptor engine, DateTimeOffset now)

@@ -32,6 +32,12 @@ public sealed class PortOptions
     /// </summary>
     public string? Compose { get; set; }
 
+    /// <summary>
+    /// The agent image the install commands use. When empty, the image matching this server's
+    /// version (<c>ghcr.io/sockless-coding/sockless-port-agent:{version}</c>).
+    /// </summary>
+    public string? AgentImage { get; set; }
+
     public string DatabasePath => Path.Combine(DataPath, "port.db");
 
     public string KeysPath => Path.Combine(DataPath, "keys");

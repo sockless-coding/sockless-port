@@ -20,6 +20,7 @@ internal sealed class SignalREngineEventSink(IHubContext<EngineHub> hub) : IEngi
         EndpointOnline => "online",
         EndpointConnecting => "connecting",
         EndpointOffline => "offline",
+        EndpointEnrolling => "enrolling",
     };
 
     internal sealed record EndpointStateMessage(int EndpointId, string State);

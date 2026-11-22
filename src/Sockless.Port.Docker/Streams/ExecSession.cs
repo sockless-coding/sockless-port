@@ -7,11 +7,13 @@ namespace Sockless.Port.Docker.Streams;
 public sealed class ExecSession : IAsyncDisposable, IDisposable
 {
     private readonly HttpResponseMessage _response;
+    private readonly HttpClient? _connection;
 
-    internal ExecSession(string execId, HttpResponseMessage response, Stream stream)
+    internal ExecSession(string execId, HttpResponseMessage response, Stream stream, HttpClient? connection = null)
     {
         ExecId = execId;
         _response = response;
+        _connection = connection;
         Stream = stream;
     }
 
@@ -24,11 +26,13 @@ public sealed class ExecSession : IAsyncDisposable, IDisposable
     {
         await Stream.DisposeAsync();
         _response.Dispose();
+        _connection?.Dispose();
     }
 
     public void Dispose()
     {
         Stream.Dispose();
         _response.Dispose();
+        _connection?.Dispose();
     }
 }

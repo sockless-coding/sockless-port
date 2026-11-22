@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The agent with the server's enrolment and connection code, end to end over real TLS. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Sockless.Port.Agent\Sockless.Port.Agent.csproj" />
+    <ProjectReference Include="..\..\src\Sockless.Port.Core\Sockless.Port.Core.csproj" />
+  </ItemGroup>
+</Project>

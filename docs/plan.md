@@ -93,7 +93,7 @@ Each phase can ship on its own and ends with a working, containerised build.
 - First-run setup needs a one-time token that is printed to the container log, so the first visitor can't claim a fresh instance.
 - Auth uses ASP.NET Core Identity on SQLite. Lockout after 5 failed attempts covers brute force per account; a per-IP rate limit stays in Phase 9.
 - A strict CSP (`'self'` only, no inline script or style, htmx without eval) is already in place.
-- The UI is served over HTTP on 8080. TLS comes from a reverse proxy for now; built-in TLS arrives with the internal CA in Phase 6.
+- The UI is served over HTTP on 8080. TLS comes from a reverse proxy for now; built-in TLS is in Phase 9 (the internal CA from Phase 6 is for agents only).
 - The `docker compose` binary was added to the image in Phase 5.
 
 ### Phase 1: Docker client and local endpoint
@@ -111,7 +111,7 @@ Each phase can ship on its own and ends with a working, containerised build.
 - **The monitor** keeps each endpoint connected with exponential backoff (1 s to 30 s), streams events, and pings every 30 s so a silently dead connection is noticed. Endpoint state is a `closed` hierarchy: Connecting, Online or Offline. Offline carries a reason that says what to check (e.g. the missing `group_add`).
 - **Podman differences** found by the integration tests: volume events have an empty `Actor.ID`, and removal is reported as `remove` instead of `destroy`. Both are normalised in the client.
 - **Disk usage** loads separately (it can be slow) with its own refresh button. Podman reports no build cache, so that row is hidden.
-- **Not yet built:** adding or removing endpoints in the UI. Remote endpoints arrive with the agent in Phase 6; until then the only endpoint is the configured or detected local one.
+- **Not yet built:** adding or removing endpoints in the UI. Remote endpoints arrive with the agent in Phase 6; until then the only endpoint is the configured or detected local one. *(Built in Phase 6.)*
 
 ### Phase 2: Containers
 
@@ -195,6 +195,17 @@ Each phase can ship on its own and ends with a working, containerised build.
 - Endpoint health, agent version reporting, and an "agent update available" prompt.
 - `Dockerfile.agent` and a one-line install script, with variants for Docker, Podman (rootful/rootless) and Swarm (a `docker service create --mode global` command, so every node runs an agent).
 
+**Status: done (direct mode).** Notes:
+- **Agent** (`Sockless.Port.Agent`): a Native AOT minimal API in a chiselled image (about 45 MB, non-root, no shell). It relays the Engine API to the local socket unchanged, with bodies streaming both ways. Hijacked connections (exec and attach with a TTY) are spliced below Kestrel's HTTP layer, because Kestrel won't upgrade a request that has a body and exec start always sends one. Besides the relay, it serves only `/agent/enrol/*`, `/agent/info` (version, uptime) and `/agent/healthz` (no client certificate needed, for the container health check, and says nothing about the host).
+- **Stacks need no agent routes.** Instead of the planned `/agent/stacks/*`, the server runs Compose itself against the agent's relay (`DOCKER_HOST=tcp://…`, `DOCKER_TLS_VERIFY`, and the CA and client certificate in the run's private folder). Stack files stay on the server, and the agent stays a plain relay. Covered by an integration test through a real agent.
+- **Enrolment** runs in direct mode: the server connects to the agent. The *Add agent* page creates the endpoint and shows the install command for each variant, with a token (`spa1.{id}.{secret}`) that works once, within the hour. Until enrolment the agent serves a throwaway self-signed certificate. The agent proves it holds the token with an HMAC over its CSR, bound to a server nonce. The server signs only the key, choosing the name, usage and host names itself, and proves the token back over the certificates it issued. From then on, both sides use mutual TLS. The agent accepts only a client certificate from that CA named `sockless-port-server`, and the server pins the agent's certificate. Enrolling again (endpoint settings, optionally at a new address) revokes the old certificate at once.
+- **Internal CA** (`InternalCa`): keys in `/data/pki`, encrypted with Data Protection like registry passwords. The CA lasts 20 years, agent certificates 5 years, and the server's client certificate 1 year (renewed 30 days before it expires). Agents accept any client certificate the CA signed. Agent certificates aren't renewed yet; re-enrol before they expire.
+- **Endpoints** can now be added, renamed, re-enrolled and removed (`EndpointRegistry`). Removing one deletes its saved stacks. The local endpoint is detected at start and can only be renamed. The `IsLocal` column was replaced by the endpoint's kind (migrations `AddAgentEndpoints`, `DropEndpointIsLocal`), and an upgrade keeps the existing local endpoint local.
+- **Health and versions:** agent endpoints go through the same monitor as the local one (backoff, events, ping). The endpoint list and page show the agent's version. When it differs from the server's, an "Update available" badge and the update command for the agent's variant appear; the identity lives in the agent's volume, so updating needs no re-enrolment. Install commands name the agent image of the server's version (`latest` for development builds). CI builds both images and pushes them on version tags.
+- **Exec** opens its own connection for every engine, not just agents, because a hijacked connection belongs to the engine afterwards. The integration suite passes against Docker with this change.
+- **Install script:** none. The per-variant one-line commands on the *Add agent* page are the install path. A `curl … | sh` served by the server would travel over plain HTTP while the UI has no built-in TLS.
+- **Not built:** edge mode (agent dials out through a WebSocket tunnel), renewal of agent certificates, and per-node drill-down for Swarm (Phase 7).
+
 ### Phase 7: Swarm
 
 Shown only on endpoints with the `Swarm` capability. Write actions need `SwarmManager`.
@@ -222,6 +233,7 @@ Shown only on endpoints with the `Pods` capability. These use Podman's libpod AP
 - OIDC login.
 - Settings: time display (local/UTC, per the guideline), session timeout, backup and restore of `/data`.
 - Security review: CSRF on every htmx POST, CSP, the risks of mounting the socket (documented), rate-limited login.
+- Built-in TLS for the UI (moved from Phase 0/6): an opt-in HTTPS listener with a certificate you supply, or one issued by the internal CA, with the CA downloadable from Settings.
 
 ## Risks and notes
 
