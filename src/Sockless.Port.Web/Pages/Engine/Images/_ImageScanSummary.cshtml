@@ -1,0 +1,86 @@
+@* The image's last scan and any scan in progress. Refreshes on engine events, which scans also send. *@
+@model Sockless.Port.Web.Pages.Engine.Images.VulnerabilitiesModel
+@using Sockless.Port.Vulnerabilities
+@{
+    var result = Model.Result;
+    var summary = result?.Summary;
+    var state = Model.State;
+    var busy = state is ScanQueued or ScanRunning;
+}
+<div id="image-scan" hx-get="@Url.Page("/Engine/Images/Vulnerabilities", "Summary", Model.Filters)"
+     hx-trigger="engine-changed from:body, endpoint-state from:body" hx-swap="outerHTML">
+
+    <section class="card mb-6" aria-labelledby="scan-title">
+        <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <h3 id="scan-title" class="section-title">Known vulnerabilities</h3>
+                <p class="text-secondary">
+                    Packages in the image (the operating system's, and those of languages such as Go, Java, Node.js and Python) checked against
+                    a vulnerability database. Software installed in a container after it started isn't part of the image, so it isn't covered.
+                </p>
+            </div>
+            @if (Model.Image is not null)
+            {
+                <form sp-can="write" method="post" asp-page="/Engine/Images/Vulnerabilities" asp-page-handler="Scan"
+                      asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId">
+                    <button type="submit" class="btn-soft secondary" disabled="@busy" aria-describedby="scan-hint">
+                        <icon name="shield-check" class="h-4 w-4" /> @(summary is null ? "Scan image" : "Scan again")
+                    </button>
+                </form>
+            }
+        </div>
+
+        @if (state is not null && (state is not ScanFailed || summary is null || summary.ScannedAt < state.Since))
+        {
+            var badge = ScanDisplay.StateBadge(state)!;
+            <div class="mb-3 flex flex-wrap items-center gap-2" role="status">
+                <partial name="_StatusBadge" model="badge" />
+                <span class="text-secondary">@ScanDisplay.StateDetail(state)</span>
+            </div>
+        }
+
+        @if (summary is null)
+        {
+            if (state is null)
+            {
+                <p class="text-secondary">Not scanned yet.</p>
+            }
+        }
+        else
+        {
+            var counts = summary.Counts;
+            <div class="mb-3 flex flex-wrap items-center gap-2">
+                @if (counts.Total == 0)
+                {
+                    <span class="badge success">No known vulnerabilities</span>
+                }
+                else
+                {
+                    foreach (var severity in Severities.WorstFirst.Where(s => counts.Of(s) > 0))
+                    {
+                        var kind = ScanDisplay.Kind(severity);
+                        <span class="@(kind.Length == 0 ? "badge-stat" : $"badge {kind}")">@counts.Of(severity) @ScanDisplay.Label(severity).ToLowerInvariant()</span>
+                    }
+                    <span class="badge-stat">@counts.Fixable with a fix</span>
+                }
+                @if (summary.OsEndOfLife)
+                {
+                    <span class="badge warning" title="The operating system release no longer gets security fixes">@summary.Os is end of life</span>
+                }
+            </div>
+            <dl class="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+                <dt class="text-secondary">Scanned</dt>
+                <dd title="@Format.Timestamp(summary.ScannedAt)">@Format.Relative(summary.ScannedAt)</dd>
+                <dt class="text-secondary">Operating system</dt>
+                <dd>@(summary.Os ?? "None found (a scratch or distroless image)")</dd>
+                <dt class="text-secondary">Scanner</dt>
+                <dd>Trivy @summary.ScannerVersion@(summary.DatabaseUpdatedAt is { } db ? $", database from {Format.Relative(db)}" : "")</dd>
+            </dl>
+        }
+        <p id="scan-hint" class="mt-3 text-xs text-secondary">
+            A scan copies the image from @Model.Connection.Name to the Sockless Port server and checks it there; nothing runs on the engine.
+            The result is shared by every endpoint with the same image ID. New vulnerabilities are published every day, so scan again from time to time,
+            or turn on scheduled scans in Settings.
+        </p>
+    </section>
+</div>

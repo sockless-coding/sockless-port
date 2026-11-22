@@ -73,6 +73,46 @@ public sealed partial class DockerClient
                ?? throw new InvalidDataException($"The engine returned an empty distribution response for {reference}.");
     }
 
+    // ---------------------------------------------------------------- export
+
+    /// <summary>The API version that takes <c>platform</c> on <c>/images/get</c>.</summary>
+    internal static readonly Version ExportPlatformApiVersion = new(1, 48);
+
+    /// <summary>
+    /// An image as a <c>docker save</c> tarball (Podman: <c>docker-archive</c>), streamed. Dispose
+    /// it to release the connection. Images are large: this has no request timeout, only
+    /// <paramref name="cancellationToken"/>.
+    /// </summary>
+    /// <param name="os">With <paramref name="architecture"/>, the platform to save from a multi-platform image
+    /// (Docker's containerd store may hold only that one). Sent from API 1.48; older engines save the one image they have.</param>
+    public async Task<Stream> ExportImageAsync(string reference, string? os = null, string? architecture = null, string? variant = null,
+        CancellationToken cancellationToken = default)
+    {
+        var platform = os is { Length: > 0 } && architecture is { Length: > 0 } && ApiVersion >= ExportPlatformApiVersion
+            ? PlatformJson(os, architecture, variant)
+            : null;
+        var response = await SendCoreAsync(HttpMethod.Get, Path($"/images/{EscapeImage(reference)}/get", Query(("platform", platform))), content: null,
+            cancellationToken, HttpCompletionOption.ResponseHeadersRead);
+        try
+        {
+            return new ResponseStream(await response.Content.ReadAsStreamAsync(cancellationToken), response);
+        }
+        catch
+        {
+            response.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>An OCI platform as the engine reads it: <c>{"os":"linux","architecture":"arm64","variant":"v8"}</c>.</summary>
+    internal static string PlatformJson(string os, string architecture, string? variant)
+    {
+        var json = $"{{\"os\":\"{JsonEncodedText.Encode(os)}\",\"architecture\":\"{JsonEncodedText.Encode(architecture)}\"";
+        if (variant is { Length: > 0 })
+            json += $",\"variant\":\"{JsonEncodedText.Encode(variant)}\"";
+        return json + "}";
+    }
+
     // ---------------------------------------------------------------- changes
 
     /// <summary>Adds the tag <paramref name="repository"/>:<paramref name="tag"/> to an image.</summary>

@@ -70,6 +70,17 @@ public sealed class ImageUnitTests
     public void Registry_addresses_are_normalised(string address, string expected) =>
         Assert.Equal(expected, ImageReference.NormalizeRegistry(address));
 
+    // ---------------------------------------------------------------- export
+
+    [Fact]
+    public void The_export_platform_is_oci_json()
+    {
+        Assert.Equal("""{"os":"linux","architecture":"arm64","variant":"v8"}""", DockerClient.PlatformJson("linux", "arm64", "v8"));
+        Assert.Equal("""{"os":"linux","architecture":"amd64"}""", DockerClient.PlatformJson("linux", "amd64", null));
+        // Values are JSON-escaped, so nothing breaks out of them.
+        Assert.Equal("""{"os":"li\u0022nux","architecture":"amd64"}""", DockerClient.PlatformJson("li\"nux", "amd64", ""));
+    }
+
     // ---------------------------------------------------------------- credentials
 
     [Fact]

@@ -268,6 +268,29 @@ Shown only on endpoints with the `Pods` capability. These use Podman's libpod AP
 - **Built-in TLS:** `Port:Https:Port` adds an HTTPS listener next to the HTTP ones (which are re-added from `urls`/`http_ports`, since listening in code replaces them). The certificate is asked for on every handshake: a configured PEM or PKCS#12 file, reloaded when it changes, or one the internal CA issues for `Port:Https:HostNames` (397 days, renewed 30 days before; `CN=sockless-port-ui`, server authentication only, so agents don't accept it as the server). `RedirectHttp` adds the redirect and HSTS, except for `/healthz`. The CA certificate downloads from Settings.
 - **Not built:** groups or roles from the OIDC provider's claims, OIDC sign-out at the provider, encrypted backups, scheduled backups, per-user API tokens, and closing consoles and streams that are already open when a user loses access (new calls are refused at once).
 
+### Phase 10: Vulnerability scanning
+
+- Scan images for known vulnerabilities (CVEs and other advisories) in their operating system packages and in language packages (Go binaries, Java, Node.js, Python, Ruby, Rust, .NET…).
+- Show the result per image (a Vulnerabilities tab with every finding), and as a badge on the image and container lists and the container's overview.
+- Scan on request (one image, one container's image, every image in use) and on a schedule.
+- Work the same on local, agent and Podman endpoints, and offline with a mirrored or copied database.
+
+**Status: done.** Notes:
+- **Scanner:** Trivy, bundled in the image as a pinned release checked against its SHA-256 (`Port:Scanner:Command` picks another), run like Compose: an argument list, a clean environment (a private home plus the proxy variables), the process tree killed on cancel. Only the `vuln` scanner runs; layer analysis uses Trivy's in-memory cache, so nothing but the databases stays on the data volume.
+- **Where it runs:** the image is exported from its engine (`GET /images/{id}/get`, through the agent like any other call, with the image's platform from API 1.48 so Docker's containerd store exports what it has) into a private folder under `TempPath`, scanned on the server, and deleted. Nothing runs on the engine and no helper container needs the socket. The cost is copying each new image ID to the server once.
+- **Databases** (`{DataPath}/scanner`, not backed up) are downloaded in their own step under a lock, only when Trivy's `NextUpdate` has passed, and scans then run with `--skip-db-update --skip-java-db-update`, so scans never race over a download. A failed download is a warning while an older database is there. `Port:Scanner:DatabaseRepositories` / `JavaDatabaseRepositories` name mirrors; `SkipDatabaseUpdate` never downloads (scans add `--offline-scan`).
+- **Queue:** `ImageScans` scans one image at a time from a bounded queue (500). Queued, running (with the phase and bytes copied) and failed scans are in memory; open pages refresh on each phase through the engine hub, like engine events. An image already queued isn't queued twice. Each scan has a time limit (`Port:Scanner:TimeoutMinutes`, 30).
+- **Results** are stored in SQLite (`ImageScans`) per image ID, which names the same content on every engine, so an image is scanned once wherever it runs: counts per severity and of fixable findings for lists, the OS and whether it's end of life, the scanner and database versions, and the findings as JSON (at most 10,000, worst first, titles shortened, only http(s) links). Results of images no online endpoint has are deleted once they're 30 days old.
+- **Pages:** the image's Vulnerabilities tab (`/endpoints/{id}/images/{image}/vulnerabilities`) shows the summary and every finding, filtered by severity, by "has a fix" and by text, at most 1000 rows at a time. The image list has a Vulnerabilities column and a "Scan images in use" button, the container list a badge under the image, and the container overview the result with a "Scan" button. Badges name the worst severity with its count ("3 critical": rust for critical and high, brass for medium, neutral below; "No known vulnerabilities" in verdigris). Viewers see results; scans need the operator role and are audited like other posts.
+- **Schedule** (Settings, off by default, daily or weekly): every 15 minutes, the images containers use on every online endpoint are queued when their result is older than the interval; a failed scan waits an interval too. Settings also shows the scanner's version and how current its databases are, or why it can't run.
+- **Not built:** scanning what was installed in a container after it started (its writable layer, via `/containers/{id}/export`), badges for stacks and swarm services (a service's image may not be on the manager), ignore lists or VEX, SBOM export, scanning images in a registry without pulling them, and notifications for new critical findings.
+- **Later: a scanner of our own** (on hold; Trivy first). Not from NVD: NVD names upstream products and versions, but distros backport fixes, so matching distro packages against it gives many false results; it's only useful for CVSS and descriptions. The plan would be:
+  - **Data:** OSV.dev's bulk downloads (one JSON format for npm, PyPI, Go, Maven, NuGet, crates.io, RubyGems, Packagist, and Debian, Ubuntu, Alpine and several RPM distros; check each distro's coverage first), distro feeds where OSV has gaps, and CISA KEV and EPSS to rank findings. Synced daily into SQLite, with a mirror or file import for offline servers.
+  - **Inventory:** our own reader for image layers (handling deleted files): `/etc/os-release`, dpkg (`status` and `status.d/`), apk, rpm (three storage formats), and language manifests (lock files, `*.dist-info`, `*.deps.json`, Go build info, `pom.properties` in nested jars).
+  - **Matching:** version comparison per ecosystem (dpkg, apk, rpm, semver, Python, Maven), Debian and Ubuntu source package names, and statuses such as not affected, won't fix and end of life.
+  - **Why:** no third-party binary; pure .NET, so the agent could scan on its own host; and OS package databases are small files that the archive API can read from a running container, which would catch packages installed after it started.
+  - **Phases:** OSV sync and Debian, Ubuntu and Alpine packages (with per-container scans) first; then npm, Python, Go and .NET; then RPM distros, Java, KEV and EPSS. Keep Trivy until ours gives the same results on real images.
+
 ## Risks and notes
 
 - **Socket access is root on the host.** This is documented clearly. The server and agent run as non-root users in the docker group; a read-only socket mode (via a proxy) is an option for viewer-only setups.
@@ -276,6 +299,7 @@ Shown only on endpoints with the `Pods` capability. These use Podman's libpod AP
 - **Windows hosts:** named pipe support is in the client, but the images target Linux first.
 - **Podman differences:** the compatible API is close to Docker's but not identical. Examples are event fields, stats on rootless cgroups v1, and some network options. Each known difference is handled in the client behind a capability, and the Podman CI jobs catch regressions.
 - **Swarm manager access:** a manager's socket controls the whole cluster, so Swarm write actions get their own role permission in Phase 9.
+- **The scanner is third-party code that reads untrusted images.** It's pinned by version and checksum and bumped deliberately (Trivy's v0.69.4 release was compromised in March 2026, GHSA-69fq-xp46-6x23). It runs as the server's non-root user with a clean environment, and only ever sees an exported tarball, never the socket.
 
 ## Decisions
 
@@ -283,3 +307,4 @@ Shown only on endpoints with the `Pods` capability. These use Podman's libpod AP
 - Swarm is in scope (Phase 7).
 - Podman is in scope: the core features through the compatible API, plus pods in Phase 8.
 - Product name: **Sockless Port**.
+- Vulnerability scanning uses **Trivy** (Phase 10), on the server, from exported images.

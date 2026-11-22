@@ -8,6 +8,7 @@ using Sockless.Port.Engines;
 using Sockless.Port.Registries;
 using Sockless.Port.Settings;
 using Sockless.Port.Stacks;
+using Sockless.Port.Vulnerabilities;
 
 namespace Sockless.Port.Data;
 
@@ -24,6 +25,8 @@ public sealed class PortDbContext(DbContextOptions<PortDbContext> options) : Ide
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
 
     public DbSet<SettingEntry> Settings => Set<SettingEntry>();
+
+    public DbSet<ImageScan> ImageScans => Set<ImageScan>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -68,6 +71,20 @@ public sealed class PortDbContext(DbContextOptions<PortDbContext> options) : Ide
             setting.HasKey(s => s.Key);
             setting.Property(s => s.Key).HasMaxLength(64);
             setting.Property(s => s.Value).HasMaxLength(1024);
+        });
+
+        builder.Entity<ImageScan>(scan =>
+        {
+            scan.ToTable("ImageScans");
+            // No endpoint: an image ID names the same content on every engine.
+            scan.Property(s => s.ImageId).HasMaxLength(80);
+            scan.HasIndex(s => s.ImageId).IsUnique();
+            scan.Property(s => s.ImageName).HasMaxLength(512);
+            scan.Property(s => s.ScannedAt).HasConversion(SortableUtc);
+            scan.Property(s => s.ScannerVersion).HasMaxLength(32);
+            scan.Property(s => s.DatabaseUpdatedAt).HasConversion(SortableUtc);
+            scan.Property(s => s.Os).HasMaxLength(128);
+            scan.Ignore(s => s.Counts);
         });
 
         builder.Entity<EngineEndpoint>(endpoint =>

@@ -20,6 +20,12 @@
                         <icon name="arrow-up-circle" class="h-4 w-4" /> Check for updates
                     </button>
                 </form>
+                <form sp-can="write" method="post" asp-page="/Engine/Images/Index" asp-page-handler="ScanInUse" asp-route-endpointId="@Model.EndpointId"
+                      asp-route-q="@Model.Q" asp-route-usage="@Model.Usage">
+                    <button type="submit" class="btn-soft" aria-describedby="scan-hint">
+                        <icon name="shield-check" class="h-4 w-4" /> Scan images in use
+                    </button>
+                </form>
                 <details class="menu" data-menu>
                     <summary class="btn-soft danger">Prune <icon name="chevron-down" class="h-4 w-4" /></summary>
                     <div class="menu-panel w-80 space-y-3 p-3">
@@ -55,6 +61,10 @@
         <p id="update-check-hint" class="-mt-4 mb-6 text-xs text-secondary">
             Checking for updates asks each image's registry for the current digest of tags in use; nothing is pulled.
             @(Model.LastChecked is { } checkedAt ? $"Last checked {Format.Relative(checkedAt)}." : "Not checked since Sockless Port started.")
+            <span id="scan-hint" class="block">
+                Scanning copies each image to the Sockless Port server and checks its packages for known vulnerabilities, one image at a time.
+                @(Model.PendingScans switch { 0 => "", 1 => "1 scan is queued or running.", var n => $"{n} scans are queued or running." })
+            </span>
         </p>
 
         <section class="card mb-6" aria-labelledby="pull-title">

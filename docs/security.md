@@ -53,6 +53,10 @@ Prefer a reverse proxy that terminates TLS. Without one, turn on the built-in li
 
 The internal CA's certificate is downloadable from Settings. Installing it in a browser trusts it for any name, and anyone with the data volume holds its key, so install it only on machines you manage. Its certificates for agents and for the UI can't stand in for the server towards agents: agents accept only the server's client certificate.
 
+## Vulnerability scanning
+
+Scans run Trivy on the server, as its non-root user, against an image tarball exported through the Engine API: the scanner never gets the socket, and nothing runs on the engine. Trivy is pinned by version and SHA-256 in the image, because it reads untrusted images and its own releases were once compromised (v0.69.4, March 2026); bump it deliberately. It gets a clean environment (none of Sockless Port's settings or secrets), and the exported image is deleted after each scan. Findings come from a downloaded database, so they're shown as data: text is escaped and only http(s) links are kept. Starting a scan needs the operator role, because each one copies a whole image to the server; scans are audited.
+
 ## The data volume and backups
 
 `/data` holds the database (users, endpoints, audit log), the Data Protection keys that encrypt registry passwords and the CA's keys, the internal CA, and stack files. Anyone who can read it can decrypt the registry passwords and connect to every agent. A backup from Settings holds the same, so keep backups as safe as the server. Restoring one replaces all of it at the next start and keeps what it replaced in a `before-restore-*` folder; backups from a newer version are refused.

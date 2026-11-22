@@ -100,6 +100,12 @@ environment:
 
 Without a certificate of yours, the internal CA (the one that signs agent certificates) issues one and renews it. Download the CA certificate from Settings to trust it in browsers.
 
+### Vulnerability scanning
+
+Images can be scanned for known vulnerabilities with [Trivy](https://github.com/aquasecurity/trivy), which the image includes. Scan one image from its Vulnerabilities tab, a container's image from its overview, or everything containers use from the Images page; Settings can scan daily or weekly. Each image is copied from its engine to the Sockless Port server and scanned there, so it works the same for remote agents and Podman, and the result is shared by every endpoint with the same image. Packages installed in a running container after it started aren't part of the image, so they aren't covered.
+
+Trivy downloads its vulnerability databases into `/data/scanner` when they're due. Without internet access, point it at a mirror (`Port__Scanner__DatabaseRepositories__0`, `Port__Scanner__JavaDatabaseRepositories__0`), or copy the databases in and set `Port__Scanner__SkipDatabaseUpdate=true`.
+
 ### Backups
 
 Settings downloads a backup of the data volume (database, encryption keys, internal CA and stack files) as one `.tar.gz`, taken while everything runs. Restoring one is checked on upload and applied at the next start; the compose file's `restart: unless-stopped` brings Sockless Port back by itself. A backup can decrypt the stored registry passwords and reach every agent, so keep it safe.

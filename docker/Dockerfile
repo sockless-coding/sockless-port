@@ -32,6 +32,16 @@ ARG COMPOSE_SHA256_AMD64=7758048ad38e580f22559603312874fec8bb638d021a9e64182385f
 ARG COMPOSE_SHA256_ARM64=15861535d14e26555736b49376c95e14bfd94285366c8446bfac7156a972e76f
 RUN set -eu;     case "$TARGETARCH" in       amd64) arch=x86_64; sum="$COMPOSE_SHA256_AMD64" ;;       arm64) arch=aarch64; sum="$COMPOSE_SHA256_ARM64" ;;       *) echo "No Compose build for $TARGETARCH" >&2; exit 1 ;;     esac;     curl -fsSL -o /docker-compose "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-${arch}";     echo "${sum}  /docker-compose" | sha256sum -c -;     chmod 755 /docker-compose
 
+# ---- Trivy, for vulnerability scans: a pinned release, checked against its published SHA-256 ----
+# Bump deliberately: update the version and both checksums (from the release's trivy_<version>_checksums.txt).
+# Never take "latest": v0.69.4 was a compromised release (GHSA-69fq-xp46-6x23).
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS trivy
+ARG TARGETARCH
+ARG TRIVY_VERSION=0.76.2
+ARG TRIVY_SHA256_AMD64=bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf
+ARG TRIVY_SHA256_ARM64=ab9d51f86e6a5fb936f605faff6b593ac51bc378fff4d3e8b9d58358b9c367c3
+RUN set -eu;     case "$TARGETARCH" in       amd64) arch=64bit; sum="$TRIVY_SHA256_AMD64" ;;       arm64) arch=ARM64; sum="$TRIVY_SHA256_ARM64" ;;       *) echo "No Trivy build for $TARGETARCH" >&2; exit 1 ;;     esac;     curl -fsSL -o /tmp/trivy.tar.gz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${arch}.tar.gz";     echo "${sum}  /tmp/trivy.tar.gz" | sha256sum -c -;     tar -xzf /tmp/trivy.tar.gz -C / trivy;     chmod 755 /trivy
+
 # ---- docker CLI, for swarm stacks (docker stack deploy): the official image, pinned by digest ----
 # Bump deliberately: update the tag and the index digest (docker buildx imagetools inspect docker:<version>-cli).
 FROM docker:29.10.0-cli@sha256:34507eb5069d8be82c95dd3b6987d4250fd5fee49b82e2509b7d7a7030740d6d AS docker-cli
@@ -56,6 +66,8 @@ ENV ASPNETCORE_HTTP_PORTS=8080 \
 COPY --from=compose /docker-compose /usr/local/bin/docker-compose
 # Swarm stacks run through the Docker CLI's stack commands (Port:DockerCli defaults to docker).
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
+# Images are scanned with Trivy (Port:Scanner:Command defaults to trivy); its databases go to /data/scanner.
+COPY --from=trivy /trivy /usr/local/bin/trivy
 
 WORKDIR /app
 COPY --from=build /app .

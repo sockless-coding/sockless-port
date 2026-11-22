@@ -15,7 +15,7 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261122173954_AddAccessAuditSettings";
+    public override string LastMigrationId => "20261122185418_AddImageScans";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -464,6 +464,70 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                     .IsUnique();
 
                 b.ToTable("Stacks");
+            });
+
+        modelBuilder.Entity("Sockless.Port.Vulnerabilities.ImageScan", b =>
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("Critical")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("DatabaseUpdatedAt")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Findings")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
+
+                b.Property<int>("Fixable")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("High")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("ImageId")
+                    .IsRequired()
+                    .HasMaxLength(80)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("ImageName")
+                    .HasMaxLength(512)
+                    .HasColumnType("TEXT");
+
+                b.Property<int>("Low")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("Medium")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("Os")
+                    .HasMaxLength(128)
+                    .HasColumnType("TEXT");
+
+                b.Property<bool>("OsEndOfLife")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("ScannedAt")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("ScannerVersion")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
+
+                b.Property<int>("Unknown")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("Id");
+
+                b.HasIndex("ImageId")
+                    .IsUnique();
+
+                b.ToTable("ImageScans");
             });
 
         modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>

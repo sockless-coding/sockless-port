@@ -4,20 +4,23 @@ using Sockless.Port.Docker.Models;
 using Sockless.Port.Engines;
 using Sockless.Port.Images;
 using Sockless.Port.Registries;
+using Sockless.Port.Vulnerabilities;
 using Sockless.Port.Web.Infrastructure;
 
 namespace Sockless.Port.Web.Pages.Engine.Images;
 
 /// <param name="UsedBy">Names of the containers created from the image.</param>
 /// <param name="Update">The last update check's result for the image, if it was checked.</param>
-public sealed record ImageRow(ImageSummary Summary, IReadOnlyList<string> UsedBy, UpdateStatus? Update)
+/// <param name="Scan">Its vulnerability scan: the stored result and any scan in progress.</param>
+public sealed record ImageRow(ImageSummary Summary, IReadOnlyList<string> UsedBy, UpdateStatus? Update, ScanFlag Scan)
 {
     public string Id => ImagePageModel.RouteId(Summary.Id);
     public string ShortId => ImageActions.ShortId(Summary.Id);
     public string Name => Summary.Tags.Count > 0 ? Summary.Tags[0] : ShortId;
 }
 
-public sealed class IndexModel(EngineConnections connections, ImageJobs jobs, ImageUpdates updates, RegistryCredentials registries) : EndpointPageModel(connections)
+public sealed class IndexModel(EngineConnections connections, ImageJobs jobs, ImageUpdates updates, RegistryCredentials registries, ImageScans scans)
+    : EndpointPageModel(connections)
 {
     public static readonly IReadOnlyList<(string Value, string Label)> Usages =
         [("", "All"), ("used", "In use"), ("unused", "Unused"), ("dangling", "Dangling")];
@@ -37,6 +40,8 @@ public sealed class IndexModel(EngineConnections connections, ImageJobs jobs, Im
     public IReadOnlyList<ImageJob> Jobs => jobs.ForEndpoint(EndpointId);
 
     public DateTimeOffset? LastChecked => updates.LastChecked(EndpointId);
+
+    public int PendingScans => scans.PendingFor(EndpointId);
 
     public bool Filtered => !string.IsNullOrWhiteSpace(Q) || !string.IsNullOrEmpty(Usage);
 
@@ -138,6 +143,26 @@ public sealed class IndexModel(EngineConnections connections, ImageJobs jobs, Im
         return RedirectToPage(Filters);
     }
 
+    /// <summary>Queues a vulnerability scan of every image a container uses, running or not.</summary>
+    public async Task<IActionResult> OnPostScanInUseAsync(CancellationToken cancellationToken)
+    {
+        int queued = 0, skipped = 0;
+        var ok = await TryEngineAsync(async client =>
+        {
+            var inUse = (await client.ListContainersAsync(all: true, cancellationToken)).Select(c => c.ImageId).OfType<string>().Distinct(StringComparer.Ordinal);
+            foreach (var imageId in inUse)
+            {
+                if (scans.Enqueue(Connection, imageId))
+                    queued++;
+                else
+                    skipped++;
+            }
+        });
+        if (ok)
+            Flash.Success(TempData, ScanDisplay.QueuedMessage(queued, skipped, "No container uses an image, so there's nothing to scan."));
+        return RedirectToPage(Filters);
+    }
+
     /// <summary>"Checked 3 tags in use: 1 with an update available, 2 up to date."</summary>
     internal static string Describe(UpdateCheckSummary summary) =>
         ImageDisplay.CheckMessage(summary, "tag in use", "tags in use", "No image in use has a tag to check.", "the table");
@@ -181,8 +206,10 @@ public sealed class IndexModel(EngineConnections connections, ImageJobs jobs, Im
             Total = images.Count;
             TotalSize = images.Sum(i => i.Size);
             Dangling = images.Count(i => i.IsDangling);
+            var scanned = await scans.SummariesAsync(images.Select(i => i.Id), cancellationToken);
             Rows = [.. images
-                .Select(i => new ImageRow(i, [.. usedBy[i.Id].Order(StringComparer.OrdinalIgnoreCase)], updates.ForImage(EndpointId, i.Id)))
+                .Select(i => new ImageRow(i, [.. usedBy[i.Id].Order(StringComparer.OrdinalIgnoreCase)], updates.ForImage(EndpointId, i.Id),
+                    new ScanFlag(scanned.GetValueOrDefault(i.Id), scans.StateOf(i.Id))))
                 .Where(Matches)
                 .OrderBy(r => r.Summary.IsDangling)
                 .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)];

@@ -7,6 +7,7 @@ using Sockless.Port.Agents;
 using Sockless.Port.Backup;
 using Sockless.Port.Https;
 using Sockless.Port.Settings;
+using Sockless.Port.Vulnerabilities;
 using Sockless.Port.Web.Infrastructure;
 
 namespace Sockless.Port.Web.Pages.Settings;
@@ -14,7 +15,7 @@ namespace Sockless.Port.Web.Pages.Settings;
 [RequestSizeLimit(MaxBackupBytes)]
 [RequestFormLimits(MultipartBodyLengthLimit = MaxBackupBytes)]
 public sealed class IndexModel(PortSettings settings, HttpsCertificates https, InternalCa ca, DataBackup backup,
-    IOptions<PortOptions> options, IHostApplicationLifetime lifetime) : PageModel
+    IOptions<PortOptions> options, IHostApplicationLifetime lifetime, TrivyCli scanner) : PageModel
 {
     /// <summary>Most a backup upload may be (compressed).</summary>
     public const long MaxBackupBytes = 1024L * 1024 * 1024;
@@ -32,7 +33,19 @@ public sealed class IndexModel(PortSettings settings, HttpsCertificates https, I
     public int ImageUpdateCheckHours { get; set; }
 
     [BindProperty]
+    public int VulnerabilityScanHours { get; set; }
+
+    [BindProperty]
     public IFormFile? Backup { get; set; }
+
+    /// <summary>The scanner's version and databases; null with <see cref="ScannerProblem"/> when it can't run.</summary>
+    public ScannerStatus? Scanner { get; private set; }
+
+    public string? ScannerProblem { get; private set; }
+
+    public ScannerOptions ScannerOptions => options.Value.Scanner;
+
+    public string ScannerCachePath => options.Value.ScannerCachePath;
 
     public HttpsStatus Https { get; private set; } = null!;
 
@@ -45,16 +58,21 @@ public sealed class IndexModel(PortSettings settings, HttpsCertificates https, I
 
     public string DataPath => options.Value.DataPath;
 
-    public void OnGet() => Load(fromSettings: true);
+    public async Task OnGetAsync(CancellationToken cancellationToken)
+    {
+        Load(fromSettings: true);
+        (Scanner, ScannerProblem) = await scanner.TryStatusAsync(cancellationToken);
+    }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
-        var problems = await settings.SaveAsync(new AppSettings(TimeDisplay, SessionTimeoutMinutes, AuditRetentionDays, ImageUpdateCheckHours), cancellationToken);
+        var problems = await settings.SaveAsync(new AppSettings(TimeDisplay, SessionTimeoutMinutes, AuditRetentionDays, ImageUpdateCheckHours, VulnerabilityScanHours), cancellationToken);
         if (problems.Count > 0)
         {
             foreach (var problem in problems)
                 ModelState.AddModelError("", problem);
             Load(fromSettings: false);
+            (Scanner, ScannerProblem) = await scanner.TryStatusAsync(cancellationToken);
             return Page();
         }
         Flash.Success(TempData, "Saved the settings. A new session timeout applies from each user's next sign-in.");
@@ -127,6 +145,7 @@ public sealed class IndexModel(PortSettings settings, HttpsCertificates https, I
             SessionTimeoutMinutes = current.SessionTimeoutMinutes;
             AuditRetentionDays = current.AuditRetentionDays;
             ImageUpdateCheckHours = current.ImageUpdateCheckHours;
+            VulnerabilityScanHours = current.VulnerabilityScanHours;
         }
         Https = https.Status();
     }

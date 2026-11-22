@@ -1,0 +1,15 @@
+@* In tables: the image's vulnerability scan as a badge with its detail, or a scan in progress. Model: ScanFlag. *@
+@model Sockless.Port.Web.Infrastructure.ScanFlag
+@{
+    // A scan in progress or a failure says more than an older result.
+    var state = Model.State is Sockless.Port.Vulnerabilities.ScanFailed && Model.Summary is not null && Model.Summary.ScannedAt > Model.State.Since ? null : Model.State;
+    var badge = ScanDisplay.StateBadge(state) ?? ScanDisplay.Badge(Model.Summary);
+    var detail = state is not null ? ScanDisplay.StateDetail(state) : Model.Summary is { } summary ? ScanDisplay.Detail(summary) : null;
+}
+@if (badge is not null)
+{
+    <span class="mt-1 flex font-sans" title="@detail">
+        <partial name="_StatusBadge" model="badge" />
+        <span class="sr-only">@detail</span>
+    </span>
+}

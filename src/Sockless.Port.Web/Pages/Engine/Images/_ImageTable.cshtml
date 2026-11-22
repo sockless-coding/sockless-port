@@ -62,6 +62,7 @@
                             <th scope="col">Created</th>
                             <th scope="col">Used by</th>
                             <th scope="col">Update</th>
+                            <th scope="col">Vulnerabilities</th>
                             <th scope="col" class="num"><span class="sr-only">Actions</span></th>
                         </tr>
                     </thead>
@@ -110,6 +111,17 @@
                                     else
                                     {
                                         <span class="text-secondary">—</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (row.Scan.Summary is null && row.Scan.State is null)
+                                    {
+                                        <span class="text-secondary">Not scanned</span>
+                                    }
+                                    else
+                                    {
+                                        <a asp-page="/Engine/Images/Vulnerabilities" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@row.Id"
+                                           class="inline-flex hover:underline" aria-label="Vulnerabilities of @row.Name"><partial name="_ScanFlag" model="row.Scan" /></a>
                                     }
                                 </td>
                                 <td class="num">

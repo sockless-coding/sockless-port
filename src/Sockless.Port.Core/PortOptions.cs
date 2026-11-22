@@ -44,6 +44,9 @@ public sealed class PortOptions
     /// </summary>
     public string? AgentImage { get; set; }
 
+    /// <summary>The vulnerability scanner (<c>Port:Scanner</c>). The image bundles Trivy.</summary>
+    public ScannerOptions Scanner { get; set; } = new();
+
     /// <summary>Sign-in attempts (password or setup) allowed per client address per minute.</summary>
     public int SignInAttemptsPerMinute { get; set; } = 10;
 
@@ -65,6 +68,36 @@ public sealed class PortOptions
 
     /// <summary>A restore waiting for the next start, extracted from an uploaded backup.</summary>
     public string RestorePendingPath => Path.Combine(DataPath, "restore-pending");
+
+    /// <summary>The scanner's vulnerability databases. Not backed up: they're downloaded again.</summary>
+    public string ScannerCachePath => Path.Combine(DataPath, "scanner");
+}
+
+/// <summary>
+/// Scanning images for known vulnerabilities with Trivy. Images are exported from their engine
+/// to the server and scanned there, so remote endpoints need nothing extra.
+/// </summary>
+public sealed class ScannerOptions
+{
+    /// <summary>The Trivy command: <c>trivy</c> or a full path. When empty, <c>trivy</c> on the search path. The image bundles it.</summary>
+    public string? Command { get; set; }
+
+    /// <summary>
+    /// Don't download the vulnerability databases: for servers without internet access. Put them
+    /// in <c>{DataPath}/scanner</c> yourself (<c>trivy image --download-db-only --cache-dir …</c>
+    /// elsewhere, then copy the <c>db</c> and <c>java-db</c> folders), or use a mirror instead.
+    /// Scans then also skip the online lookups some Java packages need.
+    /// </summary>
+    public bool SkipDatabaseUpdate { get; set; }
+
+    /// <summary>OCI repositories to download the vulnerability database from, tried in order (a mirror). When empty, Trivy's default.</summary>
+    public string[] DatabaseRepositories { get; set; } = [];
+
+    /// <summary>OCI repositories for the Java database (jar files), as <see cref="DatabaseRepositories"/>.</summary>
+    public string[] JavaDatabaseRepositories { get; set; } = [];
+
+    /// <summary>The longest one scan may take, export included, in minutes. Scans run one at a time.</summary>
+    public int TimeoutMinutes { get; set; } = 30;
 }
 
 /// <summary>

@@ -4,6 +4,7 @@ using Sockless.Port.Docker.Models;
 using Sockless.Port.Engines;
 using Sockless.Port.Images;
 using Sockless.Port.Pods;
+using Sockless.Port.Vulnerabilities;
 using Sockless.Port.Web.Infrastructure;
 
 namespace Sockless.Port.Web.Pages.Engine.Containers;
@@ -11,13 +12,13 @@ namespace Sockless.Port.Web.Pages.Engine.Containers;
 /// <param name="Pod">The Podman pod it's in, if any.</param>
 /// <param name="Update">The last update check's result for what it runs, if it was checked.</param>
 public sealed record ContainerRow(ContainerSummary Summary, StatusBadge State, StatusBadge? Health, string? Stack, string? SwarmService, IReadOnlyList<string> Ports,
-    PodMember? Pod = null, UpdateStatus? Update = null)
+    PodMember? Pod = null, UpdateStatus? Update = null, ScanFlag? Scan = null)
 {
     public string Name => Summary.DisplayName;
     public bool Running => Summary.State is "running";
 }
 
-public sealed class IndexModel(EngineConnections connections, ImageUpdates updates) : EndpointPageModel(connections)
+public sealed class IndexModel(EngineConnections connections, ImageUpdates updates, ImageScans scans) : EndpointPageModel(connections)
 {
     public static readonly IReadOnlyList<(string Value, string Label)> States =
         [("", "All"), ("running", "Running"), ("stopped", "Stopped"), ("paused", "Paused")];
@@ -145,7 +146,9 @@ public sealed class IndexModel(EngineConnections connections, ImageUpdates updat
             Total = all.Count;
             Stacks = [.. all.Select(c => ContainerLabels.Stack(c.Labels)).OfType<string>().Distinct().Order(StringComparer.OrdinalIgnoreCase)];
             PodChoices = [.. pods.Pods.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase)];
-            Rows = [.. all.Where(c => Matches(c, pods.Of(c.Id))).Select(c => ToRow(c, pods.Of(c.Id))).OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)];
+            var shown = all.Where(c => Matches(c, pods.Of(c.Id))).ToList();
+            var scanned = await scans.SummariesAsync(shown.Select(c => c.ImageId).OfType<string>(), cancellationToken);
+            Rows = [.. shown.Select(c => ToRow(c, pods.Of(c.Id), scanned)).OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)];
         }
         catch (Exception ex) when (EngineFailures.IsFailure(ex, cancellationToken))
         {
@@ -192,10 +195,11 @@ public sealed class IndexModel(EngineConnections connections, ImageUpdates updat
         return true;
     }
 
-    private ContainerRow ToRow(ContainerSummary c, PodMember? pod)
+    private ContainerRow ToRow(ContainerSummary c, PodMember? pod, IReadOnlyDictionary<string, ScanSummary> scanned)
     {
         var (state, health) = ContainerStatus.FromSummary(c);
         return new ContainerRow(c, state, health, ContainerLabels.Stack(c.Labels), ContainerLabels.SwarmServiceName(c.Labels), ContainerStatus.PublishedPorts(c.Ports), pod,
-            updates.ForContainer(EndpointId, c));
+            updates.ForContainer(EndpointId, c),
+            c.ImageId is { } imageId ? new ScanFlag(scanned.GetValueOrDefault(imageId), scans.StateOf(imageId)) : null);
     }
 }

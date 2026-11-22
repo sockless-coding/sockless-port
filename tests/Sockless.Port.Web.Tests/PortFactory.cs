@@ -18,7 +18,10 @@ public sealed partial class PortFactory : WebApplicationFactory<Program>
     /// <summary>An address where no engine listens, so tests never touch the developer's engine.</summary>
     public const string UnreachableEngine = "unix:///nonexistent/sockless-port-test.sock";
 
-    private readonly string _dataPath = Path.Combine(Path.GetTempPath(), "sockless-port-tests", Guid.NewGuid().ToString("n"));
+    /// <summary>A scanner command that doesn't exist.</summary>
+    public const string NoScanner = "sockless-port-test-no-trivy";
+
+    private readonly string _dataPath =Path.Combine(Path.GetTempPath(), "sockless-port-tests", Guid.NewGuid().ToString("n"));
     private readonly string _engine;
     private readonly IReadOnlyDictionary<string, string>? _settings;
 
@@ -36,6 +39,8 @@ public sealed partial class PortFactory : WebApplicationFactory<Program>
         builder.UseEnvironment("Testing");
         builder.UseSetting("Port:DataPath", _dataPath);
         builder.UseSetting("Port:LocalEngine", _engine);
+        // Never the developer's own Trivy (or its database downloads).
+        builder.UseSetting("Port:Scanner:Command", NoScanner);
         // Tests sign in many times from one address.
         builder.UseSetting("Port:SignInAttemptsPerMinute", "1000");
         foreach (var (key, value) in _settings ?? new Dictionary<string, string>())

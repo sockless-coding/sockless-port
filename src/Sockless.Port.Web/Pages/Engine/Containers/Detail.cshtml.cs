@@ -4,12 +4,14 @@ using Sockless.Port.Containers;
 using Sockless.Port.Engines;
 using Sockless.Port.Images;
 using Sockless.Port.Registries;
+using Sockless.Port.Vulnerabilities;
 using Sockless.Port.Web.Infrastructure;
 
 namespace Sockless.Port.Web.Pages.Engine.Containers;
 
 /// <summary>A container's overview, and the handler for every action taken from its pages.</summary>
-public sealed partial class DetailModel(EngineConnections connections, RegistryCredentials registries, ImageUpdates updates) : ContainerPageModel(connections)
+public sealed partial class DetailModel(EngineConnections connections, RegistryCredentials registries, ImageUpdates updates, ImageScans scans)
+    : ContainerPageModel(connections)
 {
     /// <summary>The container's tabs: route suffix → (page, label).</summary>
     public static readonly IReadOnlyList<(string Tab, string Page, string Label)> Tabs =
@@ -24,12 +26,40 @@ public sealed partial class DetailModel(EngineConnections connections, RegistryC
     /// <summary>The last update check's result for the container's image, if it was checked.</summary>
     public UpdateStatus? ImageUpdate => updates.ForContainer(EndpointId, Container?.Image, Container?.Config?.Image);
 
-    public void OnGet()
+    /// <summary>The vulnerability scan of the container's image.</summary>
+    public ScanFlag ImageScan { get; private set; } = ScanFlag.None;
+
+    public async Task OnGetAsync(CancellationToken cancellationToken) => await LoadScanAsync(cancellationToken);
+
+    /// <summary>Queues a vulnerability scan of the container's image.</summary>
+    public IActionResult OnPostScanImage()
     {
+        if (Container?.Image is not { } imageId)
+        {
+            Flash.Error(TempData, "The container's image couldn't be read from the engine.");
+            return BackTo(null);
+        }
+        if (scans.Enqueue(Connection, imageId))
+            Flash.Success(TempData, $"Queued a scan of {DisplayName}'s image. The result appears here when it ends.");
+        else
+            Flash.Error(TempData, $"{DisplayName}'s image is already queued or being scanned, or too many scans are waiting.");
+        return BackTo(null);
+    }
+
+    private async Task LoadScanAsync(CancellationToken cancellationToken)
+    {
+        if (Container?.Image is not { } imageId)
+            return;
+        var stored = await scans.SummariesAsync([imageId], cancellationToken);
+        ImageScan = new ScanFlag(stored.GetValueOrDefault(imageId), scans.StateOf(imageId));
     }
 
     /// <summary>htmx refresh of the overview on engine events.</summary>
-    public IActionResult OnGetOverview() => Partial("_ContainerOverview", this);
+    public async Task<IActionResult> OnGetOverviewAsync(CancellationToken cancellationToken)
+    {
+        await LoadScanAsync(cancellationToken);
+        return Partial("_ContainerOverview", this);
+    }
 
     public async Task<IActionResult> OnPostActionAsync(string? action, bool removeVolumes, string? tab)
     {

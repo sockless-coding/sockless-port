@@ -66,6 +66,26 @@ public sealed class ImageIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_image_exports_as_a_tarball_with_a_manifest()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await foreach (var _ in _client.PullImageAsync(Image, cancellationToken: ct)) { }
+        var (image, _) = await _client.InspectImageAsync(Image, ct);
+
+        // The platform the engine has: Docker's containerd store may hold only that one of a multi-platform image.
+        await using var export = await _client.ExportImageAsync(image.Id, image.Os, image.Architecture, image.Variant, ct);
+        var names = new List<string>();
+        await using (var tar = new TarReader(export))
+        {
+            while (await tar.GetNextEntryAsync(cancellationToken: ct) is { } entry)
+                names.Add(entry.Name);
+        }
+
+        // docker save (and Podman's docker-archive) always has manifest.json: what the scanner reads.
+        Assert.Contains("manifest.json", names);
+    }
+
+    [Fact]
     public async Task Tag_history_and_untag()
     {
         var ct = TestContext.Current.CancellationToken;

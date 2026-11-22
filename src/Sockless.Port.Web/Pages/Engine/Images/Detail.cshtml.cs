@@ -15,6 +15,7 @@ public sealed class DetailModel(EngineConnections connections, ImageUpdates upda
     [
         ("", "/Engine/Images/Detail", "Overview"),
         ("history", "/Engine/Images/History", "History"),
+        ("vulnerabilities", "/Engine/Images/Vulnerabilities", "Vulnerabilities"),
         ("inspect", "/Engine/Images/Inspect", "Inspect"),
     ];
 

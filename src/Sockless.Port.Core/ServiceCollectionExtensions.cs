@@ -21,6 +21,7 @@ using Sockless.Port.Settings;
 using Sockless.Port.Setup;
 using Sockless.Port.Stacks;
 using Sockless.Port.Volumes;
+using Sockless.Port.Vulnerabilities;
 
 namespace Sockless.Port;
 
@@ -87,6 +88,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ImageUpdates>();
         services.AddHostedService<ImageUpdateSchedule>();
         services.AddSingleton<VolumeBrowser>();
+        services.AddSingleton<TrivyCli>();
+        services.AddSingleton<ImageScans>();
+        services.AddHostedService(sp => sp.GetRequiredService<ImageScans>());
+        services.AddHostedService<ImageScanSchedule>();
 
         services.AddSingleton<ComposeCli>();
         services.AddSingleton<DockerCli>();

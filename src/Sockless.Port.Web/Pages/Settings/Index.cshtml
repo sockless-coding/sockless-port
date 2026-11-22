@@ -79,12 +79,71 @@
                     On Docker Hub, checks can count against the pull rate limit.
                 </p>
             </div>
+            <div class="field">
+                <label asp-for="VulnerabilityScanHours">Scan images for vulnerabilities</label>
+                <select asp-for="VulnerabilityScanHours" aria-describedby="scan-schedule-hint">
+                    @foreach (var hours in AppSettings.VulnerabilityScanChoices)
+                    {
+                        <option value="@hours" selected="@(Model.VulnerabilityScanHours == hours)">@(hours switch { 0 => "Only when asked", 24 => "Every day", _ => "Every week" })</option>
+                    }
+                </select>
+                <p class="hint" id="scan-schedule-hint">
+                    Scans the images containers use on every online endpoint when their last scan is older than this. Each scan copies the image to
+                    this server, one at a time.
+                </p>
+            </div>
         </div>
         <div class="flex justify-end">
             <button type="submit" class="btn-soft secondary">Save</button>
         </div>
     </section>
 </form>
+
+@if (Model.Scanner is not null || Model.ScannerProblem is not null)
+{
+<section class="card mt-6 space-y-4" aria-labelledby="scanner-title">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <h3 id="scanner-title" class="section-title">Vulnerability scanner</h3>
+        @if (Model.Scanner is null)
+        {
+            <span class="badge danger">Unavailable</span>
+        }
+        else if (Model.Scanner.Database is null)
+        {
+            <span class="badge-stat">No database yet</span>
+        }
+        else
+        {
+            <span class="badge success">Ready</span>
+        }
+    </div>
+    @if (Model.Scanner is { } status)
+    {
+        <dl class="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+            <dt class="text-secondary">Scanner</dt>
+            <dd>Trivy @status.Version</dd>
+            <dt class="text-secondary">Vulnerability database</dt>
+            <dd>@(status.Database?.UpdatedAt is { } db ? $"From {Format.Relative(db)} ({Format.Timestamp(db)})" : "Downloaded with the first scan")</dd>
+            <dt class="text-secondary">Java database</dt>
+            <dd>@(status.JavaDatabase?.UpdatedAt is { } java ? $"From {Format.Relative(java)} ({Format.Timestamp(java)})" : "Downloaded with the first scan")</dd>
+            <dt class="text-secondary">Database downloads</dt>
+            <dd>@(Model.ScannerOptions.SkipDatabaseUpdate ? "Off (Port:Scanner:SkipDatabaseUpdate)" : Model.ScannerOptions.DatabaseRepositories.Length > 0 ? $"From {string.Join(", ", Model.ScannerOptions.DatabaseRepositories)}" : "From Trivy's default repositories, when due")</dd>
+        </dl>
+    }
+    else
+    {
+        <div class="callout danger" role="alert">
+            <icon name="exclamation-triangle" class="h-5 w-5" />
+            <p>@Model.ScannerProblem</p>
+        </div>
+    }
+    <p class="text-xs text-secondary">
+        Databases are kept in <span class="font-mono">@Model.ScannerCachePath</span> and aren't part of backups. Without internet access, set
+        <span class="font-mono">Port:Scanner:DatabaseRepositories</span> to a mirror, or copy the databases there and set
+        <span class="font-mono">Port:Scanner:SkipDatabaseUpdate</span>.
+    </p>
+</section>
+}
 
 <section class="card mt-6 space-y-4" aria-labelledby="https-title">
     <div class="flex flex-wrap items-center justify-between gap-3">

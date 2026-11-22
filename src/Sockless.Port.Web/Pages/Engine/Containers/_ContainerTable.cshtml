@@ -118,6 +118,10 @@
                                 <td class="max-w-[16rem] break-all font-mono text-xs">
                                     @row.Summary.Image
                                     <partial name="_UpdateFlag" model="row.Update" />
+                                    @if (row.Scan is { } scan)
+                                    {
+                                        <partial name="_ScanFlag" model="scan" />
+                                    }
                                 </td>
                                 <td class="font-mono text-xs">
                                     @foreach (var port in row.Ports)

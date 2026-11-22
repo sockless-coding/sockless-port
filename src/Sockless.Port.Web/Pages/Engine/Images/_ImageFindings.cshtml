@@ -1,0 +1,89 @@
+@* The findings that match the filters. Refreshes on engine events, so a finished scan shows up. *@
+@model Sockless.Port.Web.Pages.Engine.Images.VulnerabilitiesModel
+@{
+    var result = Model.Result;
+    var summary = result?.Summary;
+}
+<div id="image-findings" hx-get="@Url.Page("/Engine/Images/Vulnerabilities", "Findings", Model.Filters)"
+     hx-trigger="engine-changed from:body, endpoint-state from:body" hx-swap="outerHTML">
+    @if (result is not null && result.Findings.Count > 0)
+    {
+        if (Model.Shown.Count == 0)
+        {
+            <section class="card">
+                <div class="empty-state">
+                    <icon name="shield-check" class="h-12 w-12" stroke-width="1.5" />
+                    <p class="text-base text-heading">No vulnerabilities match these filters</p>
+                    <p class="text-secondary"><a asp-page="/Engine/Images/Vulnerabilities" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId" class="hover:underline">Clear the filters</a> to see all @result.Findings.Count.</p>
+                </div>
+            </section>
+        }
+        else
+        {
+            <p class="mb-3 text-secondary" aria-live="polite">
+                @(Model.Filtered ? $"{Model.Matching} of {result.Findings.Count} match" : $"{result.Findings.Count} found"), worst first.
+                @if (Model.Matching > Model.Shown.Count)
+                {
+                    <text>The first @Model.Shown.Count are shown; filter to see the rest.</text>
+                }
+            </p>
+            <div class="table-wrap">
+                <table class="table">
+                    <caption class="sr-only">Vulnerabilities in @Model.DisplayName</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Vulnerability</th>
+                            <th scope="col">Severity</th>
+                            <th scope="col">Package</th>
+                            <th scope="col">Installed</th>
+                            <th scope="col">Fixed in</th>
+                            <th scope="col">Found in</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var finding in Model.Shown)
+                        {
+                            var kind = ScanDisplay.Kind(finding.Severity);
+                            <tr>
+                                <th scope="row" class="max-w-[24rem]">
+                                    @if (finding.Url is { } url)
+                                    {
+                                        <a href="@url" target="_blank" rel="noopener noreferrer" class="font-mono text-xs font-semibold hover:underline">@finding.Id<span class="sr-only"> (opens in a new tab)</span></a>
+                                    }
+                                    else
+                                    {
+                                        <span class="font-mono text-xs font-semibold">@finding.Id</span>
+                                    }
+                                    @if (finding.Title is { } title)
+                                    {
+                                        <span class="mt-1 block font-sans text-xs font-normal text-secondary">@title</span>
+                                    }
+                                </th>
+                                <td><span class="@(kind.Length == 0 ? "badge-stat" : $"badge {kind}")">@ScanDisplay.Label(finding.Severity)</span></td>
+                                <td class="break-all font-mono text-xs">
+                                    @finding.Package
+                                    @if (finding.Type is { } type)
+                                    {
+                                        <span class="block font-sans text-secondary">@type</span>
+                                    }
+                                </td>
+                                <td class="break-all font-mono text-xs">@(finding.InstalledVersion ?? "—")</td>
+                                <td class="break-all font-mono text-xs">
+                                    @if (finding.FixedVersion is { } fixedIn)
+                                    {
+                                        @fixedIn
+                                    }
+                                    else
+                                    {
+                                        <span class="font-sans text-secondary">@(finding.Status switch { "will_not_fix" => "Won't be fixed", "end_of_life" => "Release is end of life", "fix_deferred" => "Fix deferred", _ => "No fix yet" })</span>
+                                    }
+                                </td>
+                                <td class="max-w-[16rem] break-all font-mono text-xs">@(finding.Target ?? (summary?.Os is { } os ? $"{os} packages" : "OS packages"))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>

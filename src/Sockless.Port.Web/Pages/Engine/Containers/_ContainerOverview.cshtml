@@ -82,6 +82,36 @@
                             }
                         </span>
                     </dd>
+                    <dt>Vulnerabilities</dt>
+                    <dd>
+                        <span class="flex flex-wrap items-start gap-3">
+                            @if (Model.ImageScan.Summary is null && Model.ImageScan.State is null)
+                            {
+                                <span class="text-secondary">Not scanned</span>
+                            }
+                            else if (c.Image is { } scannedId)
+                            {
+                                <a asp-page="/Engine/Images/Vulnerabilities" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@ImagePageModel.RouteId(scannedId)"
+                                   class="inline-flex flex-col gap-1 hover:underline" aria-label="Vulnerabilities of the image">
+                                    <partial name="_ScanFlag" model="Model.ImageScan" />
+                                    @if (Model.ImageScan.Summary is { } scan)
+                                    {
+                                        <span class="text-xs text-secondary">@ScanDisplay.Detail(scan)</span>
+                                    }
+                                </a>
+                            }
+                            @if (Model.Client is not null && c.Image is not null)
+                            {
+                                <form sp-can="write" method="post" asp-page="/Engine/Containers/Detail" asp-page-handler="ScanImage"
+                                      asp-route-endpointId="@Model.EndpointId" asp-route-containerId="@Model.ContainerId">
+                                    <button type="submit" class="btn-soft" disabled="@(Model.ImageScan.State is Sockless.Port.Vulnerabilities.ScanQueued or Sockless.Port.Vulnerabilities.ScanRunning)"
+                                            title="Copy the image to the Sockless Port server and check its packages for known vulnerabilities.">
+                                        <icon name="shield-check" class="h-4 w-4" /> @(Model.ImageScan.Summary is null ? "Scan" : "Scan again")
+                                    </button>
+                                </form>
+                            }
+                        </span>
+                    </dd>
                     <dt>Command</dt>
                     <dd class="break-all font-mono">@(command.Length > 0 ? command : "—")</dd>
                     <dt>Created</dt>

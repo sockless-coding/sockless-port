@@ -17,4 +17,6 @@ Sockless Port ships the following third-party assets in `src/Sockless.Port.Web`.
 
 The server image also ships [Docker Compose](https://github.com/docker/compose) 5.7.0 (Apache License 2.0) as `/usr/local/bin/docker-compose`, downloaded from its GitHub release and checked against the published SHA-256.
 
+It also ships [Trivy](https://github.com/aquasecurity/trivy) 0.76.2 (Apache License 2.0) as `/usr/local/bin/trivy`, downloaded and checked the same way. Its vulnerability databases aren't part of the image: Trivy downloads them at run time into the data volume.
+
 Build-time only (not redistributed): [Tailwind CSS](https://tailwindcss.com) 3.4.19 standalone CLI, MIT; [esbuild](https://esbuild.github.io) 0.28.2, MIT, to bundle CodeMirror.
