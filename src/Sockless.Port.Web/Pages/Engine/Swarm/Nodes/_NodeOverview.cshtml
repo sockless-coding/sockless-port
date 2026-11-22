@@ -44,10 +44,10 @@
     </section>
 
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <section class="card space-y-5" aria-labelledby="node-manage-title">
+        <section sp-can="write" class="card space-y-5" aria-labelledby="node-manage-title">
             <h3 id="node-manage-title" class="section-title mb-0">Manage</h3>
 
-            <form method="post" action="@Url.Page("/Engine/Swarm/Nodes/Detail", "Availability", route)">
+            <form sp-can="write" method="post" action="@Url.Page("/Engine/Swarm/Nodes/Detail", "Availability", route)">
                 <fieldset>
                     <legend class="label-caps mb-1">Availability</legend>
                     @foreach (var (value, label, hint) in Sockless.Port.Web.Pages.Engine.Swarm.Nodes.DetailModel.Availabilities)
@@ -62,7 +62,7 @@
                         data-confirm="Change the availability of @Model.DisplayName? Draining moves its tasks to other nodes.">Set availability</button>
             </form>
 
-            <form method="post" action="@Url.Page("/Engine/Swarm/Nodes/Detail", "Role", route)" class="border-t border-line pt-4">
+            <form sp-can="write" method="post" action="@Url.Page("/Engine/Swarm/Nodes/Detail", "Role", route)" class="border-t border-line pt-4">
                 <p class="label-caps mb-1">Role</p>
                 @if (node.IsManager)
                 {
@@ -87,7 +87,7 @@
                 }
             </form>
 
-            <form method="post" action="@Url.Page("/Engine/Swarm/Nodes/Detail", "Labels", route)" class="border-t border-line pt-4">
+            <form sp-can="write" method="post" action="@Url.Page("/Engine/Swarm/Nodes/Detail", "Labels", route)" class="border-t border-line pt-4">
                 <div class="field">
                     <label for="node-labels">Labels</label>
                     <textarea id="node-labels" name="labels" rows="3" class="font-mono" placeholder="zone=a" spellcheck="false" aria-describedby="node-labels-hint">@labels</textarea>
@@ -98,7 +98,7 @@
 
             @if (!Model.IsThisNode)
             {
-                <form method="post" action="@Url.Page("/Engine/Swarm/Nodes/Detail", "Remove", route)" class="border-t border-line pt-4">
+                <form sp-can="write" method="post" action="@Url.Page("/Engine/Swarm/Nodes/Detail", "Remove", route)" class="border-t border-line pt-4">
                     <p class="label-caps mb-1">Remove from swarm</p>
                     @if (node.IsReady)
                     {

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Sockless.Port.Access;
 using Sockless.Port.Engines;
 using Sockless.Port.Stacks;
 using Sockless.Port.Web.Infrastructure;
@@ -12,6 +13,9 @@ namespace Sockless.Port.Web.Pages.Engine.Stacks;
 public sealed class EditorModel(EngineConnections connections, StackStore store, StackJobs jobs, StackValidator validator)
     : StackPageModel(connections, store, jobs)
 {
+    /// <summary>The files (and their .env) can hold secrets: only those who may change the stack see them.</summary>
+    protected override EndpointPermission ReadPermission => WritePermission;
+
     [BindProperty]
     public StackInput Input { get; set; } = new();
 

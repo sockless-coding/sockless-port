@@ -252,4 +252,28 @@
       menu.querySelector('summary')?.focus();
     }
   });
+
+  // ---------------------------------------------------------------- time zone
+
+  // "Local" times are rendered by the server in the browser's zone, which it learns from this
+  // cookie (Infrastructure/TimeZones.cs).
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const current = document.cookie.split('; ').find((c) => c.startsWith('sockless-port.tz='))?.slice('sockless-port.tz='.length);
+    if (zone && /^[A-Za-z0-9_+\-/]+$/.test(zone) && zone !== current) {
+      document.cookie = `sockless-port.tz=${zone}; path=/; max-age=31536000; samesite=strict`;
+    }
+    // For servers that don't know the zone's rules: the offset now (it changes with daylight saving time).
+    document.cookie = `sockless-port.tzo=${-new Date().getTimezoneOffset()}; path=/; max-age=31536000; samesite=strict`;
+  } catch {
+    // No Intl time zone: times stay in UTC, and say so.
+  }
+
+  // <form data-autosubmit>: a select that submits its form when changed; the button is for no-script.
+  SocklessPort.component('form[data-autosubmit]', (form) => {
+    for (const button of form.querySelectorAll('[data-autosubmit-button]')) button.hidden = true;
+    const submit = (event) => { if (event.target.matches('select')) form.requestSubmit(); };
+    form.addEventListener('change', submit);
+    return () => form.removeEventListener('change', submit);
+  });
 })();

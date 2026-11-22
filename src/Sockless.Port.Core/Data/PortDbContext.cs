@@ -2,8 +2,11 @@ using System.Globalization;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Sockless.Port.Access;
+using Sockless.Port.Audit;
 using Sockless.Port.Engines;
 using Sockless.Port.Registries;
+using Sockless.Port.Settings;
 using Sockless.Port.Stacks;
 
 namespace Sockless.Port.Data;
@@ -16,11 +19,56 @@ public sealed class PortDbContext(DbContextOptions<PortDbContext> options) : Ide
 
     public DbSet<StackDefinition> Stacks => Set<StackDefinition>();
 
+    public DbSet<EndpointGrant> EndpointGrants => Set<EndpointGrant>();
+
+    public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
+
+    public DbSet<SettingEntry> Settings => Set<SettingEntry>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
 
-        builder.Entity<PortUser>().Property(u => u.CreatedAt).HasConversion(SortableUtc);
+        builder.Entity<PortUser>(user =>
+        {
+            user.Property(u => u.CreatedAt).HasConversion(SortableUtc);
+            user.Property(u => u.LastSignInAt).HasConversion(SortableUtc);
+            user.Property(u => u.DefaultRole).HasConversion<string>().HasMaxLength(16);
+            user.Property(u => u.TimeDisplay).HasConversion<string>().HasMaxLength(8);
+        });
+
+        builder.Entity<EndpointGrant>(grant =>
+        {
+            grant.ToTable("EndpointGrants");
+            grant.HasKey(g => new { g.UserId, g.EndpointId });
+            grant.HasOne<PortUser>().WithMany().HasForeignKey(g => g.UserId).OnDelete(DeleteBehavior.Cascade);
+            grant.HasOne<EngineEndpoint>().WithMany().HasForeignKey(g => g.EndpointId).OnDelete(DeleteBehavior.Cascade);
+            grant.Property(g => g.Role).HasConversion<string>().HasMaxLength(16);
+        });
+
+        builder.Entity<AuditEntry>(entry =>
+        {
+            entry.ToTable("AuditLog");
+            entry.Property(e => e.At).HasConversion(SortableUtc);
+            entry.HasIndex(e => e.At);
+            entry.Property(e => e.UserName).HasMaxLength(256);
+            entry.HasIndex(e => e.UserName);
+            entry.Property(e => e.EndpointName).HasMaxLength(64);
+            entry.Property(e => e.Action).HasMaxLength(128);
+            entry.Property(e => e.Target).HasMaxLength(AuditLog.MaxTarget);
+            entry.Property(e => e.Outcome).HasConversion<string>().HasMaxLength(16);
+            entry.Property(e => e.Detail).HasMaxLength(AuditLog.MaxDetail);
+            entry.Property(e => e.RemoteAddress).HasMaxLength(64);
+            // No foreign keys: entries outlive the users and endpoints they name.
+        });
+
+        builder.Entity<SettingEntry>(setting =>
+        {
+            setting.ToTable("Settings");
+            setting.HasKey(s => s.Key);
+            setting.Property(s => s.Key).HasMaxLength(64);
+            setting.Property(s => s.Value).HasMaxLength(1024);
+        });
 
         builder.Entity<EngineEndpoint>(endpoint =>
         {

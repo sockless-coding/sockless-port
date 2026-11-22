@@ -87,7 +87,7 @@
                                 }
                             </td>
                             <td class="num">
-                                <button type="submit" form="swarm-object-row-actions" class="btn-soft danger" aria-label="Remove @item.Name"
+                                <button sp-can="write" type="submit" form="swarm-object-row-actions" class="btn-soft danger" aria-label="Remove @item.Name"
                                         formaction="@Url.Page($"{folder}/Index", "Remove", new { endpointId = Model.EndpointId, Model.Q, id = item.Id, name = item.Name })"
                                         data-confirm="Remove the @Model.Noun @item.Name?@(users.Count > 0 ? $" {string.Join(", ", users)} {(users.Count == 1 ? "uses" : "use")} it, so the engine will refuse until {(users.Count == 1 ? "that service no longer does" : "they no longer do")}." : "")">
                                     <icon name="trash" class="h-4 w-4" /> Remove

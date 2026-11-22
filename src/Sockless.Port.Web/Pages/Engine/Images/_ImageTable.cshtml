@@ -38,7 +38,7 @@
 
         <form id="image-bulk-form" method="post" asp-page="/Engine/Images/Index" asp-page-handler="Remove"
               asp-route-endpointId="@Model.EndpointId" asp-route-q="@Model.Q" asp-route-usage="@Model.Usage" data-bulk-noun="images">
-            <div class="mb-3 flex flex-wrap items-center gap-3" data-bulk-toolbar>
+            <div sp-can="write" class="mb-3 flex flex-wrap items-center gap-3" data-bulk-toolbar>
                 <span class="text-secondary" data-bulk-count aria-live="polite">@Model.Rows.Count of @Model.Total shown · @Format.Bytes(Model.TotalSize) in all</span>
                 <span class="flex-1"></span>
                 <label class="flex items-center gap-2 text-secondary">
@@ -55,7 +55,7 @@
                     <caption class="sr-only">Images</caption>
                     <thead>
                         <tr>
-                            <th scope="col" class="w-8"><input type="checkbox" data-select-all aria-label="Select all shown images" /></th>
+                            <th sp-can="write" scope="col" class="w-8"><input type="checkbox" data-select-all aria-label="Select all shown images" /></th>
                             <th scope="col">Image</th>
                             <th scope="col">ID</th>
                             <th scope="col" class="num">Size</th>
@@ -71,7 +71,7 @@
                             var created = Format.FromUnix(row.Summary.Created);
                             var detail = ImageDisplay.UpdateDetail(row.Update);
                             <tr>
-                                <td><input type="checkbox" name="ids" value="@row.Id" data-name="@row.Name" aria-label="Select @row.Name" /></td>
+                                <td sp-can="write"><input type="checkbox" name="ids" value="@row.Id" data-name="@row.Name" aria-label="Select @row.Name" /></td>
                                 <th scope="row" class="max-w-[22rem]">
                                     <a asp-page="/Engine/Images/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@row.Id"
                                        class="break-all font-mono text-xs font-semibold hover:underline">@(row.Summary.IsDangling ? "<none>" : row.Name)</a>
@@ -113,7 +113,7 @@
                                     }
                                 </td>
                                 <td class="num">
-                                    <button type="submit" form="image-row-actions" class="btn-soft danger" aria-label="Remove @row.Name"
+                                    <button sp-can="write" type="submit" form="image-row-actions" class="btn-soft danger" aria-label="Remove @row.Name"
                                             formaction="@Url.Page("/Engine/Images/Index", "Remove", new { endpointId = Model.EndpointId, Model.Q, Model.Usage, ids = row.Id })"
                                             data-confirm="Remove image @row.Name?@(row.Summary.Tags.Count > 1 ? $" All {row.Summary.Tags.Count} tags are removed." : "")@(row.UsedBy.Count > 0 ? " Containers use it, so the engine may refuse." : "")">
                                         <icon name="trash" class="h-4 w-4" /> Remove

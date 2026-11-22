@@ -1,5 +1,6 @@
 @inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
 @inject Sockless.Port.Engines.EngineConnections Connections
+@inject Sockless.Port.Settings.PortSettings Settings
 @{
     var currentPage = ViewContext.RouteData.Values["page"] as string;
     var topBar = TopBarView.For(Context, Connections);
@@ -12,8 +13,12 @@
         .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
         .FirstOrDefault()?.InformationalVersion.Split('+')[0];
 
+    var access = Context.Access();
+    var timeDisplay = access?.TimeDisplay;
+    var returnUrl = Context.Request.Path + Context.Request.QueryString;
     IEnumerable<NavItem> Visible(IEnumerable<NavItem> items) =>
-        items.Where(i => (i.Scope == NavScope.Global || topBar.Current is not null) && i.IsAvailable(topBar.Current?.Engine));
+        items.Where(i => (i.Scope == NavScope.Global || topBar.Current is not null) && i.IsAvailable(topBar.Current?.Engine)
+                         && (!i.AdminOnly || access?.IsAdmin == true));
     object? RouteId(NavItem item) => item.Scope == NavScope.Endpoint ? topBar.Current?.Id : null;
 }
 <!DOCTYPE html>
@@ -83,9 +88,13 @@
                 }
             </nav>
 
-            <div class="flex-none border-t border-accent/10 px-4 py-3">
+            <div class="flex-none space-y-3 border-t border-accent/10 px-4 py-3">
                 <div class="flex items-center justify-between gap-2">
-                    <span class="truncate text-secondary" title="Signed in as @User.Identity?.Name">@User.Identity?.Name</span>
+                    <a asp-page="/Account/Index" class="flex min-w-0 items-center gap-2 text-secondary hover:text-accent"
+                       title="Your account: @User.Identity?.Name" aria-current="@(currentPage == "/Account/Index" ? "page" : null)">
+                        <icon name="user-circle" class="h-5 w-5 flex-none" />
+                        <span class="truncate">@User.Identity?.Name</span>
+                    </a>
                     <form method="post" asp-page="/Account/Logout">
                         <button type="submit" class="btn-soft">
                             <icon name="arrow-right-start-on-rectangle" class="h-4 w-4" />
@@ -93,9 +102,22 @@
                         </button>
                     </form>
                 </div>
+                @* The time display preference; site.js submits it on change and hides the button. *@
+                <form method="post" asp-page="/Account/Index" asp-page-handler="Time" class="flex items-end gap-2" data-autosubmit>
+                    <input type="hidden" name="returnUrl" value="@returnUrl" />
+                    <div class="field flex-1">
+                        <label for="time-display" class="label-caps">Times</label>
+                        <select id="time-display" name="display" class="text-xs">
+                            <option value="" selected="@(timeDisplay is null)">Default (@(Settings.Current.TimeDisplay == Sockless.Port.Settings.TimeDisplay.Utc ? "UTC" : "local"))</option>
+                            <option value="Local" selected="@(timeDisplay == Sockless.Port.Settings.TimeDisplay.Local)">Local</option>
+                            <option value="Utc" selected="@(timeDisplay == Sockless.Port.Settings.TimeDisplay.Utc)">UTC</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn-soft" data-autosubmit-button>Set</button>
+                </form>
                 @if (version is not null)
                 {
-                    <p class="mt-2 font-mono text-xs text-secondary">Sockless Port v@(version)</p>
+                    <p class="font-mono text-xs text-secondary">Sockless Port v@(version)</p>
                 }
             </div>
         </aside>

@@ -1,3 +1,4 @@
+using Sockless.Port.Access;
 using Sockless.Port.Docker;
 using Sockless.Port.Docker.Engine;
 using Sockless.Port.Docker.Models;
@@ -12,6 +13,9 @@ namespace Sockless.Port.Web.Infrastructure;
 /// </summary>
 public abstract class SwarmPageModel(EngineConnections connections) : EndpointPageModel(connections)
 {
+    /// <summary>A manager's socket controls the whole cluster, so changes need their own role.</summary>
+    protected override EndpointPermission WritePermission => EndpointPermission.ManageSwarm;
+
     protected EngineConnections Endpoints { get; } = connections;
 
     public bool IsSwarm => Connection.Engine?.Has(EngineCapabilities.Swarm) == true;

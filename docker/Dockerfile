@@ -61,6 +61,8 @@ WORKDIR /app
 COPY --from=build /app .
 USER app
 EXPOSE 8080
+# Only with Port__Https__Port=8443 (built-in HTTPS, off by default).
+EXPOSE 8443
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD ["dotnet", "Sockless.Port.Web.dll", "healthcheck"]

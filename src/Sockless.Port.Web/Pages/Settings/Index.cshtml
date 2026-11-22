@@ -1,0 +1,210 @@
+@page "/settings"
+@model Sockless.Port.Web.Pages.Settings.IndexModel
+@using Sockless.Port.Settings
+@{
+    ViewData["Title"] = "Settings";
+    var https = Model.Https;
+}
+
+<div class="mb-6">
+    <h2 class="page-title">Settings</h2>
+    <p class="mt-1 text-secondary">How Sockless Port behaves for everyone, its HTTPS listener, single sign-on, and backups of its data.</p>
+</div>
+
+@if (Model.Restarting)
+{
+    <div class="callout warning mb-6" role="status">
+        <icon name="arrow-path" class="h-5 w-5" />
+        <p>
+            Sockless Port is stopping now. With the container's restart policy (<span class="font-mono">unless-stopped</span> in the compose file) it starts again by itself,
+            @(Model.RestorePending ? "applies the restore, " : "")and this page works again in a few seconds: <a asp-page="/Settings/Index" class="hover:underline">reload it</a>.
+            Without a restart policy, start it yourself.
+        </p>
+    </div>
+}
+
+@if (Model.RestorePending && !Model.Restarting)
+{
+    <div class="callout warning mb-6" role="status">
+        <icon name="exclamation-triangle" class="h-5 w-5" />
+        <div class="flex flex-1 flex-wrap items-center justify-between gap-3">
+            <p>A restore is waiting. It replaces all data the next time Sockless Port starts; what it replaces is kept in a <span class="font-mono">before-restore-*</span> folder in the data volume.</p>
+            <div class="flex gap-2">
+                <form method="post" asp-page-handler="CancelRestore">
+                    <button type="submit" class="btn-soft">Cancel restore</button>
+                </form>
+                <form method="post" asp-page-handler="Restart">
+                    <button type="submit" class="btn-soft danger" data-confirm="Restart Sockless Port and restore the backup? Everyone is signed out, and changes made since the backup are replaced.">
+                        <icon name="arrow-path" class="h-4 w-4" /> Restart and restore
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+<form method="post" class="space-y-6" novalidate>
+    <partial name="_FormErrors" />
+    <section class="card space-y-4" aria-labelledby="general-title">
+        <h3 id="general-title" class="section-title">General</h3>
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div class="field">
+                <label asp-for="TimeDisplay">Show times in</label>
+                <select asp-for="TimeDisplay" aria-describedby="time-hint">
+                    <option value="@TimeDisplay.Local" selected="@(Model.TimeDisplay == TimeDisplay.Local)">The browser's time zone</option>
+                    <option value="@TimeDisplay.Utc" selected="@(Model.TimeDisplay == TimeDisplay.Utc)">UTC</option>
+                </select>
+                <p class="hint" id="time-hint">For users who haven't chosen; each user can change it below the menu.</p>
+            </div>
+            <div class="field">
+                <label asp-for="SessionTimeoutMinutes">Session timeout (minutes)</label>
+                <input asp-for="SessionTimeoutMinutes" type="number" min="@AppSettings.MinSessionTimeout" max="@AppSettings.MaxSessionTimeout" aria-describedby="timeout-hint" />
+                <p class="hint" id="timeout-hint">A session ends after this long without a request. 720 is 12 hours.</p>
+            </div>
+            <div class="field">
+                <label asp-for="AuditRetentionDays">Keep the audit log (days)</label>
+                <input asp-for="AuditRetentionDays" type="number" min="@AppSettings.MinAuditRetention" max="@AppSettings.MaxAuditRetention" aria-describedby="retention-hint" />
+                <p class="hint" id="retention-hint">Older entries are deleted once a day.</p>
+            </div>
+        </div>
+        <div class="flex justify-end">
+            <button type="submit" class="btn-soft secondary">Save</button>
+        </div>
+    </section>
+</form>
+
+<section class="card mt-6 space-y-4" aria-labelledby="https-title">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <h3 id="https-title" class="section-title">HTTPS</h3>
+        @if (!https.Enabled)
+        {
+            <span class="badge-stat">Off</span>
+        }
+        else if (https.Problem is not null)
+        {
+            <span class="badge danger">Certificate problem</span>
+        }
+        else
+        {
+            <span class="badge success">On, port @https.Port</span>
+        }
+    </div>
+    @if (!https.Enabled)
+    {
+        <p class="max-w-3xl text-secondary">
+            Sockless Port serves plain HTTP. Put it behind a reverse proxy that terminates TLS, or turn on its own HTTPS listener by setting
+            <span class="font-mono">Port__Https__Port</span> (e.g. 8443) and publishing that port. Without a certificate of yours
+            (<span class="font-mono">Port__Https__Certificate</span>, PEM or PKCS#12), the internal CA issues one for
+            <span class="font-mono">Port__Https__HostNames</span> and renews it.
+        </p>
+    }
+    else
+    {
+        @if (https.Problem is not null)
+        {
+            <div class="callout danger" role="alert">
+                <icon name="exclamation-triangle" class="h-5 w-5" />
+                <p>@https.Problem</p>
+            </div>
+        }
+        <dl class="grid grid-cols-1 gap-x-6 gap-y-2 md:grid-cols-[12rem_1fr]">
+            <dt class="label-caps">Certificate</dt>
+            <dd>@(https.InternalCa ? "Issued by the internal CA, renewed 30 days before it expires" : $"From {https.Source}, reloaded when the file changes")</dd>
+            @if (https.Names.Count > 0)
+            {
+                <dt class="label-caps">Names</dt>
+                <dd class="font-mono text-xs">@string.Join(", ", https.Names)</dd>
+            }
+            @if (https.NotAfter is { } notAfter)
+            {
+                <dt class="label-caps">Valid until</dt>
+                <dd>@Format.Timestamp(notAfter) (@Format.Until(notAfter))</dd>
+            }
+            @if (https.Thumbprint is not null)
+            {
+                <dt class="label-caps">SHA-256</dt>
+                <dd class="break-all font-mono text-xs">@https.Thumbprint</dd>
+            }
+            <dt class="label-caps">Plain HTTP</dt>
+            <dd>@(https.RedirectHttp ? "Redirected to HTTPS, with HSTS (the health check stays on HTTP)" : "Still served; set Port__Https__RedirectHttp to send it to HTTPS")</dd>
+        </dl>
+    }
+    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+        <p class="max-w-3xl text-secondary">
+            The internal CA signs agent certificates@(https is { Enabled: true, InternalCa: true } ? " and this HTTPS certificate" : "").
+            Install it in browsers to trust the built-in HTTPS. Anyone with this server's data volume could sign certificates with it, so trust it only on machines you manage.
+        </p>
+        <a asp-page="/Settings/Index" asp-page-handler="Ca" class="btn-soft" hx-boost="false" download>
+            <icon name="arrow-down-tray" class="h-4 w-4" /> Download the CA certificate
+        </a>
+    </div>
+</section>
+
+<section class="card mt-6 space-y-4" aria-labelledby="sso-title">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <h3 id="sso-title" class="section-title">Single sign-on</h3>
+        @if (Model.Oidc.Enabled)
+        {
+            <span class="badge success">On</span>
+        }
+        else
+        {
+            <span class="badge-stat">Off</span>
+        }
+    </div>
+    @if (Model.Oidc.Enabled)
+    {
+        <dl class="grid grid-cols-1 gap-x-6 gap-y-2 md:grid-cols-[12rem_1fr]">
+            <dt class="label-caps">Provider</dt>
+            <dd class="break-all font-mono text-xs">@Model.Oidc.Authority</dd>
+            <dt class="label-caps">Button</dt>
+            <dd>@Model.Oidc.DisplayName</dd>
+            <dt class="label-caps">New users</dt>
+            <dd>
+                @(Model.Oidc.CreateUsers
+                    ? $"Created on their first sign-in, as {Sockless.Port.Access.EndpointRoles.Label(Model.Oidc.DefaultRole).ToLowerInvariant()} on all endpoints"
+                    : "Not created: only users added here can sign in, matched by verified email address")
+            </dd>
+            <dt class="label-caps">Passwords</dt>
+            <dd>@(Model.Oidc.DisablePasswordLogin ? "Hidden on the sign-in page (still at /account/login?local=true)" : "Still offered next to single sign-on")</dd>
+        </dl>
+    }
+    else
+    {
+        <p class="max-w-3xl text-secondary">
+            Sign in through an OpenID Connect provider (Keycloak, Authentik, Entra ID, …) by setting <span class="font-mono">Port__Oidc__Authority</span>,
+            <span class="font-mono">Port__Oidc__ClientId</span> and <span class="font-mono">Port__Oidc__ClientSecret</span>.
+            Register <span class="font-mono">@($"{Request.Scheme}://{Request.Host}{Sockless.Port.Web.Infrastructure.ExternalLogins.CallbackPath}")</span> as the redirect URI.
+        </p>
+    }
+</section>
+
+<section class="card mt-6 space-y-4" aria-labelledby="backup-title">
+    <h3 id="backup-title" class="section-title">Backup and restore</h3>
+    <div class="callout warning">
+        <icon name="exclamation-triangle" class="h-5 w-5" />
+        <p>
+            A backup holds everything in <span class="font-mono">@Model.DataPath</span> that matters: the database (users, endpoints, audit log),
+            the encryption keys and the internal CA's key, so whoever has it can read the stored registry passwords and connect to every agent. Keep it as safe as the server.
+        </p>
+    </div>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <p class="max-w-3xl text-secondary">The database, encryption keys, internal CA and stack files, as one .tar.gz. Taken while everything keeps running.</p>
+        <form method="post" asp-page-handler="Backup" hx-boost="false">
+            <button type="submit" class="btn-soft secondary"><icon name="arrow-down-tray" class="h-4 w-4" /> Download a backup</button>
+        </form>
+    </div>
+    <form method="post" asp-page-handler="Restore" enctype="multipart/form-data" class="flex flex-wrap items-end gap-3 border-t border-line pt-4" novalidate>
+        <div class="field min-w-[16rem] flex-1">
+            <label asp-for="Backup">Restore from a backup</label>
+            <input asp-for="Backup" type="file" accept=".tar.gz,.tgz,application/gzip" aria-describedby="restore-hint" />
+            <p class="hint" id="restore-hint">
+                It's checked, then applied when Sockless Port restarts: everything is replaced by the backup, and everyone signs in again.
+                Backups from newer versions of Sockless Port are refused.
+            </p>
+        </div>
+        <button type="submit" class="btn-soft danger" data-confirm="Prepare to restore this backup? Nothing changes until you restart.">
+            <icon name="arrow-up-tray" class="h-4 w-4" /> Check and prepare
+        </button>
+    </form>
+</section>

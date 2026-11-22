@@ -14,7 +14,7 @@
 
     @if (Model.Manager is not null && Model.Swarm is not null)
     {
-        <section class="card mt-6" aria-labelledby="join-title">
+        <section sp-can="write" class="card mt-6" aria-labelledby="join-title">
             <h3 id="join-title" class="section-title">Add nodes</h3>
             <p class="mb-4 text-secondary">
                 Run a join command on the new node. Anyone with a token can join the swarm, so the tokens are shown only on request.
@@ -39,7 +39,7 @@
             }
             else
             {
-                <form method="post" asp-page-handler="ShowJoin" asp-route-endpointId="@Model.EndpointId">
+                <form sp-can="write" method="post" asp-page-handler="ShowJoin" asp-route-endpointId="@Model.EndpointId">
                     <button type="submit" class="btn-soft"><icon name="eye" class="h-4 w-4" /> Show join commands</button>
                 </form>
             }
@@ -47,7 +47,7 @@
             <div class="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
                 @foreach (var role in new[] { "worker", "manager" })
                 {
-                    <form method="post" asp-page-handler="Rotate" asp-route-endpointId="@Model.EndpointId">
+                    <form sp-can="write" method="post" asp-page-handler="Rotate" asp-route-endpointId="@Model.EndpointId">
                         <input type="hidden" name="role" value="@role" />
                         <button type="submit" class="btn-soft danger"
                                 data-confirm="Rotate the @role join token of this swarm? Commands using the current token stop working.">

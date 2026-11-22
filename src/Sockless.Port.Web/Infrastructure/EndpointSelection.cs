@@ -6,6 +6,7 @@ namespace Sockless.Port.Web.Infrastructure;
 /// <summary>
 /// Which endpoint the user is looking at. Endpoint pages carry it in the route
 /// (<c>/endpoints/{endpointId}/…</c>); elsewhere the last one visited is remembered in a cookie.
+/// Only endpoints the user may see count.
 /// </summary>
 public static class EndpointSelection
 {
@@ -14,13 +15,16 @@ public static class EndpointSelection
 
     public static EngineConnection? Resolve(HttpContext context, EngineConnections connections)
     {
-        if (TryGetId(context.GetRouteValue(RouteKey)?.ToString(), out var routeId))
-            return connections.Get(routeId);
+        var access = context.Access();
+        bool Visible(EngineConnection connection) => access?.CanView(connection.Id) == true;
 
-        if (TryGetId(context.Request.Cookies[CookieName], out var cookieId) && connections.Get(cookieId) is { } remembered)
+        if (TryGetId(context.GetRouteValue(RouteKey)?.ToString(), out var routeId))
+            return connections.Get(routeId) is { } routed && Visible(routed) ? routed : null;
+
+        if (TryGetId(context.Request.Cookies[CookieName], out var cookieId) && connections.Get(cookieId) is { } remembered && Visible(remembered))
             return remembered;
 
-        return connections.All.FirstOrDefault();
+        return connections.All.FirstOrDefault(Visible);
     }
 
     public static void Remember(HttpResponse response, int endpointId) =>

@@ -15,7 +15,7 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261122101655_AddAgentEndpoints";
+    public override string LastMigrationId => "20261122173954_AddAccessAuditSettings";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -150,6 +150,82 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                 b.ToTable("AspNetUserTokens");
             });
 
+        modelBuilder.Entity("Sockless.Port.Access.EndpointGrant", b =>
+            {
+                b.Property<string>("UserId")
+                    .HasColumnType("TEXT");
+
+                b.Property<int>("EndpointId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("Role")
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasColumnType("TEXT");
+
+                b.HasKey("UserId", "EndpointId");
+
+                b.HasIndex("EndpointId");
+
+                b.ToTable("EndpointGrants");
+            });
+
+        modelBuilder.Entity("Sockless.Port.Audit.AuditEntry", b =>
+            {
+                b.Property<long>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("Action")
+                    .IsRequired()
+                    .HasMaxLength(128)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("At")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Detail")
+                    .HasMaxLength(2000)
+                    .HasColumnType("TEXT");
+
+                b.Property<int?>("EndpointId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("EndpointName")
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Outcome")
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("RemoteAddress")
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Target")
+                    .HasMaxLength(1000)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("UserId")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("UserName")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
+
+                b.HasKey("Id");
+
+                b.HasIndex("At");
+
+                b.HasIndex("UserName");
+
+                b.ToTable("AuditLog");
+            });
+
         modelBuilder.Entity("Sockless.Port.Data.PortUser", b =>
             {
                 b.Property<string>("Id")
@@ -166,12 +242,26 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                     .IsRequired()
                     .HasColumnType("TEXT");
 
+                b.Property<string>("DefaultRole")
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasColumnType("TEXT");
+
                 b.Property<string>("Email")
                     .HasMaxLength(256)
                     .HasColumnType("TEXT");
 
                 b.Property<bool>("EmailConfirmed")
                     .HasColumnType("INTEGER");
+
+                b.Property<bool>("IsAdmin")
+                    .HasColumnType("INTEGER");
+
+                b.Property<bool>("IsDisabled")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("LastSignInAt")
+                    .HasColumnType("TEXT");
 
                 b.Property<bool>("LockoutEnabled")
                     .HasColumnType("INTEGER");
@@ -197,6 +287,10 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                     .HasColumnType("INTEGER");
 
                 b.Property<string>("SecurityStamp")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("TimeDisplay")
+                    .HasMaxLength(8)
                     .HasColumnType("TEXT");
 
                 b.Property<bool>("TwoFactorEnabled")
@@ -315,6 +409,22 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                 b.ToTable("Registries");
             });
 
+        modelBuilder.Entity("Sockless.Port.Settings.SettingEntry", b =>
+            {
+                b.Property<string>("Key")
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Value")
+                    .IsRequired()
+                    .HasMaxLength(1024)
+                    .HasColumnType("TEXT");
+
+                b.HasKey("Key");
+
+                b.ToTable("Settings");
+            });
+
         modelBuilder.Entity("Sockless.Port.Stacks.StackDefinition", b =>
             {
                 b.Property<int>("Id")
@@ -400,6 +510,21 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
 
         modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<string>", b =>
             {
+                b.HasOne("Sockless.Port.Data.PortUser", null)
+                    .WithMany()
+                    .HasForeignKey("UserId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
+
+        modelBuilder.Entity("Sockless.Port.Access.EndpointGrant", b =>
+            {
+                b.HasOne("Sockless.Port.Engines.EngineEndpoint", null)
+                    .WithMany()
+                    .HasForeignKey("EndpointId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
                 b.HasOne("Sockless.Port.Data.PortUser", null)
                     .WithMany()
                     .HasForeignKey("UserId")

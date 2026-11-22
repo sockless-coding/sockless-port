@@ -1,0 +1,157 @@
+@page "/audit"
+@model Sockless.Port.Web.Pages.Audit.IndexModel
+@using Sockless.Port.Audit
+@{
+    ViewData["Title"] = "Audit log";
+}
+
+<div class="mb-6">
+    <h2 class="page-title">Audit log</h2>
+    <p class="mt-1 text-secondary">
+        Every change made through Sockless Port, and every attempt that was refused: who, what, on which endpoint, and how it went.
+        Entries are kept for @Model.RetentionDays days (<a asp-page="/Settings/Index" class="hover:underline">Settings</a>), and also written to the server log.
+    </p>
+</div>
+
+<form method="get" role="search" aria-label="Filter the audit log" class="mb-4 flex flex-wrap items-end gap-3">
+    <div class="field min-w-[14rem] flex-1">
+        <label for="audit-q">Search</label>
+        <input id="audit-q" type="search" name="q" value="@Model.Q" placeholder="Action, target or reason" autocomplete="off" />
+    </div>
+    <div class="field">
+        <label for="audit-user">User</label>
+        <select id="audit-user" name="user">
+            <option value="">All</option>
+            @foreach (var name in Model.UserNames)
+            {
+                <option value="@name" selected="@(name == Model.UserName)">@name</option>
+            }
+        </select>
+    </div>
+    <div class="field">
+        <label for="audit-endpoint">Endpoint</label>
+        <select id="audit-endpoint" name="endpoint">
+            <option value="">All</option>
+            @foreach (var endpoint in Model.Endpoints)
+            {
+                <option value="@endpoint.Id" selected="@(endpoint.Id == Model.Endpoint)">@endpoint.Name</option>
+            }
+        </select>
+    </div>
+    <div class="field">
+        <label for="audit-outcome">Outcome</label>
+        <select id="audit-outcome" name="outcome">
+            <option value="">All</option>
+            @foreach (var outcome in Enum.GetValues<AuditOutcome>())
+            {
+                <option value="@outcome" selected="@(outcome == Model.Outcome)">@outcome</option>
+            }
+        </select>
+    </div>
+    <button type="submit" class="btn-soft"><icon name="magnifying-glass" class="h-4 w-4" /> Filter</button>
+</form>
+
+@if (Model.Entries.Entries.Count == 0)
+{
+    <section class="card">
+        <div class="empty-state">
+            <icon name="clipboard-document-list" class="h-12 w-12" stroke-width="1.5" />
+            @if (Model.Filtered)
+            {
+                <p class="text-base text-heading">No entries match these filters</p>
+                <p class="text-secondary"><a asp-page="/Audit/Index" class="hover:underline">Clear the filters</a> to see everything.</p>
+            }
+            else
+            {
+                <p class="text-base text-heading">Nothing recorded yet</p>
+                <p class="text-secondary">Changes appear here as people make them.</p>
+            }
+        </div>
+    </section>
+}
+else
+{
+    <div class="table-wrap">
+        <table class="table">
+            <caption class="sr-only">Audit entries, newest first</caption>
+            <thead>
+                <tr>
+                    <th scope="col">When</th>
+                    <th scope="col">User</th>
+                    <th scope="col">Action</th>
+                    <th scope="col">Endpoint</th>
+                    <th scope="col">Outcome</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var entry in Model.Entries.Entries)
+                {
+                    <tr>
+                        <td class="whitespace-nowrap font-mono text-xs">@Format.Timestamp(entry.At)</td>
+                        <td>
+                            @entry.UserName
+                            @if (entry.RemoteAddress is not null)
+                            {
+                                <span class="block font-mono text-xs text-secondary">@entry.RemoteAddress</span>
+                            }
+                        </td>
+                        <th scope="row" class="font-normal">
+                            <span class="font-semibold">@entry.Action</span>
+                            @if (entry.Target is not null)
+                            {
+                                <span class="block break-all font-mono text-xs text-secondary">@entry.Target</span>
+                            }
+                        </th>
+                        <td>@(entry.EndpointName ?? "—")</td>
+                        <td>
+                            @switch (entry.Outcome)
+                            {
+                                case AuditOutcome.Succeeded:
+                                    <span class="badge success">Succeeded</span>
+                                    break;
+                                case AuditOutcome.Failed:
+                                    <span class="badge danger">Failed</span>
+                                    break;
+                                case AuditOutcome.Denied:
+                                    <span class="badge warning">Denied</span>
+                                    break;
+                            }
+                            @if (entry.Detail is not null)
+                            {
+                                <span class="mt-1 block max-w-xs text-xs text-secondary">@entry.Detail</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (Model.Entries.Page > 1 || Model.Entries.HasMore)
+    {
+        <nav aria-label="Pages" class="mt-4 flex items-center justify-between gap-3">
+            @if (Model.Entries.Page > 1)
+            {
+                <a asp-page="/Audit/Index" asp-all-route-data="@ToRoute(Model.Route(Model.Entries.Page - 1))" class="btn-soft">Newer</a>
+            }
+            else
+            {
+                <span></span>
+            }
+            <span class="text-secondary">Page @Model.Entries.Page</span>
+            @if (Model.Entries.HasMore)
+            {
+                <a asp-page="/Audit/Index" asp-all-route-data="@ToRoute(Model.Route(Model.Entries.Page + 1))" class="btn-soft">Older</a>
+            }
+            else
+            {
+                <span></span>
+            }
+        </nav>
+    }
+}
+
+@functions {
+    private static Dictionary<string, string> ToRoute(object values) =>
+        new RouteValueDictionary(values).Where(v => v.Value is not null).ToDictionary(v => v.Key, v => Convert.ToString(v.Value, System.Globalization.CultureInfo.InvariantCulture)!);
+}

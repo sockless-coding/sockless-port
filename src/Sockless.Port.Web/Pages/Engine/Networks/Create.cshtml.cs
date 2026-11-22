@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Sockless.Port.Access;
 using Sockless.Port.Docker.Engine;
 using Sockless.Port.Engines;
 using Sockless.Port.Networks;
@@ -8,6 +9,12 @@ namespace Sockless.Port.Web.Pages.Engine.Networks;
 
 public sealed class CreateModel(EngineConnections connections) : EndpointPageModel(connections)
 {
+    protected override EndpointPermission ReadPermission => EndpointPermission.Operate;
+
+    /// <summary>An overlay network spans the whole swarm.</summary>
+    protected override EndpointPermission WritePermission =>
+        Input.Driver == "overlay" ? EndpointPermission.ManageSwarm : EndpointPermission.Operate;
+
     [BindProperty]
     public NetworkCreateSpec Input { get; set; } = new();
 

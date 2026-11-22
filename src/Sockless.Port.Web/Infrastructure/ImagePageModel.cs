@@ -14,6 +14,8 @@ namespace Sockless.Port.Web.Infrastructure;
 /// </summary>
 public abstract partial class ImagePageModel(EngineConnections connections, ImageUpdates updates) : EndpointPageModel(connections)
 {
+    public override string? AuditTarget => DisplayName;
+
     public const string RouteKey = "imageId";
 
     /// <summary>The ID from the route: 12 to 64 hex characters, without <c>sha256:</c>.</summary>

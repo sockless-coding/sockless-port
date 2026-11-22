@@ -16,22 +16,37 @@
         </div>
     }
 
-    <form method="post" class="space-y-4" novalidate>
-        <input type="hidden" asp-for="ReturnUrl" />
-        <div class="field">
-            <label asp-for="Input.UserName"></label>
-            <input asp-for="Input.UserName" autocomplete="username" autofocus />
-            <partial name="_FieldError" model='"Input_UserName"' />
-        </div>
-        <div class="field">
-            <label asp-for="Input.Password"></label>
-            <input asp-for="Input.Password" autocomplete="current-password" />
-            <partial name="_FieldError" model='"Input_Password"' />
-        </div>
-        <label class="flex items-center gap-2 text-secondary">
-            <input asp-for="Input.RememberMe" class="accent-accent" />
-            Keep me signed in
-        </label>
-        <button type="submit" class="btn-primary w-full">Sign in</button>
-    </form>
+    @if (Model.Oidc.Enabled)
+    {
+        <form method="post" asp-page="/Account/External" class="@(Model.ShowPasswordForm ? "mb-6" : "")">
+            <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+            <button type="submit" class="btn-primary w-full"><icon name="key" class="h-4 w-4" /> @Model.Oidc.DisplayName</button>
+        </form>
+        @if (Model.ShowPasswordForm)
+        {
+            <p class="label-caps mb-4 text-center">or with a password</p>
+        }
+    }
+
+    @if (Model.ShowPasswordForm)
+    {
+        <form method="post" class="space-y-4" novalidate>
+            <input type="hidden" asp-for="ReturnUrl" />
+            <div class="field">
+                <label asp-for="Input.UserName"></label>
+                <input asp-for="Input.UserName" autocomplete="username" autofocus />
+                <partial name="_FieldError" model='"Input_UserName"' />
+            </div>
+            <div class="field">
+                <label asp-for="Input.Password"></label>
+                <input asp-for="Input.Password" autocomplete="current-password" />
+                <partial name="_FieldError" model='"Input_Password"' />
+            </div>
+            <label class="flex items-center gap-2 text-secondary">
+                <input asp-for="Input.RememberMe" class="accent-accent" />
+                Keep me signed in
+            </label>
+            <button type="submit" class="btn-primary w-full">Sign in</button>
+        </form>
+    }
 </section>

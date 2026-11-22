@@ -1,0 +1,16 @@
+@* Errors that belong to the form as a whole (ModelState key ""), above its fields. *@
+@{
+    var errors = ViewContext.ViewData.ModelState.TryGetValue("", out var entry) ? entry.Errors : null;
+}
+@if (errors is { Count: > 0 })
+{
+    <div class="callout danger" role="alert">
+        <icon name="exclamation-triangle" class="h-5 w-5" />
+        <div>
+            @foreach (var error in errors)
+            {
+                <p>@error.ErrorMessage</p>
+            }
+        </div>
+    </div>
+}

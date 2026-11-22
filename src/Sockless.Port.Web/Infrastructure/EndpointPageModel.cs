@@ -1,14 +1,18 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Sockless.Port.Access;
 using Sockless.Port.Docker;
 using Sockless.Port.Engines;
 
 namespace Sockless.Port.Web.Infrastructure;
 
 /// <summary>
-/// Base for pages under <c>/endpoints/{endpointId}</c>: resolves the endpoint (404 if unknown)
-/// and remembers it as the user's current endpoint.
+/// Base for pages under <c>/endpoints/{endpointId}</c>: resolves the endpoint (404 if unknown, or
+/// if the user may not see it), checks the user's role on it, and remembers it as the user's
+/// current endpoint. Reading needs <see cref="ReadPermission"/>; any other method than GET or
+/// HEAD needs <see cref="WritePermission"/>, checked after <see cref="LoadAsync"/> so a page can
+/// decide from what it loaded (a swarm stack needs more than a Compose one).
 /// </summary>
 public abstract class EndpointPageModel(EngineConnections connections) : PageModel
 {
@@ -19,6 +23,24 @@ public abstract class EndpointPageModel(EngineConnections connections) : PageMod
 
     public int EndpointId => Connection.Id;
 
+    public UserAccess Access { get; private set; } = null!;
+
+    /// <summary>What opening the page needs. Forms that only make sense for changing things (create, console) need more.</summary>
+    protected virtual EndpointPermission ReadPermission => EndpointPermission.View;
+
+    /// <summary>What the page's posts need.</summary>
+    protected virtual EndpointPermission WritePermission => EndpointPermission.Operate;
+
+    /// <summary>May the user use this page's actions? Views hide them otherwise (<c>sp-can="write"</c>).</summary>
+    public bool CanWrite => Access.Can(EndpointId, WritePermission);
+
+    public bool CanOperate => Access.Can(EndpointId, EndpointPermission.Operate);
+
+    public bool CanManageSwarm => Access.Can(EndpointId, EndpointPermission.ManageSwarm);
+
+    /// <summary>What the audit log names as the target of this page's posts; null for the route's values.</summary>
+    public virtual string? AuditTarget => null;
+
     public override async Task OnPageHandlerExecutionAsync(PageHandlerExecutingContext context, PageHandlerExecutionDelegate next)
     {
         if (!int.TryParse(RouteData.Values[EndpointSelection.RouteKey]?.ToString(), out var id) || connections.Get(id) is not { } connection)
@@ -27,7 +49,20 @@ public abstract class EndpointPageModel(EngineConnections connections) : PageMod
             return;
         }
 
+        // Endpoints the user may not see don't exist for them.
+        if (HttpContext.Access() is not { } access || !access.CanView(id))
+        {
+            context.Result = NotFound();
+            return;
+        }
+
         Connection = connection;
+        Access = access;
+        if (!access.Can(id, ReadPermission))
+        {
+            context.Result = Denied(ReadPermission);
+            return;
+        }
         EndpointSelection.Remember(Response, id);
 
         if (await LoadAsync(HttpContext.RequestAborted) is { } shortCircuit)
@@ -35,7 +70,24 @@ public abstract class EndpointPageModel(EngineConnections connections) : PageMod
             context.Result = shortCircuit;
             return;
         }
+        if (!HttpMethods.IsGet(Request.Method) && !HttpMethods.IsHead(Request.Method) && !CanWrite)
+        {
+            context.Result = Denied(WritePermission);
+            return;
+        }
+        PageAccess.SetWrite(HttpContext, CanWrite);
         await next();
+    }
+
+    private StatusCodeResult Denied(EndpointPermission needed)
+    {
+        AuditTrail.Deny(HttpContext, needed switch
+        {
+            EndpointPermission.ManageSwarm => $"Needs the swarm operator role on {Connection.Name}.",
+            EndpointPermission.Operate => $"Needs the operator role on {Connection.Name}.",
+            _ => $"No access to {Connection.Name}.",
+        });
+        return StatusCode(StatusCodes.Status403Forbidden);
     }
 
     /// <summary>Loads what every handler of the page needs. Return a result to stop (e.g. 404).</summary>

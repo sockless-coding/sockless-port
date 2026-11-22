@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Sockless.Port.Access;
 using Sockless.Port.Engines;
 using Sockless.Port.Stacks;
 using Sockless.Port.Web.Infrastructure;
@@ -11,6 +12,12 @@ namespace Sockless.Port.Web.Pages.Engine.Stacks;
 /// </summary>
 public sealed class CreateModel(EngineConnections connections, StackStore store, StackJobs jobs, StackValidator validator) : EndpointPageModel(connections)
 {
+    protected override EndpointPermission ReadPermission => EndpointPermission.Operate;
+
+    /// <summary>A swarm stack deploys services across the swarm.</summary>
+    protected override EndpointPermission WritePermission =>
+        ChosenKind == StackKind.Swarm ? EndpointPermission.ManageSwarm : EndpointPermission.Operate;
+
     [BindProperty]
     public StackInput Input { get; set; } = new();
 

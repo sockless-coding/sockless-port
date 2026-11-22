@@ -9,7 +9,20 @@
         <h2 class="page-title">Endpoints</h2>
         <p class="mt-1 text-secondary">The engines Sockless Port manages: the local one, and remote hosts through the agent.</p>
     </div>
-    <a asp-page="/Endpoints/Add" class="btn-primary"><icon name="plus" class="h-4 w-4" /> Add agent</a>
+    <a asp-page="/Endpoints/Add" class="btn-primary" sp-can="admin"><icon name="plus" class="h-4 w-4" /> Add agent</a>
 </div>
 
-<partial name="_EndpointTable" model="Model.Connections" />
+@if (Model.Connections.Count == 0)
+{
+    <section class="card">
+        <div class="empty-state">
+            <icon name="server-stack" class="h-12 w-12" stroke-width="1.5" />
+            <p class="text-base text-heading">No endpoints for you yet</p>
+            <p class="text-secondary">An administrator gives you a role on the endpoints you need.</p>
+        </div>
+    </section>
+}
+else
+{
+    <partial name="_EndpointTable" model="Model.Connections" />
+}

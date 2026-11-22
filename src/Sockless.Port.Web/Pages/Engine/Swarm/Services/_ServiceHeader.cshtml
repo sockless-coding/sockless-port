@@ -33,10 +33,10 @@
 
     @if (service is not null && Model.Manager is not null)
     {
-        <div class="flex flex-wrap items-center gap-2">
+        <div sp-can="write" class="flex flex-wrap items-center gap-2">
             @if (Model.IsReplicated)
             {
-                <form method="post" action="@Url.Page("/Engine/Swarm/Services/Detail", "Scale", route)" class="flex items-end gap-2">
+                <form sp-can="write" method="post" action="@Url.Page("/Engine/Swarm/Services/Detail", "Scale", route)" class="flex items-end gap-2">
                     <div class="field w-24">
                         <label for="scale-replicas">Replicas</label>
                         <input id="scale-replicas" name="replicas" type="number" min="0" max="10000" inputmode="numeric"
@@ -48,25 +48,25 @@
             <details class="menu" data-menu>
                 <summary class="btn-soft" aria-label="More actions for @name">More <icon name="chevron-down" class="h-4 w-4" /></summary>
                 <div class="menu-panel w-80 space-y-3 p-3">
-                    <form method="post" action="@Url.Page("/Engine/Swarm/Services/Detail", "Redeploy", route)">
+                    <form sp-can="write" method="post" action="@Url.Page("/Engine/Swarm/Services/Detail", "Redeploy", route)">
                         <p class="mb-2 text-xs text-secondary">Replaces every task, as the update config says, without changing anything.</p>
                         <button type="submit" class="btn-soft"><icon name="arrow-path" class="h-4 w-4" /> Restart tasks</button>
                     </form>
-                    <form method="post" action="@Url.Page("/Engine/Swarm/Services/Detail", "Redeploy", route)">
+                    <form sp-can="write" method="post" action="@Url.Page("/Engine/Swarm/Services/Detail", "Redeploy", route)">
                         <input type="hidden" name="pull" value="true" />
                         <p class="mb-2 text-xs text-secondary">Asks the registry which image @(service.Image ?? "the tag") is now, and replaces the tasks with it.</p>
                         <button type="submit" class="btn-soft"><icon name="cloud-arrow-down" class="h-4 w-4" /> Update image</button>
                     </form>
                     @if (service.PreviousSpec is not null)
                     {
-                        <form method="post" action="@Url.Page("/Engine/Swarm/Services/Detail", "Rollback", route)">
+                        <form sp-can="write" method="post" action="@Url.Page("/Engine/Swarm/Services/Detail", "Rollback", route)">
                             <p class="mb-2 text-xs text-secondary">Goes back to the settings before the last update.</p>
                             <button type="submit" class="btn-soft" data-confirm="Roll @name back to the settings it had before its last update?">
                                 <icon name="arrow-uturn-left" class="h-4 w-4" /> Roll back
                             </button>
                         </form>
                     }
-                    <form method="post" action="@Url.Page("/Engine/Swarm/Services/Detail", "Remove", route)" class="border-t border-line pt-3">
+                    <form sp-can="write" method="post" action="@Url.Page("/Engine/Swarm/Services/Detail", "Remove", route)" class="border-t border-line pt-3">
                         <input type="hidden" name="tab" value="@tab" />
                         <button type="submit" class="btn-soft danger"
                                 data-confirm="Remove the service @name? Its tasks stop on every node.@(service.Stack is { } s ? $" It belongs to the stack {s}, which brings it back at its next deploy." : "")">

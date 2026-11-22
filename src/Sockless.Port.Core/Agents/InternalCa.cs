@@ -27,13 +27,24 @@ public sealed partial class InternalCa(IOptions<PortOptions> options, IDataProte
     internal static readonly TimeSpan AgentLifetime = TimeSpan.FromDays(365 * 5);
     internal static readonly TimeSpan ClientLifetime = TimeSpan.FromDays(365);
 
+    /// <summary>Browsers refuse server certificates valid for longer than 398 days.</summary>
+    internal static readonly TimeSpan HttpsLifetime = TimeSpan.FromDays(397);
+
     /// <summary>The client certificate is replaced this long before it expires. Agents accept any the CA signed.</summary>
     internal static readonly TimeSpan ClientRenewBefore = TimeSpan.FromDays(30);
+
+    /// <summary>The UI's HTTPS certificate is replaced this long before it expires.</summary>
+    internal static readonly TimeSpan HttpsRenewBefore = TimeSpan.FromDays(30);
 
     private const string CaCertificateFile = "ca.pem";
     private const string CaKeyFile = "ca.key.protected";
     private const string ClientCertificateFile = "client.pem";
     private const string ClientKeyFile = "client.key.protected";
+    private const string HttpsCertificateFile = "https.pem";
+    private const string HttpsKeyFile = "https.key.protected";
+
+    /// <summary>The UI's HTTPS certificate's subject. Agents accept only <see cref="AgentProtocol.ServerCommonName"/> as a client, so it can't stand in for the server.</summary>
+    internal const string HttpsCommonName = "sockless-port-ui";
 
     private static readonly Oid ServerAuth = new("1.3.6.1.5.5.7.3.1");
     private static readonly Oid ClientAuth = new("1.3.6.1.5.5.7.3.2");
@@ -42,6 +53,7 @@ public sealed partial class InternalCa(IOptions<PortOptions> options, IDataProte
     private readonly Lock _gate = new();
     private (X509Certificate2 Certificate, string Pem)? _ca;
     private (string CertificatePem, string KeyPem, DateTimeOffset NotAfter)? _client;
+    private (X509Certificate2 Certificate, string Names)? _https;
 
     private string Directory => Path.Combine(options.Value.DataPath, "pki");
 
@@ -121,6 +133,78 @@ public sealed partial class InternalCa(IOptions<PortOptions> options, IDataProte
             LogIssued(logger, endpointId, host);
             return new IssuedCertificate(certificate.ExportCertificatePem(), DockerTransport.Thumbprint(certificate), notAfter);
         }
+    }
+
+    /// <summary>
+    /// The UI's HTTPS server certificate for <paramref name="hostNames"/> (DNS names or IP
+    /// addresses), with its key. Issued on first use, and again when the names change or it's
+    /// within <see cref="HttpsRenewBefore"/> of expiring. Browsers trust it once the CA is installed.
+    /// </summary>
+    public X509Certificate2 HttpsCertificate(IReadOnlyList<string> hostNames)
+    {
+        var names = string.Join(",", hostNames.Select(n => n.Trim().ToLowerInvariant()).Where(n => n.Length > 0).Distinct().Order(StringComparer.Ordinal));
+        if (names.Length == 0)
+            throw new ArgumentException("The certificate needs at least one host name.", nameof(hostNames));
+
+        lock (_gate)
+        {
+            var now = time.GetUtcNow();
+            if (_https is { } cached && cached.Names == names && new DateTimeOffset(cached.Certificate.NotAfter.ToUniversalTime()) - now > HttpsRenewBefore)
+                return cached.Certificate;
+
+            var ca = LoadOrCreateCa().Certificate;
+            var certificatePath = Path.Combine(Directory, HttpsCertificateFile);
+            var keyPath = Path.Combine(Directory, HttpsKeyFile);
+            if (_https is null && File.Exists(certificatePath) && File.Exists(keyPath))
+            {
+                var pem = File.ReadAllText(certificatePath);
+                using var stored = X509Certificate2.CreateFromPem(pem);
+                if (new DateTimeOffset(stored.NotAfter.ToUniversalTime()) - now > HttpsRenewBefore && stored.Issuer == ca.Subject && NamesOf(stored) == names)
+                {
+                    _https = (LoadWithKey(pem, Unprotect(keyPath, "HTTPS")), names);
+                    return _https.Value.Certificate;
+                }
+            }
+
+            using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+            var request = new CertificateRequest($"CN={HttpsCommonName}", key, HashAlgorithmName.SHA256);
+            request.CertificateExtensions.Add(new X509BasicConstraintsExtension(certificateAuthority: false, false, 0, critical: true));
+            request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, critical: true));
+            request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension([ServerAuth], critical: false));
+            var san = new SubjectAlternativeNameBuilder();
+            foreach (var name in names.Split(','))
+            {
+                if (IPAddress.TryParse(name, out var ip))
+                    san.AddIpAddress(ip);
+                else
+                    san.AddDnsName(name);
+            }
+            request.CertificateExtensions.Add(san.Build());
+            request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, critical: false));
+            request.CertificateExtensions.Add(X509AuthorityKeyIdentifierExtension.CreateFromCertificate(ca, includeKeyIdentifier: true, includeIssuerAndSerial: false));
+            var expires = Min(now + HttpsLifetime, new DateTimeOffset(ca.NotAfter.ToUniversalTime()));
+            using var certificate = request.Create(ca, now.AddMinutes(-5), expires, NewSerial());
+            var certificatePem = certificate.ExportCertificatePem();
+            var keyPem = key.ExportPkcs8PrivateKeyPem();
+
+            System.IO.Directory.CreateDirectory(Directory);
+            File.WriteAllText(keyPath, _protector.Protect(keyPem));
+            File.WriteAllText(certificatePath, certificatePem);
+            LogIssuedHttps(logger, names, expires);
+            _https?.Certificate.Dispose();
+            _https = (LoadWithKey(certificatePem, keyPem), names);
+            return _https.Value.Certificate;
+        }
+    }
+
+    /// <summary>The certificate's DNS names and IP addresses, normalised as <see cref="HttpsCertificate"/> compares them.</summary>
+    private static string NamesOf(X509Certificate2 certificate)
+    {
+        var extension = certificate.Extensions.OfType<X509SubjectAlternativeNameExtension>().FirstOrDefault();
+        if (extension is null)
+            return "";
+        return string.Join(",", extension.EnumerateDnsNames().Concat(extension.EnumerateIPAddresses().Select(ip => ip.ToString()))
+            .Select(n => n.ToLowerInvariant()).Distinct().Order(StringComparer.Ordinal));
     }
 
     // ---------------------------------------------------------------- storage
@@ -222,6 +306,9 @@ public sealed partial class InternalCa(IOptions<PortOptions> options, IDataProte
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Issued a client certificate for agents, valid until {NotAfter}")]
     private static partial void LogIssuedClient(ILogger logger, DateTimeOffset notAfter);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Issued the HTTPS certificate for {Names}, valid until {NotAfter}")]
+    private static partial void LogIssuedHttps(ILogger logger, string names, DateTimeOffset notAfter);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Issued a certificate for the agent of endpoint {EndpointId} ({Host})")]
     private static partial void LogIssued(ILogger logger, int endpointId, string host);

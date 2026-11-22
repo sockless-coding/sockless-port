@@ -7,12 +7,17 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Sockless.Port.Access;
 using Sockless.Port.Agents;
+using Sockless.Port.Audit;
+using Sockless.Port.Backup;
 using Sockless.Port.Engines;
 using Microsoft.Extensions.Options;
 using Sockless.Port.Data;
 using Sockless.Port.Images;
+using Sockless.Port.Https;
 using Sockless.Port.Registries;
+using Sockless.Port.Settings;
 using Sockless.Port.Setup;
 using Sockless.Port.Stacks;
 using Sockless.Port.Volumes;
@@ -55,10 +60,18 @@ public static class ServiceCollectionExtensions
                 options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
             })
             .AddEntityFrameworkStores<PortDbContext>()
-            .AddSignInManager()
+            .AddSignInManager<PortSignInManager>()
             .AddDefaultTokenProviders();
 
         services.AddSingleton<SetupState>();
+        services.AddScoped<AccessLoader>();
+        services.AddScoped<UserAdmin>();
+        services.AddScoped<ExternalSignIn>();
+        services.AddSingleton<PortSettings>();
+        services.AddSingleton<AuditLog>();
+        services.AddHostedService<AuditRetention>();
+        services.AddSingleton<DataBackup>();
+        services.AddSingleton<HttpsCertificates>();
 
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<EngineConnections>();
@@ -93,12 +106,19 @@ public static class ServiceCollectionExtensions
         if (Directory.Exists(port.TempPath))
             Directory.Delete(port.TempPath, recursive: true);
         Directory.CreateDirectory(port.TempPath);
+
+        // A restore uploaded in Settings replaces the data before anything opens it.
+        var time = services.GetRequiredService<TimeProvider>();
+        if (DataBackup.ApplyPending(port, time.GetUtcNow()) is { } aside)
+            services.GetRequiredService<ILoggerFactory>().CreateLogger("Sockless.Port.Backup")
+                .LogWarning("Restored the data volume from a backup. The data it replaced is in {Aside}.", aside);
         Directory.CreateDirectory(port.StacksPath);
 
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<PortDbContext>();
         await db.Database.MigrateAsync(cancellationToken);
         await services.GetRequiredService<SetupState>().InitializeAsync(db, cancellationToken);
+        await services.GetRequiredService<PortSettings>().LoadAsync(db, cancellationToken);
         await RegisterEndpointsAsync(db, port, services, cancellationToken);
     }
 

@@ -6,6 +6,7 @@ namespace Sockless.Port.Web.Pages;
 
 [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
 [IgnoreAntiforgeryToken]
+[Sockless.Port.Web.Infrastructure.NoAudit] // Re-executed after a failed request, which is audited itself.
 public sealed class ErrorModel : PageModel
 {
     public string Heading { get; private set; } = "Something went wrong";
@@ -23,6 +24,7 @@ public sealed class ErrorModel : PageModel
         {
             404 => ("Page not found", "There's nothing at this address."),
             403 => ("Access denied", "Your account doesn't have access to this page."),
+            429 => ("Too many requests", "Wait a minute, then try again."),
             400 => ("Bad request", "The request wasn't valid. If you submitted a form, reload the page and try again."),
             null => (Heading, Message),
             _ => ($"Error {code}", Message),

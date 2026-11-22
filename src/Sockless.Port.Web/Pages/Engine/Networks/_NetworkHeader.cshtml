@@ -57,7 +57,7 @@
 
     @if (network is not null && !network.IsPredefined)
     {
-        <form method="post" asp-page="/Engine/Networks/Detail" asp-page-handler="Remove"
+        <form sp-can="write" method="post" asp-page="/Engine/Networks/Detail" asp-page-handler="Remove"
               asp-route-endpointId="@Model.EndpointId" asp-route-networkId="@Model.NetworkId">
             <input type="hidden" name="tab" value="@tab" />
             <button type="submit" class="btn-soft danger"

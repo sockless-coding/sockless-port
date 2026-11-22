@@ -1,0 +1,70 @@
+@page "/users/create"
+@model Sockless.Port.Web.Pages.Users.CreateModel
+@using Sockless.Port.Web.Pages.Users
+@{
+    ViewData["Title"] = "Add user";
+}
+
+<nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+    <a asp-page="/Users/Index" class="hover:underline">Users</a>
+    <span class="text-line-accent" aria-hidden="true">/</span>
+    <span aria-current="page">Add</span>
+</nav>
+<div class="mb-6">
+    <h2 class="page-title">Add user</h2>
+    <p class="mt-1 text-secondary">Give them the user name and password yourself; there's no email invitation.</p>
+</div>
+
+<form method="post" class="space-y-6" novalidate>
+    <partial name="_FormErrors" />
+
+    <section class="card space-y-4" aria-labelledby="user-title">
+        <h3 id="user-title" class="section-title">User</h3>
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div class="field">
+                <label asp-for="Input.UserName"></label>
+                <input asp-for="Input.UserName" autocomplete="off" spellcheck="false" maxlength="64" aria-describedby="name-hint" />
+                <p class="hint" id="name-hint">Letters, digits and . _ @@ - only.</p>
+                <partial name="_FieldError" model='"Input_UserName"' />
+            </div>
+            <div class="field">
+                <label asp-for="Input.Email">Email address (optional)</label>
+                <input asp-for="Input.Email" type="email" autocomplete="off" spellcheck="false" aria-describedby="email-hint" />
+                <p class="hint" id="email-hint">
+                    @if (Model.SingleSignOn)
+                    {
+                        <text>Single sign-on finds the user by this address, if the provider says it's verified.</text>
+                    }
+                    else
+                    {
+                        <text>For your records; nothing is sent to it.</text>
+                    }
+                </p>
+                <partial name="_FieldError" model='"Input_Email"' />
+            </div>
+            <div class="field">
+                <label asp-for="Input.Password">Password@(Model.SingleSignOn ? " (optional)" : "")</label>
+                <input asp-for="Input.Password" autocomplete="new-password" aria-describedby="password-hint" />
+                <p class="hint" id="password-hint">
+                    At least 12 characters.
+                    @if (Model.SingleSignOn)
+                    {
+                        <text>Leave it empty for a user who signs in only through single sign-on.</text>
+                    }
+                </p>
+                <partial name="_FieldError" model='"Input_Password"' />
+            </div>
+            <div class="field">
+                <label asp-for="Input.ConfirmPassword"></label>
+                <input asp-for="Input.ConfirmPassword" autocomplete="new-password" />
+                <partial name="_FieldError" model='"Input_ConfirmPassword"' />
+            </div>
+        </div>
+    </section>
+
+    <partial name="_AccessFields" model="new AccessFieldsView(Model.Access, Model.Endpoints, IsSelf: false)" />
+
+    <div class="flex justify-end">
+        <button type="submit" class="btn-primary"><icon name="plus" class="h-4 w-4" /> Add user</button>
+    </div>
+</form>

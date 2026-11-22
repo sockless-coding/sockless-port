@@ -59,7 +59,7 @@
                                         </td>
                                         <td class="font-mono text-xs">@(endpoint?.MacAddress is { Length: > 0 } mac ? mac : "—")</td>
                                         <td class="num">
-                                            <form method="post" asp-page="/Engine/Networks/Detail" asp-page-handler="Disconnect"
+                                            <form sp-can="write" method="post" asp-page="/Engine/Networks/Detail" asp-page-handler="Disconnect"
                                                   asp-route-endpointId="@Model.EndpointId" asp-route-networkId="@Model.NetworkId">
                                                 <input type="hidden" name="container" value="@container.Id" />
                                                 <button type="submit" class="btn-soft danger" aria-label="Disconnect @container.DisplayName"
@@ -77,7 +77,7 @@
 
                 @if (connectable && Model.Others.Count > 0)
                 {
-                    <form method="post" asp-page="/Engine/Networks/Detail" asp-page-handler="Connect"
+                    <form sp-can="write" method="post" asp-page="/Engine/Networks/Detail" asp-page-handler="Connect"
                           asp-route-endpointId="@Model.EndpointId" asp-route-networkId="@Model.NetworkId"
                           class="mt-4 flex flex-wrap items-end gap-3 border-t border-line pt-4">
                         <div class="field min-w-[12rem]">

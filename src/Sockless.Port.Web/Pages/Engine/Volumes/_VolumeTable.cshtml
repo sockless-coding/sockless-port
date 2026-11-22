@@ -47,7 +47,7 @@
         <form id="volume-bulk-form" method="post" asp-page="/Engine/Volumes/Index" asp-page-handler="Remove"
               asp-route-endpointId="@Model.EndpointId" asp-route-q="@Model.Q" asp-route-usage="@Model.Usage" asp-route-sizes="@(Model.Sizes ? "true" : null)"
               data-bulk-noun="volumes">
-            <div class="mb-3 flex flex-wrap items-center gap-3" data-bulk-toolbar>
+            <div sp-can="write" class="mb-3 flex flex-wrap items-center gap-3" data-bulk-toolbar>
                 <span class="text-secondary" data-bulk-count aria-live="polite">@Model.Rows.Count of @Model.Total shown@(Model.TotalSize is { } total ? $" · {Format.Bytes(total)} in all" : "")</span>
                 <span class="flex-1"></span>
                 <button type="submit" class="btn-soft danger" data-bulk-action disabled
@@ -61,7 +61,7 @@
                     <caption class="sr-only">Volumes</caption>
                     <thead>
                         <tr>
-                            <th scope="col" class="w-8"><input type="checkbox" data-select-all aria-label="Select all shown volumes" /></th>
+                            <th sp-can="write" scope="col" class="w-8"><input type="checkbox" data-select-all aria-label="Select all shown volumes" /></th>
                             <th scope="col">Volume</th>
                             <th scope="col">Driver</th>
                             @if (Model.Sizes)
@@ -78,7 +78,7 @@
                         {
                             var created = Format.EngineTime(row.Summary.CreatedAt);
                             <tr>
-                                <td><input type="checkbox" name="ids" value="@row.Name" data-name="@row.ShortName" aria-label="Select @row.ShortName" /></td>
+                                <td sp-can="write"><input type="checkbox" name="ids" value="@row.Name" data-name="@row.ShortName" aria-label="Select @row.ShortName" /></td>
                                 <th scope="row" class="max-w-[22rem]">
                                     <a asp-page="/Engine/Volumes/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-volumeName="@row.Name"
                                        class="break-all font-mono text-xs font-semibold hover:underline" title="@row.Name">@row.ShortName</a>
@@ -120,7 +120,7 @@
                                     }
                                 </td>
                                 <td class="num">
-                                    <button type="submit" form="volume-row-actions" class="btn-soft danger" aria-label="Remove @row.ShortName"
+                                    <button sp-can="write" type="submit" form="volume-row-actions" class="btn-soft danger" aria-label="Remove @row.ShortName"
                                             formaction="@Url.Page("/Engine/Volumes/Index", "Remove", new { endpointId = Model.EndpointId, Model.Q, Model.Usage, sizes = Model.Sizes ? "true" : null, ids = row.Name })"
                                             data-confirm="Remove volume @row.ShortName? Its data is deleted.@(row.UsedBy.Count > 0 ? " Containers use it, so the engine will refuse." : "")">
                                         <icon name="trash" class="h-4 w-4" /> Remove

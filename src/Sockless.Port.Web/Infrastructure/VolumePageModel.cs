@@ -13,6 +13,8 @@ namespace Sockless.Port.Web.Infrastructure;
 /// </summary>
 public abstract class VolumePageModel(EngineConnections connections, VolumeBrowser browser) : EndpointPageModel(connections)
 {
+    public override string? AuditTarget => VolumeName;
+
     public const string RouteKey = "volumeName";
 
     public string VolumeName { get; private set; } = "";

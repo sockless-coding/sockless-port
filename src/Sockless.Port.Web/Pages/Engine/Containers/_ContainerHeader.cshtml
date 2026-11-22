@@ -55,7 +55,7 @@
 
     @if (container is not null)
     {
-        <form method="post" asp-page="/Engine/Containers/Detail" asp-page-handler="Action"
+        <form sp-can="write" method="post" asp-page="/Engine/Containers/Detail" asp-page-handler="Action"
               asp-route-endpointId="@Model.EndpointId" asp-route-containerId="@Model.ContainerId"
               class="flex flex-wrap items-center gap-2">
             <input type="hidden" name="tab" value="@tab" />
@@ -103,7 +103,7 @@
                             </div>
                         </div>
                         <div class="mb-3">
-                            <a asp-page="/Engine/Containers/Create" asp-route-endpointId="@Model.EndpointId" asp-route-from="@Model.ContainerId" class="btn-soft">
+                            <a sp-can="write" asp-page="/Engine/Containers/Create" asp-route-endpointId="@Model.EndpointId" asp-route-from="@Model.ContainerId" class="btn-soft">
                                 <icon name="plus" class="h-4 w-4" /> Duplicate
                             </a>
                         </div>
@@ -122,12 +122,12 @@
             </details>
         </form>
         @* images.js pulls first with live progress when "Pull the image first" is checked, then sets pulled. *@
-        <form id="recreate-form" method="post" asp-page="/Engine/Containers/Detail" asp-page-handler="Recreate"
+        <form sp-can="write" id="recreate-form" method="post" asp-page="/Engine/Containers/Detail" asp-page-handler="Recreate"
               asp-route-endpointId="@Model.EndpointId" asp-route-containerId="@Model.ContainerId"
               data-pull-before-submit data-endpoint="@Model.EndpointId" data-pull-reference="@container.Config?.Image" data-pull-when="[name=pull][form=recreate-form]">
             <input type="hidden" name="pulled" value="false" data-pulled />
         </form>
-        <form id="rename-form" method="post" asp-page="/Engine/Containers/Detail" asp-page-handler="Rename"
+        <form sp-can="write" id="rename-form" method="post" asp-page="/Engine/Containers/Detail" asp-page-handler="Rename"
               asp-route-endpointId="@Model.EndpointId" asp-route-containerId="@Model.ContainerId">
             <input type="hidden" name="tab" value="@tab" />
         </form>
@@ -167,7 +167,7 @@
 }
 
 <nav aria-label="Container" class="tabs mb-6">
-    @foreach (var (key, tabPage, label) in DetailModel.Tabs)
+    @foreach (var (key, tabPage, label) in DetailModel.Tabs.Where(t => t.Tab != "console" || Model.CanOperate))
     {
         <a asp-page="@tabPage" asp-route-endpointId="@Model.EndpointId" asp-route-containerId="@Model.ContainerId"
            class="tab" aria-current="@(key == tab ? "page" : null)">@label</a>

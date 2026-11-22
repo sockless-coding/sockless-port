@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
+using Sockless.Port.Access;
 using Sockless.Port.Engines;
 using Sockless.Port.Volumes;
 using Sockless.Port.Web.Infrastructure;
@@ -13,6 +14,9 @@ namespace Sockless.Port.Web.Pages.Engine.Volumes;
 /// </summary>
 public sealed class FilesModel(EngineConnections connections, VolumeBrowser browser) : VolumePageModel(connections, browser)
 {
+    /// <summary>A volume's files can hold anything (keys, databases): operators only.</summary>
+    protected override EndpointPermission ReadPermission => EndpointPermission.Operate;
+
     /// <summary>The path from the query, normalized; null when it leaves the volume.</summary>
     public string? CurrentPath { get; private set; } = "/";
 

@@ -11,7 +11,7 @@ public sealed class TopBarModel(EngineConnections connections) : PageModel
     public IActionResult OnGet(int? current)
     {
         var view = TopBarView.For(HttpContext, connections);
-        if (current is { } id && connections.Get(id) is { } selected)
+        if (current is { } id && connections.Get(id) is { } selected && HttpContext.CanView(selected))
             view = view with { Current = selected };
         return Partial("_TopBarStatus", view);
     }

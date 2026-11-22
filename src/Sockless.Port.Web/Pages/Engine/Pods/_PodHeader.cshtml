@@ -39,7 +39,7 @@
 
     @if (pod is not null)
     {
-        <form method="post" asp-page="/Engine/Pods/Detail" asp-page-handler="Action"
+        <form sp-can="write" method="post" asp-page="/Engine/Pods/Detail" asp-page-handler="Action"
               asp-route-endpointId="@Model.EndpointId" asp-route-podId="@Model.PodId" class="flex flex-wrap items-center gap-2">
             <input type="hidden" name="tab" value="@tab" />
             @* A degraded pod is active, but start still starts the containers that aren't running. *@

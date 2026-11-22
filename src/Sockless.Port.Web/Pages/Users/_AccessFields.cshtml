@@ -1,0 +1,88 @@
+@* Administrator, default role, and a role per endpoint. Field names: Access.IsAdmin, Access.DefaultRole, Access.Grants[{id}]. *@
+@model Sockless.Port.Web.Pages.Users.AccessFieldsView
+@using Sockless.Port.Access
+@{
+    var form = Model.Form;
+}
+<section class="card space-y-4" aria-labelledby="access-title">
+    <h3 id="access-title" class="section-title">Access</h3>
+
+    <div>
+        <label class="flex items-center gap-2">
+            <input type="checkbox" name="Access.IsAdmin" value="true" checked="@form.IsAdmin" class="accent-accent"
+                   aria-describedby="admin-hint" disabled="@(Model.IsSelf && form.IsAdmin)" />
+            <input type="hidden" name="Access.IsAdmin" value="false" disabled="@(Model.IsSelf && form.IsAdmin)" />
+            Administrator
+        </label>
+        @if (Model.IsSelf && form.IsAdmin)
+        {
+            <input type="hidden" name="Access.IsAdmin" value="true" />
+        }
+        <p class="hint" id="admin-hint">
+            Manages users, endpoints, registries and settings, reads the audit log, and has every role on every endpoint.
+            @if (Model.IsSelf && form.IsAdmin)
+            {
+                <text>You can't remove your own administrator role.</text>
+            }
+        </p>
+        <partial name="_FieldError" model='"Admin"' />
+    </div>
+
+    <div class="space-y-4" data-access-roles>
+        @if (form.IsAdmin)
+        {
+            <p class="hint">The roles below apply only if the administrator role is removed.</p>
+        }
+        <div class="field max-w-sm">
+            <label for="access-default">Role on all endpoints</label>
+            <select id="access-default" name="Access.DefaultRole" aria-describedby="default-hint">
+                @foreach (var role in EndpointRoles.All)
+                {
+                    <option value="@role" selected="@(role == form.DefaultRole)">@role.Label()</option>
+                }
+            </select>
+            <p class="hint" id="default-hint">Also applies to endpoints added later. Change it for single endpoints below.</p>
+        </div>
+
+        @if (Model.Endpoints.Count > 0)
+        {
+            <div class="table-wrap">
+                <table class="table">
+                    <caption class="sr-only">Role per endpoint</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Endpoint</th>
+                            <th scope="col">Role</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var endpoint in Model.Endpoints)
+                        {
+                            var id = $"access-grant-{endpoint.Id}";
+                            <tr>
+                                <th scope="row"><label for="@id" class="font-semibold">@endpoint.Name</label></th>
+                                <td>
+                                    <select id="@id" name="Access.Grants[@endpoint.Id]" class="max-w-xs">
+                                        <option value="" selected="@(form.GrantFor(endpoint) is null)">Same as all endpoints</option>
+                                        @foreach (var role in EndpointRoles.All)
+                                        {
+                                            <option value="@role" selected="@(role == form.GrantFor(endpoint))">@role.Label()</option>
+                                        }
+                                    </select>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <dl class="grid grid-cols-1 gap-2 text-xs md:grid-cols-[10rem_1fr]">
+            @foreach (var role in EndpointRoles.All.Skip(1))
+            {
+                <dt class="font-semibold">@role.Label()</dt>
+                <dd class="text-secondary">@role.Describe()</dd>
+            }
+        </dl>
+    </div>
+</section>

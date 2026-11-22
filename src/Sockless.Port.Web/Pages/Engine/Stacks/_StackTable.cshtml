@@ -114,14 +114,14 @@
                             <td class="num">
                                 @if (row.IsExternal && !row.IsSwarm && !row.IsSelf)
                                 {
-                                    <a asp-page="/Engine/Stacks/Create" asp-route-endpointId="@Model.EndpointId" asp-route-adopt="@row.Name" class="btn-soft"
+                                    <a sp-can="operate" asp-page="/Engine/Stacks/Create" asp-route-endpointId="@Model.EndpointId" asp-route-adopt="@row.Name" class="btn-soft"
                                        aria-label="Adopt @row.Name">
                                         <icon name="arrow-down-on-square" class="h-4 w-4" /> Adopt
                                     </a>
                                 }
                                 else if (!row.IsExternal)
                                 {
-                                    <a asp-page="/Engine/Stacks/Editor" asp-route-endpointId="@Model.EndpointId" asp-route-stackName="@row.Name" class="btn-soft"
+                                    <a sp-can="@(row.IsSwarm ? "swarm" : "operate")" asp-page="/Engine/Stacks/Editor" asp-route-endpointId="@Model.EndpointId" asp-route-stackName="@row.Name" class="btn-soft"
                                        aria-label="Edit @row.Name">
                                         <icon name="pencil-square" class="h-4 w-4" /> Edit
                                     </a>

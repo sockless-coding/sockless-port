@@ -20,14 +20,26 @@ public sealed partial class PortFactory : WebApplicationFactory<Program>
 
     private readonly string _dataPath = Path.Combine(Path.GetTempPath(), "sockless-port-tests", Guid.NewGuid().ToString("n"));
     private readonly string _engine;
+    private readonly IReadOnlyDictionary<string, string>? _settings;
 
-    public PortFactory(string engine = UnreachableEngine) => _engine = engine;
+    /// <param name="settings">More configuration, e.g. <c>Port:Oidc:Authority</c>.</param>
+    public PortFactory(string engine = UnreachableEngine, IReadOnlyDictionary<string, string>? settings = null)
+    {
+        _engine = engine;
+        _settings = settings;
+    }
+
+    public string DataPath => _dataPath;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
         builder.UseSetting("Port:DataPath", _dataPath);
         builder.UseSetting("Port:LocalEngine", _engine);
+        // Tests sign in many times from one address.
+        builder.UseSetting("Port:SignInAttemptsPerMinute", "1000");
+        foreach (var (key, value) in _settings ?? new Dictionary<string, string>())
+            builder.UseSetting(key, value);
     }
 
     public EngineConnection LocalEndpoint => Services.GetRequiredService<EngineConnections>().All.Single(c => c.IsLocal);
@@ -62,6 +74,40 @@ public sealed partial class PortFactory : WebApplicationFactory<Program>
             ["Input.Password"] = AdminPassword,
             ["Input.ConfirmPassword"] = AdminPassword,
         }));
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        return browser;
+    }
+
+    /// <summary>Adds a user through the Users page, as the administrator <paramref name="admin"/>.</summary>
+    /// <param name="grants">Roles per endpoint id; the rest follow <paramref name="defaultRole"/>.</param>
+    public static async Task CreateUserAsync(HttpClient admin, string name, string password, Access.EndpointRole defaultRole,
+        IReadOnlyDictionary<int, Access.EndpointRole>? grants = null, bool isAdmin = false)
+    {
+        var token = await GetAntiforgeryTokenAsync(admin, "/users/create");
+        var fields = new Dictionary<string, string>
+        {
+            ["Input.UserName"] = name,
+            ["Input.Password"] = password,
+            ["Input.ConfirmPassword"] = password,
+            ["Access.IsAdmin"] = isAdmin ? "true" : "false",
+            ["Access.DefaultRole"] = defaultRole.ToString(),
+        };
+        foreach (var (endpoint, role) in grants ?? new Dictionary<int, Access.EndpointRole>())
+            fields[$"Access.Grants[{endpoint}]"] = role.ToString();
+        var response = await admin.PostAsync("/users/create", Form(token, fields), TestContext.Current.CancellationToken);
+        Assert.True(response.StatusCode == HttpStatusCode.Redirect, $"Creating {name} answered {response.StatusCode}: {await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)}");
+    }
+
+    /// <summary>A browser signed in as <paramref name="name"/>.</summary>
+    public async Task<HttpClient> SignInAsync(string name, string password)
+    {
+        var browser = CreateBrowser();
+        var token = await GetAntiforgeryTokenAsync(browser, "/account/login");
+        var response = await browser.PostAsync("/account/login", Form(token, new()
+        {
+            ["Input.UserName"] = name,
+            ["Input.Password"] = password,
+        }), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         return browser;
     }

@@ -13,7 +13,7 @@
         </div>
         @if (Model.Manager is not null)
         {
-            <a asp-page="/Engine/Swarm/Services/Create" asp-route-endpointId="@Model.EndpointId" class="btn-soft secondary">
+            <a sp-can="write" asp-page="/Engine/Swarm/Services/Create" asp-route-endpointId="@Model.EndpointId" class="btn-soft secondary">
                 <icon name="plus" class="h-4 w-4" /> Create service
             </a>
         }

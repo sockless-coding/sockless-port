@@ -12,6 +12,9 @@ public static class Flash
 
     public static void Error(ITempDataDictionary tempData, string message) => tempData[ErrorKey] = message;
 
+    /// <summary>The error left for the next page, without using it up (for the audit log).</summary>
+    public static string? PeekError(ITempDataDictionary tempData) => tempData.Peek(ErrorKey) as string;
+
     public static (string? Success, string? Error) Take(ITempDataDictionary tempData) =>
         (tempData[SuccessKey] as string, tempData[ErrorKey] as string);
 }

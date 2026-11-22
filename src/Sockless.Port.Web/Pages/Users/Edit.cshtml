@@ -1,0 +1,129 @@
+@page "/users/{id}"
+@model Sockless.Port.Web.Pages.Users.EditModel
+@using Sockless.Port.Web.Pages.Users
+@{
+    var user = Model.Summary.User;
+    ViewData["Title"] = user.UserName;
+}
+
+<nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+    <a asp-page="/Users/Index" class="hover:underline">Users</a>
+    <span class="text-line-accent" aria-hidden="true">/</span>
+    <span aria-current="page">@user.UserName</span>
+</nav>
+<div class="mb-6">
+    <h2 class="page-title break-all">@user.UserName</h2>
+    <div class="mt-2 flex flex-wrap items-center gap-1">
+        @if (user.IsDisabled)
+        {
+            <span class="badge danger">Disabled</span>
+        }
+        else
+        {
+            <span class="badge success">Enabled</span>
+        }
+        @if (user.IsAdmin)
+        {
+            <span class="badge-stat">Administrator</span>
+        }
+        @if (Model.IsSelf)
+        {
+            <span class="badge-stat">You</span>
+        }
+    </div>
+    <p class="mt-2 text-xs text-secondary">
+        Added <span title="@Format.Timestamp(user.CreatedAt)">@Format.Relative(user.CreatedAt)</span>.
+        Last signed in @(user.LastSignInAt is { } last ? Format.Relative(last) : "never").
+    </p>
+</div>
+
+<form method="post" class="space-y-6" novalidate>
+    <partial name="_FormErrors" />
+    <section class="card space-y-4" aria-labelledby="details-title">
+        <h3 id="details-title" class="section-title">Details</h3>
+        <div class="field max-w-md">
+            <label asp-for="Email">Email address</label>
+            <input asp-for="Email" type="email" autocomplete="off" spellcheck="false" aria-describedby="email-hint" />
+            <p class="hint" id="email-hint">
+                @(Model.SingleSignOn ? "Single sign-on finds the user by this address, if the provider says it's verified." : "For your records; nothing is sent to it.")
+            </p>
+            <partial name="_FieldError" model='"Email"' />
+        </div>
+    </section>
+
+    <partial name="_AccessFields" model="new AccessFieldsView(Model.Access, Model.Endpoints, Model.IsSelf)" />
+
+    <div class="flex justify-end">
+        <button type="submit" class="btn-soft secondary">Save</button>
+    </div>
+</form>
+
+<section class="card mt-6" aria-labelledby="password-title">
+    <h3 id="password-title" class="section-title">Password</h3>
+    <p class="mb-4 max-w-3xl text-secondary">
+        @(Model.Summary.HasPassword ? "Setting a new one ends the user's sessions and lifts a lockout." : "The user has no password and signs in only through single sign-on. Setting one lets them sign in with it too.")
+    </p>
+    <form method="post" asp-page-handler="Password" class="flex flex-wrap items-start gap-3" novalidate>
+        <div class="field min-w-[16rem]">
+            <label asp-for="Password">New password</label>
+            <input asp-for="Password" autocomplete="new-password" aria-describedby="new-password-hint" />
+            <p class="hint" id="new-password-hint">At least 12 characters.</p>
+            <partial name="_FieldError" model='"Password"' />
+        </div>
+        <button type="submit" class="btn-soft secondary mt-6">Set password</button>
+    </form>
+</section>
+
+@if (Model.Summary.Logins.Count > 0)
+{
+    <section class="card mt-6" aria-labelledby="sso-title">
+        <h3 id="sso-title" class="section-title">Single sign-on</h3>
+        <ul class="space-y-2">
+            @foreach (var login in Model.Summary.Logins)
+            {
+                <li class="flex flex-wrap items-center justify-between gap-3">
+                    <span>Linked to <span class="font-semibold">@login</span></span>
+                    <form method="post" asp-page-handler="RemoveLogin" asp-route-provider="@Sockless.Port.Web.Infrastructure.ExternalLogins.Scheme">
+                        <button type="submit" class="btn-soft danger" data-confirm="Unlink @user.UserName from @login?">Unlink</button>
+                    </form>
+                </li>
+            }
+        </ul>
+    </section>
+}
+
+@if (!Model.IsSelf)
+{
+    <section class="card mt-6" aria-labelledby="status-title">
+        <h3 id="status-title" class="section-title">@(user.IsDisabled ? "Enable" : "Disable")</h3>
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <p class="max-w-3xl text-secondary">
+                @(user.IsDisabled ? "The user can sign in again with what they had." : "The user can't sign in, and their sessions end at their next request. Their access is kept for when they're enabled again.")
+            </p>
+            @if (user.IsDisabled)
+            {
+                <form method="post" asp-page-handler="Enable">
+                    <button type="submit" class="btn-soft secondary">Enable @user.UserName</button>
+                </form>
+            }
+            else
+            {
+                <form method="post" asp-page-handler="Disable">
+                    <button type="submit" class="btn-soft danger" data-confirm="Disable @user.UserName? Their sessions end at once.">Disable @user.UserName</button>
+                </form>
+            }
+        </div>
+    </section>
+
+    <section class="card mt-6" aria-labelledby="remove-title">
+        <h3 id="remove-title" class="section-title">Remove</h3>
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <p class="max-w-3xl text-secondary">The audit log keeps their entries under their name.</p>
+            <form method="post" asp-page-handler="Remove">
+                <button type="submit" class="btn-soft danger" data-confirm="Remove the user @user.UserName?">
+                    <icon name="trash" class="h-4 w-4" /> Remove @user.UserName
+                </button>
+            </form>
+        </div>
+    </section>
+}

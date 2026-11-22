@@ -2,11 +2,16 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.RateLimiting;
+using Sockless.Port.Audit;
 using Sockless.Port.Data;
 using Sockless.Port.Setup;
+using Sockless.Port.Web.Infrastructure;
 
 namespace Sockless.Port.Web.Pages.Setup;
 
+[EnableRateLimiting(SignInLimit.Policy)]
+[NoAudit] // Writes its own entries, without the token or password.
 public sealed class SetupModel(SetupState setup, UserManager<PortUser> users, SignInManager<PortUser> signIn) : PageModel
 {
     [BindProperty]
@@ -26,6 +31,8 @@ public sealed class SetupModel(SetupState setup, UserManager<PortUser> users, Si
 
         if (!setup.ValidateToken(Input.SetupToken))
         {
+            await AuditTrail.WriteAsync(HttpContext, "Setup: create administrator", Input.UserName, outcome: AuditOutcome.Failed,
+                detail: "Wrong setup token.", userName: "anonymous");
             ModelState.AddModelError("Input.SetupToken", "That setup token is not valid. Copy it again from the container log.");
             return Page();
         }
@@ -39,6 +46,7 @@ public sealed class SetupModel(SetupState setup, UserManager<PortUser> users, Si
 
         var user = await users.FindByNameAsync(Input.UserName.Trim());
         await signIn.SignInAsync(user!, isPersistent: false);
+        await AuditTrail.WriteAsync(HttpContext, "Setup: create administrator", user!.UserName, userName: user.UserName);
         return RedirectToPage("/Index");
     }
 

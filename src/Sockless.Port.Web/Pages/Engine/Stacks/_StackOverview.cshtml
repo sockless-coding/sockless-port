@@ -77,7 +77,7 @@
                     <icon name="exclamation-triangle" class="h-5 w-5" />
                     <p>
                         The saved files differ from what was deployed @Format.Relative(definition.DeployedAt.Value).
-                        <a asp-page="/Engine/Stacks/Editor" asp-route-endpointId="@Model.EndpointId" asp-route-stackName="@Model.StackName" asp-route-review="true" class="hover:underline">Review the changes</a>.
+                        <span sp-can="write"><a asp-page="/Engine/Stacks/Editor" asp-route-endpointId="@Model.EndpointId" asp-route-stackName="@Model.StackName" asp-route-review="true" class="hover:underline">Review the changes</a>.</span>
                     </p>
                 </div>
             }

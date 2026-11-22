@@ -68,6 +68,8 @@ public abstract class PodsPageModel(EngineConnections connections) : EndpointPag
 /// </summary>
 public abstract partial class PodPageModel(EngineConnections connections) : PodsPageModel(connections)
 {
+    public override string? AuditTarget => DisplayName;
+
     public const string RouteKey = "podId";
 
     /// <summary>The ID or name from the route.</summary>

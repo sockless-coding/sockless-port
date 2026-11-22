@@ -1,0 +1,84 @@
+@page "/account"
+@model Sockless.Port.Web.Pages.Account.IndexModel
+@using Sockless.Port.Access
+@using Sockless.Port.Settings
+@{
+    ViewData["Title"] = "Your account";
+    var me = Model.Me;
+}
+
+<div class="mb-6">
+    <h2 class="page-title break-all">@me.UserName</h2>
+    <p class="mt-1 text-secondary">Your access, password and how times are shown to you.</p>
+</div>
+
+<section class="card space-y-4" aria-labelledby="access-title">
+    <h3 id="access-title" class="section-title">Access</h3>
+    @if (me.IsAdmin)
+    {
+        <p>You're an administrator: every role on every endpoint, and the users, endpoints, registries, audit log and settings.</p>
+    }
+    else if (Model.Roles.Count == 0)
+    {
+        <p class="text-secondary">You have no access to any endpoint yet. Ask an administrator.</p>
+    }
+    else
+    {
+        <ul class="space-y-1">
+            @foreach (var (endpoint, role) in Model.Roles)
+            {
+                <li>
+                    <a asp-page="/Engine/Index" asp-route-endpointId="@endpoint.Id" class="font-semibold hover:underline">@endpoint.Name</a>:
+                    @role.Label(). <span class="text-secondary">@role.Describe()</span>
+                </li>
+            }
+        </ul>
+    }
+</section>
+
+<section class="card mt-6 space-y-4" aria-labelledby="time-title">
+    <h3 id="time-title" class="section-title">Times</h3>
+    <form method="post" asp-page-handler="Time" class="flex flex-wrap items-end gap-3">
+        <input type="hidden" name="returnUrl" value="/account" />
+        <div class="field">
+            <label for="account-time">Show times in</label>
+            <select id="account-time" name="display">
+                <option value="" selected="@(me.TimeDisplay is null)">The default (@(Model.DefaultTimeDisplay == TimeDisplay.Utc ? "UTC" : "your browser's time zone"))</option>
+                <option value="@TimeDisplay.Local" selected="@(me.TimeDisplay == TimeDisplay.Local)">Your browser's time zone</option>
+                <option value="@TimeDisplay.Utc" selected="@(me.TimeDisplay == TimeDisplay.Utc)">UTC</option>
+            </select>
+        </div>
+        <button type="submit" class="btn-soft">Save</button>
+    </form>
+</section>
+
+<section class="card mt-6 space-y-4" aria-labelledby="password-title">
+    <h3 id="password-title" class="section-title">Password</h3>
+    @if (!Model.HasPassword)
+    {
+        <p class="text-secondary">You sign in through single sign-on. Setting a password lets you sign in with it too.</p>
+    }
+    <form method="post" asp-page-handler="Password" class="grid max-w-3xl grid-cols-1 gap-4 md:grid-cols-3" novalidate>
+        @if (Model.HasPassword)
+        {
+            <div class="field">
+                <label asp-for="Input.CurrentPassword"></label>
+                <input asp-for="Input.CurrentPassword" autocomplete="current-password" />
+                <partial name="_FieldError" model='"Input_CurrentPassword"' />
+            </div>
+        }
+        <div class="field">
+            <label asp-for="Input.NewPassword"></label>
+            <input asp-for="Input.NewPassword" autocomplete="new-password" />
+            <partial name="_FieldError" model='"Input_NewPassword"' />
+        </div>
+        <div class="field">
+            <label asp-for="Input.ConfirmPassword"></label>
+            <input asp-for="Input.ConfirmPassword" autocomplete="new-password" />
+            <partial name="_FieldError" model='"Input_ConfirmPassword"' />
+        </div>
+        <div class="md:col-span-3 flex justify-end">
+            <button type="submit" class="btn-soft secondary">@(Model.HasPassword ? "Change password" : "Set password")</button>
+        </div>
+    </form>
+</section>

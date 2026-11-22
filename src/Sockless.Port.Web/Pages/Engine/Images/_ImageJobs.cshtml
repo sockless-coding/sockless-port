@@ -16,7 +16,7 @@
                         <partial name="_ImageJob" model="job.View()" />
                         @if (job.Kind == Sockless.Port.Images.ImageJobKind.Build)
                         {
-                            <a asp-page="/Engine/Images/Build" asp-route-endpointId="@Model.EndpointId" asp-route-job="@job.Id" class="text-xs hover:underline">Open the build</a>
+                            <a sp-can="write" asp-page="/Engine/Images/Build" asp-route-endpointId="@Model.EndpointId" asp-route-job="@job.Id" class="text-xs hover:underline">Open the build</a>
                         }
                     </li>
                 }

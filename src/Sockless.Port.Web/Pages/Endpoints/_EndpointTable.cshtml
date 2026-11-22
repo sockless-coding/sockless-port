@@ -62,7 +62,7 @@
                     </td>
                     <td class="whitespace-nowrap font-mono text-xs text-secondary">@Format.Timestamp(endpoint.State.Since)</td>
                     <td class="num">
-                        <a asp-page="/Endpoints/Settings" asp-route-endpointId="@endpoint.Id" class="btn-soft" aria-label="Settings for @endpoint.Name">
+                        <a asp-page="/Endpoints/Settings" asp-route-endpointId="@endpoint.Id" class="btn-soft" aria-label="Settings for @endpoint.Name" sp-can="admin">
                             <icon name="cog-6-tooth" class="h-4 w-4" /> Settings
                         </a>
                     </td>

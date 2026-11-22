@@ -14,6 +14,8 @@ namespace Sockless.Port.Web.Infrastructure;
 /// </summary>
 public abstract partial class NetworkPageModel(EngineConnections connections) : EndpointPageModel(connections)
 {
+    public override string? AuditTarget => DisplayName;
+
     public const string RouteKey = "networkId";
 
     /// <summary>The ID or name from the route.</summary>

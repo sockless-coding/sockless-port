@@ -27,6 +27,9 @@ services:
     environment:
       # Set to true when running behind a reverse proxy that sets X-Forwarded-* headers.
       ASPNETCORE_FORWARDEDHEADERS_ENABLED: "false"
+      # Built-in HTTPS (publish "9443:8443" too); see README. Single sign-on: Port__Oidc__*.
+      # Port__Https__Port: "8443"
+      # Port__Https__HostNames__0: port.example.com
 
 volumes:
   port-data:

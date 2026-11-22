@@ -1,0 +1,76 @@
+@page "/users"
+@model Sockless.Port.Web.Pages.Users.IndexModel
+@using Sockless.Port.Web.Pages.Users
+@{
+    ViewData["Title"] = "Users";
+    var me = HttpContext.Access()?.UserId;
+}
+
+<div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div>
+        <h2 class="page-title">Users</h2>
+        <p class="mt-1 text-secondary">Who can sign in, and what they may do on each endpoint.</p>
+    </div>
+    <a asp-page="/Users/Create" class="btn-primary"><icon name="plus" class="h-4 w-4" /> Add user</a>
+</div>
+
+<div class="table-wrap">
+    <table class="table">
+        <caption class="sr-only">Users</caption>
+        <thead>
+            <tr>
+                <th scope="col">User</th>
+                <th scope="col">Access</th>
+                <th scope="col">Signs in with</th>
+                <th scope="col">Last sign-in</th>
+                <th scope="col" class="num"><span class="sr-only">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var summary in Model.Users)
+            {
+                var user = summary.User;
+                <tr>
+                    <th scope="row">
+                        <a asp-page="/Users/Edit" asp-route-id="@user.Id" class="font-semibold hover:underline">@user.UserName</a>
+                        <span class="mt-1 flex flex-wrap gap-1">
+                            @if (user.Id == me)
+                            {
+                                <span class="badge-stat">You</span>
+                            }
+                            @if (user.IsDisabled)
+                            {
+                                <span class="badge danger">Disabled</span>
+                            }
+                            @if (user.LockoutEnd is { } lockout && lockout > DateTimeOffset.UtcNow)
+                            {
+                                <span class="badge warning" title="Too many wrong passwords. It ends @Format.Timestamp(lockout).">Locked out</span>
+                            }
+                        </span>
+                        @if (user.Email is not null)
+                        {
+                            <span class="mt-1 block text-xs text-secondary">@user.Email</span>
+                        }
+                    </th>
+                    <td>@UserDisplay.Summary(summary, Model.Endpoints)</td>
+                    <td class="text-secondary">
+                        @string.Join(", ", (summary.HasPassword ? new[] { "Password" } : []).Concat(summary.Logins).DefaultIfEmpty("Nothing yet"))
+                    </td>
+                    <td class="whitespace-nowrap text-secondary">
+                        @if (user.LastSignInAt is { } last)
+                        {
+                            <span title="@Format.Timestamp(last)">@Format.Relative(last)</span>
+                        }
+                        else
+                        {
+                            <span>Never</span>
+                        }
+                    </td>
+                    <td class="num">
+                        <a asp-page="/Users/Edit" asp-route-id="@user.Id" class="btn-soft" aria-label="Edit @user.UserName">Edit</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

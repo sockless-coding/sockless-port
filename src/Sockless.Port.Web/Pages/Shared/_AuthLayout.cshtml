@@ -1,8 +1,9 @@
-@* Layout for pages shown before sign-in: setup and login. *@
+@* Layout for pages shown before sign-in: setup, login and the single sign-on callback. *@
 <!DOCTYPE html>
 <html lang="en" class="dark h-full">
 <head>
     <partial name="_Head" />
+    @await RenderSectionAsync("Head", required: false)
 </head>
 <body>
     <a href="#main-content" class="skip-link">Skip to main content</a>

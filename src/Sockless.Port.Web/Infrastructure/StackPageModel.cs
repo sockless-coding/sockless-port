@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Sockless.Port.Access;
 using Sockless.Port.Containers;
 using Sockless.Port.Docker;
 using Sockless.Port.Docker.Engine;
@@ -16,6 +17,11 @@ namespace Sockless.Port.Web.Infrastructure;
 /// </summary>
 public abstract class StackPageModel(EngineConnections connections, StackStore store, StackJobs jobs) : EndpointPageModel(connections)
 {
+    /// <summary>A swarm stack's changes reach the whole swarm.</summary>
+    protected override EndpointPermission WritePermission => IsSwarm ? EndpointPermission.ManageSwarm : EndpointPermission.Operate;
+
+    public override string? AuditTarget => StackName;
+
     public const string RouteKey = "stackName";
 
     public string StackName { get; private set; } = "";

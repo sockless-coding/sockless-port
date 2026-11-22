@@ -13,6 +13,8 @@ namespace Sockless.Port.Web.Infrastructure;
 /// </summary>
 public abstract partial class NodePageModel(EngineConnections connections) : SwarmPageModel(connections)
 {
+    public override string? AuditTarget => DisplayName;
+
     public const string RouteKey = "nodeId";
 
     public string NodeKey { get; private set; } = "";

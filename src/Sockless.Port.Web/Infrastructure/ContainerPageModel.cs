@@ -15,6 +15,8 @@ namespace Sockless.Port.Web.Infrastructure;
 /// </summary>
 public abstract partial class ContainerPageModel(EngineConnections connections) : EndpointPageModel(connections)
 {
+    public override string? AuditTarget => DisplayName;
+
     public const string RouteKey = "containerId";
 
     public string ContainerId { get; private set; } = "";

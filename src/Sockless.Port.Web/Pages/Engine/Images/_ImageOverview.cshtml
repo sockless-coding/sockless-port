@@ -47,7 +47,7 @@
                                             }
                                         </td>
                                         <td class="num">
-                                            <form method="post" asp-page="/Engine/Images/Detail" asp-page-handler="Untag"
+                                            <form sp-can="write" method="post" asp-page="/Engine/Images/Detail" asp-page-handler="Untag"
                                                   asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId">
                                                 <input type="hidden" name="tag" value="@tag" />
                                                 <button type="submit" class="btn-soft danger" aria-label="Remove the tag @tag"

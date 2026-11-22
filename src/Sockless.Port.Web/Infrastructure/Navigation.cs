@@ -14,8 +14,9 @@ public enum NavScope
 /// <summary>A sidebar entry. <see cref="Page"/> is the Razor page path, e.g. <c>/Engine/Index</c>.</summary>
 /// <param name="MatchSubPages">Also highlight on pages in the same folder (e.g. a detail page).</param>
 /// <param name="Requires">Shown only while the current endpoint is online with these capabilities.</param>
+/// <param name="AdminOnly">Shown only to administrators.</param>
 public sealed record NavItem(string Label, string Page, string Icon, NavScope Scope = NavScope.Global, bool MatchSubPages = true,
-    EngineCapabilities Requires = EngineCapabilities.None)
+    EngineCapabilities Requires = EngineCapabilities.None, bool AdminOnly = false)
 {
     public bool IsAvailable(EngineDescriptor? engine) => Requires == EngineCapabilities.None || engine?.Has(Requires) == true;
 }
@@ -48,7 +49,10 @@ public static class Navigation
     public static IReadOnlyList<NavItem> Admin { get; } =
     [
         new("Endpoints", "/Endpoints/Index", "server-stack"),
-        new("Registries", "/Registries/Index", "key"),
+        new("Registries", "/Registries/Index", "key", AdminOnly: true),
+        new("Users", "/Users/Index", "users", AdminOnly: true),
+        new("Audit log", "/Audit/Index", "clipboard-document-list", AdminOnly: true),
+        new("Settings", "/Settings/Index", "cog-6-tooth", AdminOnly: true),
     ];
 
     /// <summary>

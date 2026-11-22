@@ -22,7 +22,7 @@
         </div>
         @if (Model.Manager is not null)
         {
-            <a asp-page="@($"{folder}/Create")" asp-route-endpointId="@Model.EndpointId" class="btn-soft secondary">
+            <a sp-can="write" asp-page="@($"{folder}/Create")" asp-route-endpointId="@Model.EndpointId" class="btn-soft secondary">
                 <icon name="plus" class="h-4 w-4" /> Create @Model.Noun
             </a>
         }

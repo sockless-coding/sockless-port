@@ -25,7 +25,7 @@
         </div>
         @if (item is not null && Model.Manager is not null)
         {
-            <form method="post" action="@Url.Page($"{folder}/Detail", "Remove", new { endpointId = Model.EndpointId, objectId = item.Id })">
+            <form sp-can="write" method="post" action="@Url.Page($"{folder}/Detail", "Remove", new { endpointId = Model.EndpointId, objectId = item.Id })">
                 <button type="submit" class="btn-soft danger"
                         data-confirm="Remove the @Model.Noun @item.Name?@(Model.Users.Count > 0 ? " Services use it, so the engine will refuse until they no longer do." : "")">
                     <icon name="trash" class="h-4 w-4" /> Remove @Model.Noun

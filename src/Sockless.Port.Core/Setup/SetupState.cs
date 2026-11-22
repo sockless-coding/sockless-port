@@ -76,7 +76,7 @@ public sealed partial class SetupState(ILogger<SetupState> logger)
             return IdentityResult.Failed(new IdentityError { Code = "SetupComplete", Description = "Setup has already been completed." });
         }
 
-        var result = await users.CreateAsync(new PortUser { UserName = userName }, password);
+        var result = await users.CreateAsync(new PortUser { UserName = userName, IsAdmin = true }, password);
         if (result.Succeeded)
             MarkComplete();
         return result;

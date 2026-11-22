@@ -38,7 +38,7 @@
 
         <form id="pod-bulk-form" method="post" asp-page="/Engine/Pods/Index" asp-page-handler="Bulk"
               asp-route-endpointId="@Model.EndpointId" asp-route-state="@Model.State" asp-route-q="@Model.Q" data-bulk-noun="pods">
-            <div class="mb-3 flex flex-wrap items-center gap-2" data-bulk-toolbar>
+            <div sp-can="write" class="mb-3 flex flex-wrap items-center gap-2" data-bulk-toolbar>
                 <span class="text-secondary" data-bulk-count aria-live="polite">@Model.Rows.Count of @Model.Total shown</span>
                 <span class="flex-1"></span>
                 <button type="submit" name="action" value="start" class="btn-soft" data-bulk-action disabled>
@@ -61,7 +61,7 @@
                     <caption class="sr-only">Pods</caption>
                     <thead>
                         <tr>
-                            <th scope="col" class="w-8"><input type="checkbox" data-select-all aria-label="Select all shown pods" /></th>
+                            <th sp-can="write" scope="col" class="w-8"><input type="checkbox" data-select-all aria-label="Select all shown pods" /></th>
                             <th scope="col">Pod</th>
                             <th scope="col">State</th>
                             <th scope="col">Containers</th>
@@ -74,7 +74,7 @@
                         {
                             var created = Format.EngineTime(row.Summary.Created);
                             <tr>
-                                <td>
+                                <td sp-can="write">
                                     @if (!row.IsSelf)
                                     {
                                         <input type="checkbox" name="ids" value="@row.Id" data-name="@row.Name" aria-label="Select @row.Name" />
@@ -130,7 +130,7 @@
                                     {
                                         @if (!row.IsSelf)
                                         {
-                                            <button type="submit" form="pod-row-actions" class="btn-soft" aria-label="Stop @row.Name"
+                                            <button sp-can="write" type="submit" form="pod-row-actions" class="btn-soft" aria-label="Stop @row.Name"
                                                     formaction="@Url.Page("/Engine/Pods/Index", "Bulk", new { endpointId = Model.EndpointId, Model.State, Model.Q, ids = row.Id, action = "stop" })">
                                                 <icon name="stop" class="h-4 w-4" /> Stop
                                             </button>
@@ -138,7 +138,7 @@
                                     }
                                     else
                                     {
-                                        <button type="submit" form="pod-row-actions" class="btn-soft" aria-label="Start @row.Name"
+                                        <button sp-can="write" type="submit" form="pod-row-actions" class="btn-soft" aria-label="Start @row.Name"
                                                 formaction="@Url.Page("/Engine/Pods/Index", "Bulk", new { endpointId = Model.EndpointId, Model.State, Model.Q, ids = row.Id, action = "start" })">
                                             <icon name="play" class="h-4 w-4" /> Start
                                         </button>

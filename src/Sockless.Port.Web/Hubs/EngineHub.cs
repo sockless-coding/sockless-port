@@ -1,6 +1,8 @@
 using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Sockless.Port.Access;
+using Sockless.Port.Audit;
 using Sockless.Port.Docker;
 using Sockless.Port.Docker.Streams;
 using Sockless.Port.Engines;
@@ -13,10 +15,12 @@ namespace Sockless.Port.Web.Hubs;
 /// <summary>
 /// Pushes live endpoint state and engine events to browsers, and streams container and service logs, stats,
 /// terminals, image jobs (pulls and builds) and stack jobs (Compose runs). Every client receives <c>endpointState</c>; <c>engineEvent</c> goes only to
-/// clients watching that endpoint.
+/// clients watching that endpoint. Every call checks the user's role on its endpoint, read afresh
+/// for each call, so a change applies to a connection that's already open.
 /// </summary>
 [Authorize]
-public sealed class EngineHub(EngineConnections connections, TerminalSessions terminals, ImageJobs jobs, StackJobs stackJobs) : Hub
+public sealed class EngineHub(EngineConnections connections, TerminalSessions terminals, ImageJobs jobs, StackJobs stackJobs,
+    AccessLoader accessLoader, AuditLog audit) : Hub
 {
     public const string Path = "/hubs/engine";
 
@@ -27,7 +31,7 @@ public sealed class EngineHub(EngineConnections connections, TerminalSessions te
 
     public async Task Watch(int endpointId)
     {
-        Connection(endpointId);
+        await RequireAsync(endpointId, EndpointPermission.View);
         await Groups.AddToGroupAsync(Context.ConnectionId, Group(endpointId));
     }
 
@@ -42,6 +46,8 @@ public sealed class EngineHub(EngineConnections connections, TerminalSessions te
     public async IAsyncEnumerable<LogMessage> StreamLogs(int endpointId, string containerId, int tail, bool timestamps,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        await RequireAsync(endpointId, EndpointPermission.View);
+        var zone = TimeZones.For(Context.GetHttpContext());
         var client = Client(endpointId);
         var tty = await IsTtyAsync(endpointId, client, containerId, cancellationToken);
         var options = new LogOptions { Follow = true, Tail = Math.Clamp(tail, 0, MaxTail), Timestamps = timestamps, Tty = tty };
@@ -52,7 +58,7 @@ public sealed class EngineHub(EngineConnections connections, TerminalSessions te
             yield return new LogMessage(
                 line.Stream == StreamKind.Stderr ? "stderr" : "stdout",
                 line.Text,
-                line.Timestamp is { } time ? Format.Timestamp(time) : null);
+                line.Timestamp is { } time ? Format.Timestamp(time, zone) : null);
         }
     }
 
@@ -63,6 +69,8 @@ public sealed class EngineHub(EngineConnections connections, TerminalSessions te
     public async IAsyncEnumerable<LogMessage> StreamServiceLogs(int endpointId, string serviceId, int tail, bool timestamps,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        await RequireAsync(endpointId, EndpointPermission.View);
+        var zone = TimeZones.For(Context.GetHttpContext());
         var client = Client(endpointId);
         Docker.Models.SwarmService service;
         Dictionary<string, string> sources;
@@ -90,7 +98,7 @@ public sealed class EngineHub(EngineConnections connections, TerminalSessions te
             yield return new LogMessage(
                 line.Line.Stream == StreamKind.Stderr ? "stderr" : "stdout",
                 line.Line.Text,
-                line.Line.Timestamp is { } time ? Format.Timestamp(time) : null,
+                line.Line.Timestamp is { } time ? Format.Timestamp(time, zone) : null,
                 line.TaskId is { } task ? sources.GetValueOrDefault(task, SwarmDisplay.Short(task)) : null);
         }
     }
@@ -105,6 +113,7 @@ public sealed class EngineHub(EngineConnections connections, TerminalSessions te
 
     public async IAsyncEnumerable<StatsMessage> StreamStats(int endpointId, string containerId, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        await RequireAsync(endpointId, EndpointPermission.View);
         var client = Client(endpointId);
         await foreach (var s in Guard(client.StreamStatsAsync(containerId, cancellationToken), endpointId, cancellationToken))
         {
@@ -117,16 +126,23 @@ public sealed class EngineHub(EngineConnections connections, TerminalSessions te
 
     /// <summary>Starts a shell in the container. Output arrives as <c>terminalOutput</c>, the end as <c>terminalExit</c>.</summary>
     /// <returns>The session id for input, resize and close.</returns>
+    /// <remarks>A console is a shell in the container, so it needs the operator role, and every one opened is in the audit log.</remarks>
     public async Task<string> OpenTerminal(int endpointId, string containerId, string command, string? user, int columns, int rows)
     {
+        var (connection, access) = await RequireAsync(endpointId, EndpointPermission.Operate, "Containers: open console", containerId);
         var client = Client(endpointId);
+        var target = ShortId(containerId) + ": " + command + (string.IsNullOrEmpty(user) ? "" : " as " + user);
         try
         {
-            return await terminals.OpenAsync(Context.ConnectionId, client, containerId, command, user, columns, rows, Context.ConnectionAborted);
+            var session = await terminals.OpenAsync(Context.ConnectionId, client, containerId, command, user, columns, rows, Context.ConnectionAborted);
+            await WriteAuditAsync(access, connection, "Containers: open console", target);
+            return session;
         }
         catch (Exception ex) when (EngineFailures.IsFailure(ex, Context.ConnectionAborted))
         {
-            throw new HubException(EngineFailures.Describe(ex, Connection(endpointId)));
+            var message = EngineFailures.Describe(ex, connection);
+            await WriteAuditAsync(access, connection, "Containers: open console", target, AuditOutcome.Failed, message);
+            throw new HubException(message);
         }
     }
 
@@ -152,16 +168,20 @@ public sealed class EngineHub(EngineConnections connections, TerminalSessions te
     /// returns the job id. The pull goes on if the browser leaves; <see cref="CancelJob"/> stops it.
     /// </summary>
     /// <param name="onlyIfMissing">Finish at once when the image is already on the engine.</param>
-    public string StartPull(int endpointId, string reference, bool onlyIfMissing)
+    public async Task<string> StartPull(int endpointId, string reference, bool onlyIfMissing)
     {
+        var (connection, access) = await RequireAsync(endpointId, EndpointPermission.Operate, "Images: pull", reference);
         if (ImageReference.Parse(reference) is null)
             throw new HubException("Enter an image such as nginx, nginx:1.27 or ghcr.io/org/app:tag.");
         try
         {
-            return jobs.StartPull(Connection(endpointId), reference.Trim(), onlyIfMissing).Id;
+            var job = jobs.StartPull(connection, reference.Trim(), onlyIfMissing);
+            await WriteAuditAsync(access, connection, "Images: pull", reference.Trim());
+            return job.Id;
         }
         catch (ImageJobRejectedException ex)
         {
+            await WriteAuditAsync(access, connection, "Images: pull", reference.Trim(), AuditOutcome.Failed, ex.Message);
             throw new HubException(ex.Message);
         }
     }
@@ -170,11 +190,19 @@ public sealed class EngineHub(EngineConnections connections, TerminalSessions te
     public async IAsyncEnumerable<JobMessage> WatchJob(string jobId, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var job = jobs.Get(jobId) ?? throw new HubException("That pull or build is no longer known. It may have finished a while ago.");
+        await RequireAsync(job.EndpointId, EndpointPermission.View);
         await foreach (var view in job.WatchAsync(JobUpdateInterval, cancellationToken))
             yield return JobMessage.From(view);
     }
 
-    public void CancelJob(string jobId) => jobs.Get(jobId)?.Cancel();
+    public async Task CancelJob(string jobId)
+    {
+        if (jobs.Get(jobId) is not { } job)
+            return;
+        var (connection, access) = await RequireAsync(job.EndpointId, EndpointPermission.Operate, "Images: cancel", job.Target);
+        job.Cancel();
+        await WriteAuditAsync(access, connection, "Images: cancel", job.Target);
+    }
 
     public sealed record LayerMessage(string Id, string Phase, string Status, long Current, long Total);
 
@@ -205,11 +233,19 @@ public sealed class EngineHub(EngineConnections connections, TerminalSessions te
     public async IAsyncEnumerable<StackJobMessage> WatchStackJob(string jobId, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var job = stackJobs.Get(jobId) ?? throw new HubException("That stack job is no longer known. It may have finished a while ago.");
+        await RequireAsync(job.EndpointId, EndpointPermission.View);
         await foreach (var view in job.WatchAsync(JobUpdateInterval, cancellationToken))
             yield return StackJobMessage.From(view);
     }
 
-    public void CancelStackJob(string jobId) => stackJobs.Get(jobId)?.Cancel();
+    public async Task CancelStackJob(string jobId)
+    {
+        if (stackJobs.Get(jobId) is not { } job)
+            return;
+        var (connection, access) = await RequireAsync(job.EndpointId, EndpointPermission.Operate, "Stacks: cancel", job.StackName);
+        job.Cancel();
+        await WriteAuditAsync(access, connection, "Stacks: cancel", job.StackName);
+    }
 
     /// <param name="State"><c>running</c>, <c>succeeded</c>, <c>failed</c> or <c>canceled</c>.</param>
     /// <param name="Badge">The badge's word, as the page renders it.</param>
@@ -234,6 +270,35 @@ public sealed class EngineHub(EngineConnections connections, TerminalSessions te
     }
 
     // ---------------------------------------------------------------- helpers
+
+    /// <summary>
+    /// The endpoint, if the user may do <paramref name="permission"/> there. An endpoint they may
+    /// not see is unknown to them. Refused changes (those with an <paramref name="action"/>) are audited.
+    /// </summary>
+    private async Task<(EngineConnection Connection, UserAccess Access)> RequireAsync(int endpointId, EndpointPermission permission,
+        string? action = null, string? target = null)
+    {
+        var access = await accessLoader.LoadAsync(Context.User!, Context.ConnectionAborted)
+                     ?? throw new HubException("Your session has ended. Reload the page and sign in again.");
+        if (connections.Get(endpointId) is not { } connection || !access.CanView(endpointId))
+            throw new HubException("Unknown endpoint.");
+        if (!access.Can(endpointId, permission))
+        {
+            var role = permission == EndpointPermission.ManageSwarm ? "swarm operator" : "operator";
+            var reason = "Needs the " + role + " role on " + connection.Name + ".";
+            if (action is not null)
+                await WriteAuditAsync(access, connection, action, target is null ? null : ShortId(target), AuditOutcome.Denied, reason);
+            throw new HubException("You can't do that here: it needs the " + role + " role on " + connection.Name + ".");
+        }
+        return (connection, access);
+    }
+
+    private Task WriteAuditAsync(UserAccess access, EngineConnection connection, string action, string? target,
+        AuditOutcome outcome = AuditOutcome.Succeeded, string? detail = null) =>
+        audit.WriteAsync(new AuditRecord(access.UserId, access.UserName, action, target, connection.Id, connection.Name, outcome, detail,
+            Context.GetHttpContext()?.Connection.RemoteIpAddress?.ToString()));
+
+    private static string ShortId(string id) => id.Length == 64 && id.All(char.IsAsciiHexDigitLower) ? id[..12] : id;
 
     private EngineConnection Connection(int endpointId) =>
         connections.Get(endpointId) ?? throw new HubException("Unknown endpoint.");

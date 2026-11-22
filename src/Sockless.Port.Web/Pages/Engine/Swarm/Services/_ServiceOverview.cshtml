@@ -113,7 +113,7 @@
     <section class="card" aria-labelledby="settings-title">
         <div class="mb-4 flex flex-wrap items-baseline justify-between gap-2">
             <h3 id="settings-title" class="section-title mb-0">Settings</h3>
-            <a asp-page="/Engine/Swarm/Services/Edit" asp-route-endpointId="@Model.EndpointId" asp-route-serviceId="@Model.ServiceId" class="btn-soft">
+            <a sp-can="write" asp-page="/Engine/Swarm/Services/Edit" asp-route-endpointId="@Model.EndpointId" asp-route-serviceId="@Model.ServiceId" class="btn-soft">
                 <icon name="pencil-square" class="h-4 w-4" /> Edit
             </a>
         </div>

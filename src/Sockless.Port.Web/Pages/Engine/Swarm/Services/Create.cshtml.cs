@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Sockless.Port.Access;
 using Sockless.Port.Engines;
 using Sockless.Port.Swarm;
 using Sockless.Port.Web.Infrastructure;
@@ -7,6 +8,8 @@ namespace Sockless.Port.Web.Pages.Engine.Swarm.Services;
 
 public sealed class CreateModel(EngineConnections connections, SwarmServices services) : SwarmPageModel(connections), IServiceFormPage
 {
+    protected override EndpointPermission ReadPermission => EndpointPermission.ManageSwarm;
+
     [BindProperty]
     public ServiceForm Input { get; set; } = new();
 

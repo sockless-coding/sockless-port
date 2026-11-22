@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
+using Sockless.Port.Access;
 using Sockless.Port.Containers;
 using Sockless.Port.Docker;
 using Sockless.Port.Engines;
@@ -60,6 +61,8 @@ public abstract class SwarmObjectsIndexModel(EngineConnections connections) : Sw
 /// <summary>Creates a secret or config from text or an uploaded file.</summary>
 public abstract partial class SwarmObjectCreateModel(EngineConnections connections) : SwarmPageModel(connections)
 {
+    protected override EndpointPermission ReadPermission => EndpointPermission.ManageSwarm;
+
     public abstract SwarmObjectKind Kind { get; }
 
     [BindProperty]
@@ -147,6 +150,8 @@ public abstract partial class SwarmObjectCreateModel(EngineConnections connectio
 /// <summary>A secret's or config's metadata (and a config's value), the services using it, and removing it.</summary>
 public abstract partial class SwarmObjectDetailModel(EngineConnections connections) : SwarmPageModel(connections)
 {
+    public override string? AuditTarget => DisplayName;
+
     public const string RouteKey = "objectId";
 
     public abstract SwarmObjectKind Kind { get; }

@@ -30,7 +30,7 @@
 
         <form id="network-bulk-form" method="post" asp-page="/Engine/Networks/Index" asp-page-handler="Remove"
               asp-route-endpointId="@Model.EndpointId" asp-route-q="@Model.Q" asp-route-kind="@Model.Kind" data-bulk-noun="networks">
-            <div class="mb-3 flex flex-wrap items-center gap-3" data-bulk-toolbar>
+            <div sp-can="write" class="mb-3 flex flex-wrap items-center gap-3" data-bulk-toolbar>
                 <span class="text-secondary" data-bulk-count aria-live="polite">@Model.Rows.Count of @Model.Total shown</span>
                 <span class="flex-1"></span>
                 <button type="submit" class="btn-soft danger" data-bulk-action disabled
@@ -44,7 +44,7 @@
                     <caption class="sr-only">Networks</caption>
                     <thead>
                         <tr>
-                            <th scope="col" class="w-8"><input type="checkbox" data-select-all aria-label="Select all shown networks" /></th>
+                            <th sp-can="write" scope="col" class="w-8"><input type="checkbox" data-select-all aria-label="Select all shown networks" /></th>
                             <th scope="col">Network</th>
                             <th scope="col">Driver</th>
                             <th scope="col">Subnet</th>
@@ -57,7 +57,7 @@
                         {
                             var summary = row.Summary;
                             <tr>
-                                <td>
+                                <td sp-can="write">
                                     @if (!summary.IsPredefined)
                                     {
                                         <input type="checkbox" name="ids" value="@row.Id" data-name="@row.Name" aria-label="Select @row.Name" />
@@ -129,7 +129,7 @@
                                 <td class="num">
                                     @if (!summary.IsPredefined)
                                     {
-                                        <button type="submit" form="network-row-actions" class="btn-soft danger" aria-label="Remove @row.Name"
+                                        <button sp-can="write" type="submit" form="network-row-actions" class="btn-soft danger" aria-label="Remove @row.Name"
                                                 formaction="@Url.Page("/Engine/Networks/Index", "Remove", new { endpointId = Model.EndpointId, Model.Q, Model.Kind, ids = row.Id })"
                                                 data-confirm="Remove network @row.Name?@(row.Attached.Count > 0 ? $" {row.Attached.Count} {(row.Attached.Count == 1 ? "container is" : "containers are")} attached, so the engine may refuse." : "")">
                                             <icon name="trash" class="h-4 w-4" /> Remove

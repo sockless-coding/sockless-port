@@ -33,4 +33,17 @@ internal static class AuthRedirects
         context.Response.Redirect(context.RedirectUri);
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// A signed-in user without the role for an administration page gets a 403 page, not the login
+    /// page. Refused posts go to the audit log.
+    /// </summary>
+    public static async Task DeniedAsync(RedirectContext<CookieAuthenticationOptions> context)
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        var request = context.Request;
+        if (!HttpMethods.IsGet(request.Method) && !HttpMethods.IsHead(request.Method))
+            await AuditTrail.WriteAsync(context.HttpContext, $"{AuditTrail.Area(request.Path.Value ?? "/")}: post", request.Path.Value,
+                outcome: Port.Audit.AuditOutcome.Denied, detail: "Needs the administrator role.");
+    }
 }

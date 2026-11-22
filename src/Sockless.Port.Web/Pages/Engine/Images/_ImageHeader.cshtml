@@ -37,13 +37,13 @@
 
     @if (image is not null)
     {
-        <div class="flex flex-wrap items-center gap-2">
+        <div sp-can="write" class="flex flex-wrap items-center gap-2">
             @if (Model.Tags.Count > 0)
             {
-                <a asp-page="/Engine/Containers/Create" asp-route-endpointId="@Model.EndpointId" asp-route-image="@Model.Tags[0]" class="btn-soft secondary">
+                <a sp-can="write" asp-page="/Engine/Containers/Create" asp-route-endpointId="@Model.EndpointId" asp-route-image="@Model.Tags[0]" class="btn-soft secondary">
                     <icon name="plus" class="h-4 w-4" /> Create container
                 </a>
-                <form method="post" asp-page="/Engine/Images/Detail" asp-page-handler="Pull"
+                <form sp-can="write" method="post" asp-page="/Engine/Images/Detail" asp-page-handler="Pull"
                       asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId"
                       data-pull-form data-endpoint="@Model.EndpointId">
                     <input type="hidden" name="tab" value="@tab" />
@@ -51,7 +51,7 @@
                     <input type="hidden" name="tag" value="@Model.Tags[0]" />
                     <button type="submit" class="btn-soft"><icon name="arrow-down-tray" class="h-4 w-4" /> Pull @Model.Tags[0]</button>
                 </form>
-                <form method="post" asp-page="/Engine/Images/Detail" asp-page-handler="CheckUpdate"
+                <form sp-can="write" method="post" asp-page="/Engine/Images/Detail" asp-page-handler="CheckUpdate"
                       asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId">
                     <input type="hidden" name="tab" value="@tab" />
                     <button type="submit" class="btn-soft"><icon name="arrow-up-circle" class="h-4 w-4" /> Check for update</button>
@@ -60,7 +60,7 @@
             <details class="menu" data-menu>
                 <summary class="btn-soft" aria-label="More actions for @name">More <icon name="chevron-down" class="h-4 w-4" /></summary>
                 <div class="menu-panel w-80 p-3">
-                    <form method="post" asp-page="/Engine/Images/Detail" asp-page-handler="Tag"
+                    <form sp-can="write" method="post" asp-page="/Engine/Images/Detail" asp-page-handler="Tag"
                           asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId" class="mb-3">
                         <input type="hidden" name="tab" value="@tab" />
                         <p class="label-caps mb-1">Add a tag</p>
@@ -70,7 +70,7 @@
                             <button type="submit" class="btn-soft secondary"><icon name="tag" class="h-4 w-4" /> Tag</button>
                         </div>
                     </form>
-                    <form method="post" asp-page="/Engine/Images/Detail" asp-page-handler="Remove"
+                    <form sp-can="write" method="post" asp-page="/Engine/Images/Detail" asp-page-handler="Remove"
                           asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId">
                         <input type="hidden" name="tab" value="@tab" />
                         <p class="label-caps mb-1">Remove</p>

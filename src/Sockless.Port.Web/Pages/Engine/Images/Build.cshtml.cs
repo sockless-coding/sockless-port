@@ -2,6 +2,7 @@ using System.Formats.Tar;
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Sockless.Port.Access;
 using Sockless.Port.Docker;
 using Sockless.Port.Engines;
 using Sockless.Port.Images;
@@ -33,6 +34,9 @@ public sealed class BuildInput
 [RequestFormLimits(MultipartBodyLengthLimit = BuildModel.MaxContextBytes)]
 public sealed class BuildModel(EngineConnections connections, ImageJobs jobs, IOptions<PortOptions> options) : EndpointPageModel(connections)
 {
+    /// <summary>A form for changing things: viewers don't get it.</summary>
+    protected override EndpointPermission ReadPermission => EndpointPermission.Operate;
+
     /// <summary>Largest build context accepted: 2 GB.</summary>
     public const long MaxContextBytes = 2L * 1024 * 1024 * 1024;
 

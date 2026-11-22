@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Sockless.Port.Access;
 using Sockless.Port.Engines;
 using Sockless.Port.Volumes;
 using Sockless.Port.Web.Infrastructure;
@@ -7,6 +8,9 @@ namespace Sockless.Port.Web.Pages.Engine.Volumes;
 
 public sealed class CreateModel(EngineConnections connections) : EndpointPageModel(connections)
 {
+    /// <summary>A form for changing things: viewers don't get it.</summary>
+    protected override EndpointPermission ReadPermission => EndpointPermission.Operate;
+
     [BindProperty]
     public VolumeCreateSpec Input { get; set; } = new();
 

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Sockless.Port.Access;
 using Sockless.Port.Containers;
 using Sockless.Port.Docker;
 using Sockless.Port.Engines;
@@ -9,6 +10,9 @@ namespace Sockless.Port.Web.Pages.Engine.Containers;
 
 public sealed class CreateModel(EngineConnections connections, RegistryCredentials registries) : EndpointPageModel(connections)
 {
+    /// <summary>A form for changing things: viewers don't get it.</summary>
+    protected override EndpointPermission ReadPermission => EndpointPermission.Operate;
+
     [BindProperty]
     public ContainerSpec Input { get; set; } = new();
 

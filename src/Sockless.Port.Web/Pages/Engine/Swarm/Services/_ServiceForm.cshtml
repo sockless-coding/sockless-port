@@ -76,7 +76,7 @@
             <legend class="label-caps mb-1">Networks</legend>
             @if (refs.Networks.Count == 0 && input.Networks.Count == 0)
             {
-                <p class="text-secondary">No overlay networks yet. Without one, the service is reachable through its published ports only. <a asp-page="/Engine/Networks/Create" asp-route-endpointId="@ViewContext.RouteData.Values["endpointId"]" class="hover:underline">Create an overlay network</a>.</p>
+                <p class="text-secondary">No overlay networks yet. Without one, the service is reachable through its published ports only. <a sp-can="write" asp-page="/Engine/Networks/Create" asp-route-endpointId="@ViewContext.RouteData.Values["endpointId"]" class="hover:underline">Create an overlay network</a>.</p>
             }
             @foreach (var name in refs.Networks.Keys.Union(input.Networks).Order(StringComparer.Ordinal))
             {

@@ -40,7 +40,7 @@
         <form id="bulk-form" method="post" asp-page="/Engine/Containers/Index" asp-page-handler="Bulk"
               asp-route-endpointId="@Model.EndpointId" asp-route-state="@Model.State" asp-route-q="@Model.Q"
               asp-route-stack="@Model.Stack" asp-route-pod="@Model.Pod" asp-route-label="@Model.Label">
-            <div class="mb-3 flex flex-wrap items-center gap-2" data-bulk-toolbar>
+            <div sp-can="write" class="mb-3 flex flex-wrap items-center gap-2" data-bulk-toolbar>
                 <span class="text-secondary" data-bulk-count aria-live="polite">@Model.Rows.Count of @Model.Total shown</span>
                 <span class="flex-1"></span>
                 <button type="submit" name="action" value="start" class="btn-soft" data-bulk-action disabled>
@@ -63,7 +63,7 @@
                     <caption class="sr-only">Containers</caption>
                     <thead>
                         <tr>
-                            <th scope="col" class="w-8"><input type="checkbox" data-select-all aria-label="Select all shown containers" /></th>
+                            <th sp-can="write" scope="col" class="w-8"><input type="checkbox" data-select-all aria-label="Select all shown containers" /></th>
                             <th scope="col">Name</th>
                             <th scope="col">State</th>
                             <th scope="col">Image</th>
@@ -77,7 +77,7 @@
                         {
                             var created = Format.FromUnix(row.Summary.Created);
                             <tr>
-                                <td><input type="checkbox" name="ids" value="@row.Summary.Id" data-name="@row.Name" aria-label="Select @row.Name" /></td>
+                                <td sp-can="write"><input type="checkbox" name="ids" value="@row.Summary.Id" data-name="@row.Name" aria-label="Select @row.Name" /></td>
                                 <th scope="row">
                                     <a asp-page="/Engine/Containers/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-containerId="@row.Summary.Id"
                                        class="font-semibold hover:underline">@row.Name</a>
@@ -126,14 +126,14 @@
                                 <td class="num">
                                     @if (row.Running)
                                     {
-                                        <button type="submit" form="row-actions" class="btn-soft" aria-label="Stop @row.Name"
+                                        <button sp-can="write" type="submit" form="row-actions" class="btn-soft" aria-label="Stop @row.Name"
                                                 formaction="@Url.Page("/Engine/Containers/Index", "Bulk", new { endpointId = Model.EndpointId, Model.State, Model.Q, Model.Stack, Model.Pod, Model.Label, ids = row.Summary.Id, action = "stop" })">
                                             <icon name="stop" class="h-4 w-4" /> Stop
                                         </button>
                                     }
                                     else
                                     {
-                                        <button type="submit" form="row-actions" class="btn-soft" aria-label="Start @row.Name"
+                                        <button sp-can="write" type="submit" form="row-actions" class="btn-soft" aria-label="Start @row.Name"
                                                 formaction="@Url.Page("/Engine/Containers/Index", "Bulk", new { endpointId = Model.EndpointId, Model.State, Model.Q, Model.Stack, Model.Pod, Model.Label, ids = row.Summary.Id, action = "start" })">
                                             <icon name="play" class="h-4 w-4" /> Start
                                         </button>

@@ -14,8 +14,14 @@ public static class SecurityHeaders
     /// </summary>
     public static string StyleNonce(HttpContext context) => (string)context.Items[NonceKey]!;
 
-    public static IApplicationBuilder UseSecurityHeaders(this IApplicationBuilder app) =>
-        app.Use(async (context, next) =>
+    /// <param name="signInAuthority">The OpenID Connect provider, when single sign-on is on: the sign-in form posts to a redirect there.</param>
+    public static IApplicationBuilder UseSecurityHeaders(this IApplicationBuilder app, string? signInAuthority = null)
+    {
+        var formAction = "'self'";
+        if (Uri.TryCreate(signInAuthority, UriKind.Absolute, out var authority))
+            formAction += " " + authority.GetLeftPart(UriPartial.Authority);
+
+        return app.Use(async (context, next) =>
         {
             var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
             context.Items[NonceKey] = nonce;
@@ -25,11 +31,12 @@ public static class SecurityHeaders
             headers.ContentSecurityPolicy =
                 "default-src 'self'; script-src 'self'; " +
                 $"style-src 'self' 'nonce-{nonce}'; img-src 'self' data:; font-src 'self'; connect-src 'self'; " +
-                "frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+                $"frame-ancestors 'none'; base-uri 'self'; form-action {formAction}";
             headers.XContentTypeOptions = "nosniff";
             headers.XFrameOptions = "DENY";
             headers["Referrer-Policy"] = "same-origin";
             headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
             await next(context);
         });
+    }
 }

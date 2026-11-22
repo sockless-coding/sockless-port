@@ -76,9 +76,21 @@ public static class Format
             ? parsed
             : null;
 
-    /// <summary>UTC until the time-zone preference arrives (Phase 9).</summary>
-    public static string Timestamp(DateTimeOffset value) =>
-        value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture);
+    /// <summary>
+    /// The exact time, in the user's preferred zone (<see cref="TimeZones.Current"/> unless
+    /// <paramref name="zone"/> is given): <c>2026-11-22 18:04:05 UTC</c> or <c>2026-11-22 19:04:05 UTC+01:00</c>.
+    /// </summary>
+    public static string Timestamp(DateTimeOffset value, TimeZoneInfo? zone = null)
+    {
+        zone ??= TimeZones.Current;
+        if (zone == TimeZoneInfo.Utc)
+            return value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture);
+        var local = TimeZoneInfo.ConvertTime(value, zone);
+        var offset = local.Offset;
+        var sign = offset < TimeSpan.Zero ? "-" : "+";
+        return local.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
+               + (offset == TimeSpan.Zero ? " UTC" : $" UTC{sign}{offset.Duration().ToString(@"hh\:mm", CultureInfo.InvariantCulture)}");
+    }
 
     /// <summary>The engine's JSON, indented for the inspect tabs.</summary>
     public static string? Json(string? json) => json is null ? null : JsonNode.Parse(json)?.ToJsonString(IndentedJson);

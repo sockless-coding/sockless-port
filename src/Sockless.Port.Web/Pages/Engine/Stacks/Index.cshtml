@@ -11,7 +11,7 @@
             <h2 class="page-title">Stacks</h2>
             <p class="mt-1 text-secondary">Compose projects on @Model.Connection.Name: the ones deployed from here, and the ones found by their labels.</p>
         </div>
-        <a asp-page="/Engine/Stacks/Create" asp-route-endpointId="@Model.EndpointId" class="btn-soft secondary">
+        <a sp-can="write" asp-page="/Engine/Stacks/Create" asp-route-endpointId="@Model.EndpointId" class="btn-soft secondary">
             <icon name="plus" class="h-4 w-4" /> Create stack
         </a>
     </div>

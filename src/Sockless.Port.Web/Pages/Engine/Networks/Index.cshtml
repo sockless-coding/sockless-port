@@ -13,15 +13,15 @@
         </div>
         @if (Model.Client is not null)
         {
-            <div class="flex flex-wrap items-center gap-2">
-                <form method="post" asp-page="/Engine/Networks/Index" asp-page-handler="Prune" asp-route-endpointId="@Model.EndpointId"
+            <div sp-can="write" class="flex flex-wrap items-center gap-2">
+                <form sp-can="write" method="post" asp-page="/Engine/Networks/Index" asp-page-handler="Prune" asp-route-endpointId="@Model.EndpointId"
                       asp-route-q="@Model.Q" asp-route-kind="@Model.Kind">
                     <button type="submit" class="btn-soft danger"
                             data-confirm="Remove every network on @Model.Connection.Name that no container is attached to? @(Model.Unused == 1 ? "1 network is unused." : $"{Model.Unused} networks are unused.") Built-in networks are kept.">
                         <icon name="trash" class="h-4 w-4" /> Prune unused
                     </button>
                 </form>
-                <a asp-page="/Engine/Networks/Create" asp-route-endpointId="@Model.EndpointId" class="btn-soft secondary">
+                <a sp-can="write" asp-page="/Engine/Networks/Create" asp-route-endpointId="@Model.EndpointId" class="btn-soft secondary">
                     <icon name="plus" class="h-4 w-4" /> Create network
                 </a>
             </div>

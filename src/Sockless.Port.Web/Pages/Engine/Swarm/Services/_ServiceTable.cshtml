@@ -77,7 +77,7 @@
                                 }
                             </td>
                             <td class="num">
-                                <button type="submit" form="service-row-actions" class="btn-soft danger" aria-label="Remove @service.Name"
+                                <button sp-can="write" type="submit" form="service-row-actions" class="btn-soft danger" aria-label="Remove @service.Name"
                                         formaction="@Url.Page("/Engine/Swarm/Services/Index", "Remove", new { endpointId = Model.EndpointId, Model.Q, Model.Stack, id = service.Id, name = service.Name })"
                                         data-confirm="Remove the service @service.Name? Its tasks stop on every node.@(service.Stack is { } s ? $" It belongs to the stack {s}, which brings it back at its next deploy." : "")">
                                     <icon name="trash" class="h-4 w-4" /> Remove
