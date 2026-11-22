@@ -52,6 +52,10 @@ public sealed partial class RegistryCredentials(IServiceScopeFactory scopes, IDa
         return all.Count == 0 ? null : RegistryAuth.EncodeConfig(all.Values.ToDictionary(a => a.ServerAddress!, a => a, StringComparer.Ordinal));
     }
 
+    /// <summary>Every readable credential, decrypted, for tools with their own config file (Compose).</summary>
+    internal async Task<IReadOnlyCollection<AuthConfig>> AllAsync(CancellationToken cancellationToken = default) =>
+        [.. (await LoadAsync(cancellationToken)).Values];
+
     /// <summary>The decrypted credential, for testing a login. Null if unknown or unreadable.</summary>
     public async Task<AuthConfig?> GetAuthAsync(int id, CancellationToken cancellationToken = default)
     {

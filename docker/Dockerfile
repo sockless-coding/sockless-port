@@ -23,6 +23,15 @@ RUN dotnet publish src/Sockless.Port.Web/Sockless.Port.Web.csproj \
       --no-restore -a $TARGETARCH -c Release -o /app \
       -p:Version=$VERSION -p:UseAppHost=false
 
+# ---- docker compose: a pinned release, checked against its published SHA-256 ----
+# Bump deliberately: update the version and both checksums (from the release's .sha256 files).
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS compose
+ARG TARGETARCH
+ARG COMPOSE_VERSION=5.7.0
+ARG COMPOSE_SHA256_AMD64=7758048ad38e580f22559603312874fec8bb638d021a9e64182385fc17cc12a2
+ARG COMPOSE_SHA256_ARM64=15861535d14e26555736b49376c95e14bfd94285366c8446bfac7156a972e76f
+RUN set -eu;     case "$TARGETARCH" in       amd64) arch=x86_64; sum="$COMPOSE_SHA256_AMD64" ;;       arm64) arch=aarch64; sum="$COMPOSE_SHA256_ARM64" ;;       *) echo "No Compose build for $TARGETARCH" >&2; exit 1 ;;     esac;     curl -fsSL -o /docker-compose "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-${arch}";     echo "${sum}  /docker-compose" | sha256sum -c -;     chmod 755 /docker-compose
+
 # ---- runtime ----
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime
 LABEL org.opencontainers.image.title="Sockless Port" \
@@ -38,6 +47,9 @@ VOLUME /data
 ENV ASPNETCORE_HTTP_PORTS=8080 \
     Port__DataPath=/data \
     DOTNET_CLI_TELEMETRY_OPTOUT=1
+
+# Stacks run through the standalone Compose binary (Port:Compose defaults to docker-compose).
+COPY --from=compose /docker-compose /usr/local/bin/docker-compose
 
 WORKDIR /app
 COPY --from=build /app .

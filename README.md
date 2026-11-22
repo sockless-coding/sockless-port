@@ -2,7 +2,7 @@
 
 Self-hosted container management for Docker, Docker Swarm and Podman. Sockless Port runs as a container and manages containers, stacks, images, volumes and networks on the local engine. A lightweight agent will let it manage remote engines too.
 
-> **Status:** early development. Phases 0 to 4 are done: it manages containers, images, volumes and networks on the local engine. The roadmap is in [docs/plan.md](docs/plan.md).
+> **Status:** early development. Phases 0 to 5 are done: it manages Compose stacks, containers, images, volumes and networks on the local engine. The roadmap is in [docs/plan.md](docs/plan.md).
 
 ## Run it
 
@@ -13,13 +13,26 @@ docker logs sockless-port      # copy the setup token
 
 Open <http://localhost:9000>, enter the setup token and create the first administrator. The token is printed to the log on every start until an account exists, and stops working once setup is complete.
 
-Data (the SQLite database and encryption keys) is kept in the `port-data` volume, mounted at `/data`.
+Data (the SQLite database, encryption keys and stack files) is kept in the `port-data` volume, mounted at `/data`.
 
 The app runs as a non-root user, so it needs the group that owns the engine socket. `DOCKER_GID` sets it: on Linux, `stat -c %g /var/run/docker.sock` prints it. On Docker Desktop the socket inside containers belongs to group `0`, so use `DOCKER_GID=0`. Without the group the dashboard shows the endpoint as offline with "Permission denied" and says what to change.
 
 ### Which engine it manages
 
 On first start Sockless Port looks for an engine in this order: `DOCKER_HOST`, `/var/run/docker.sock`, `/run/podman/podman.sock`, `$XDG_RUNTIME_DIR/podman/podman.sock`. It uses the first that answers. To choose one explicitly, set `Port__LocalEngine` (for example `unix:///run/podman/podman.sock` or `tcp://10.0.0.5:2375`). That setting also replaces the stored address on every start.
+
+### Stacks
+
+Stacks are Compose projects. Each one's `compose.yaml` and `.env` are kept in `/data/stacks/<endpoint>/<name>/`, and the image's bundled `docker compose` runs from there against the engine. Projects started with `docker compose` elsewhere on the engine are listed too: they can be started, stopped and taken down by name, or adopted to be edited and redeployed from Sockless Port.
+
+Compose runs inside the Sockless Port container, not on the engine's host, so:
+
+- **Relative bind mounts** (`./data:/data`) resolve inside the data volume, which the engine can't see. Use absolute host paths or named volumes. The editor warns when a file has them.
+- **`build:`** has no build context: only the two files are stored, and the image has no Buildx. Build and push images elsewhere, then use `image:`.
+- **Interpolation** (`${VAR}`) uses the stack's `.env` only. Sockless Port's own environment is never passed to Compose.
+- **Registry credentials** stored under Registries are used for the pulls Compose makes.
+
+To use another Compose binary, set `Port__Compose` (for example `docker compose`, or a full path).
 
 ### Volume file browser
 
@@ -42,7 +55,7 @@ Access to the engine socket is equivalent to root on the host. Keep Sockless Por
 
 ## Develop
 
-Needs the .NET 11 SDK. Node is not needed: the build downloads the Tailwind standalone CLI.
+Needs the .NET 11 SDK. Node is not needed: the build downloads the Tailwind standalone CLI, and the CodeMirror bundle is checked in (rebuild it from `build/codemirror/` when bumping it). Stacks need `docker-compose` or the `docker compose` plugin on the PATH.
 
 ```sh
 dotnet build

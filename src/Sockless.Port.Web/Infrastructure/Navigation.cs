@@ -19,6 +19,7 @@ public static class Navigation
     public static IReadOnlyList<NavItem> Main { get; } =
     [
         new("Dashboard", "/Engine/Index", "home", NavScope.Endpoint, MatchSubPages: false),
+        new("Stacks", "/Engine/Stacks/Index", "rectangle-stack", NavScope.Endpoint),
         new("Containers", "/Engine/Containers/Index", "cube", NavScope.Endpoint),
         new("Images", "/Engine/Images/Index", "square-3-stack-3d", NavScope.Endpoint),
         new("Volumes", "/Engine/Volumes/Index", "circle-stack", NavScope.Endpoint),

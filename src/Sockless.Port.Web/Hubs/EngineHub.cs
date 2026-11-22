@@ -5,17 +5,18 @@ using Sockless.Port.Docker;
 using Sockless.Port.Docker.Streams;
 using Sockless.Port.Engines;
 using Sockless.Port.Images;
+using Sockless.Port.Stacks;
 using Sockless.Port.Web.Infrastructure;
 
 namespace Sockless.Port.Web.Hubs;
 
 /// <summary>
 /// Pushes live endpoint state and engine events to browsers, and streams container logs, stats,
-/// terminals and image jobs (pulls and builds). Every client receives <c>endpointState</c>; <c>engineEvent</c> goes only to
+/// terminals, image jobs (pulls and builds) and stack jobs (Compose runs). Every client receives <c>endpointState</c>; <c>engineEvent</c> goes only to
 /// clients watching that endpoint.
 /// </summary>
 [Authorize]
-public sealed class EngineHub(EngineConnections connections, TerminalSessions terminals, ImageJobs jobs) : Hub
+public sealed class EngineHub(EngineConnections connections, TerminalSessions terminals, ImageJobs jobs, StackJobs stackJobs) : Hub
 {
     public const string Path = "/hubs/engine";
 
@@ -149,6 +150,40 @@ public sealed class EngineHub(EngineConnections connections, TerminalSessions te
             return new JobMessage(view.Job.Id, view.Job.EndpointId, view.Job.Kind == ImageJobKind.Pull ? "pull" : "build", view.Job.Target, state, message, imageId,
                 [.. pull.Layers.Select(l => new LayerMessage(l.Id, l.Phase.ToString().ToLowerInvariant(), l.Status, l.Current, l.Total))],
                 pull.Messages, pull.DownloadedBytes, pull.TotalBytes, pull.LayersDone, view.LogStart, view.Log);
+        }
+    }
+
+    // ---------------------------------------------------------------- stack jobs
+
+    /// <summary>A stack job's state now and on every change until it ends. Output lines are sent once each.</summary>
+    public async IAsyncEnumerable<StackJobMessage> WatchStackJob(string jobId, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var job = stackJobs.Get(jobId) ?? throw new HubException("That stack job is no longer known. It may have finished a while ago.");
+        await foreach (var view in job.WatchAsync(JobUpdateInterval, cancellationToken))
+            yield return StackJobMessage.From(view);
+    }
+
+    public void CancelStackJob(string jobId) => stackJobs.Get(jobId)?.Cancel();
+
+    /// <param name="State"><c>running</c>, <c>succeeded</c>, <c>failed</c> or <c>canceled</c>.</param>
+    /// <param name="Badge">The badge's word, as the page renders it.</param>
+    /// <param name="Summary">What's happening or how it ended, for people.</param>
+    public sealed record StackJobMessage(string Id, string Stack, string Operation, string State, string Badge, string Summary,
+        IReadOnlyList<string> Hints, int LogStart, IReadOnlyList<string> Log)
+    {
+        public static StackJobMessage From(StackJobView view)
+        {
+            var state = view.Status switch
+            {
+                StackJobRunning => "running",
+                StackJobSucceeded => "succeeded",
+                StackJobFailed => "failed",
+                StackJobCanceled => "canceled",
+            };
+            var operation = view.Job.Operation;
+            return new StackJobMessage(view.Job.Id, view.Job.StackName, StackDisplay.Key(operation), state,
+                StackDisplay.JobBadge(view.Status, operation).Label, StackDisplay.JobSummary(view.Status, operation),
+                view.Status is StackJobFailed failed ? failed.Hints : [], view.LogStart, view.Log);
         }
     }
 

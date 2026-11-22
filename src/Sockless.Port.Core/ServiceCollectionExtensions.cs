@@ -14,6 +14,7 @@ using Sockless.Port.Data;
 using Sockless.Port.Images;
 using Sockless.Port.Registries;
 using Sockless.Port.Setup;
+using Sockless.Port.Stacks;
 using Sockless.Port.Volumes;
 
 namespace Sockless.Port;
@@ -69,6 +70,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ImageJobs>();
         services.AddSingleton<ImageUpdates>();
         services.AddSingleton<VolumeBrowser>();
+
+        services.AddSingleton<ComposeCli>();
+        services.AddSingleton<StackStore>();
+        services.AddSingleton<StackValidator>();
+        services.AddSingleton<StackJobs>();
         return services;
     }
 
@@ -82,6 +88,7 @@ public static class ServiceCollectionExtensions
         if (Directory.Exists(port.TempPath))
             Directory.Delete(port.TempPath, recursive: true);
         Directory.CreateDirectory(port.TempPath);
+        Directory.CreateDirectory(port.StacksPath);
 
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<PortDbContext>();

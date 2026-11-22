@@ -30,7 +30,12 @@
                 {
                     <partial name="_StatusBadge" model="healthBadge" />
                 }
-                @if (Model.Stack is not null)
+                @if (container.Config?.Labels?.GetValueOrDefault(Sockless.Port.Containers.ContainerLabels.ComposeProject) is { Length: > 0 } project)
+                {
+                    <a asp-page="/Engine/Stacks/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-stackName="@project"
+                       class="badge-stat hover:text-accent" title="Compose stack">@project</a>
+                }
+                else if (Model.Stack is not null)
                 {
                     <span class="badge-stat" title="Stack">@Model.Stack</span>
                 }

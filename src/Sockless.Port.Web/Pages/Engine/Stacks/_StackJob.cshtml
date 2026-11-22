@@ -1,0 +1,42 @@
+@* A stack job, rendered now and kept live by stacks.js ([data-stack-job]). Model: the job's view. *@
+@model Sockless.Port.Stacks.StackJobView
+@using Sockless.Port.Stacks
+@{
+    var job = Model.Job;
+    var running = Model.Status is StackJobRunning;
+    var label = StackDisplay.Label(job.Operation);
+    var hints = Model.Status is StackJobFailed { Hints: var h } ? h : [];
+}
+<section class="card mb-6" aria-labelledby="stack-job-title" data-stack-job="@job.Id">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <h3 id="stack-job-title" class="section-title mb-0">
+            <span class="label-caps mr-2">@label</span><span class="font-mono">@job.StackName</span>
+        </h3>
+        <span class="flex items-center gap-2">
+            <span class="text-xs text-secondary" title="@Format.Timestamp(job.StartedAt)">@Format.Relative(job.StartedAt)</span>
+            <span data-job-badge><partial name="_StatusBadge" model="StackDisplay.JobBadge(Model.Status, job.Operation)" /></span>
+            <button type="button" class="btn-soft danger" data-job-cancel hidden="@(!running)" aria-label="Cancel: @label.ToLowerInvariant() @job.StackName">Cancel</button>
+        </span>
+    </div>
+    @if (running)
+    {
+        <progress class="progress mt-3" data-job-progress aria-label="@label @job.StackName"></progress>
+    }
+    else
+    {
+        <progress class="progress mt-3" data-job-progress aria-label="@label @job.StackName" max="1" value="@(Model.Status is StackJobSucceeded ? 1 : 0)"></progress>
+    }
+    <p class="mt-2 @(Model.Status is StackJobFailed ? "text-danger" : "text-secondary")" data-job-summary>@StackDisplay.JobSummary(Model.Status, job.Operation)</p>
+    <p class="sr-only" role="status" data-job-announce></p>
+    <ul class="mt-2 list-disc space-y-1 pl-5" data-job-hints hidden="@(hints.Count == 0)">
+        @foreach (var hint in hints)
+        {
+            <li>@hint</li>
+        }
+    </ul>
+    <details class="mt-3" open="@(running || Model.Status is StackJobFailed)">
+        <summary class="cursor-pointer text-secondary hover:text-accent">Compose output</summary>
+        <div class="log-view wrap mt-2 h-72" role="log" aria-label="Compose output" tabindex="0" data-job-log>@foreach (var line in Model.Log)
+            {<div class="log-line">@line</div>}</div>
+    </details>
+</section>

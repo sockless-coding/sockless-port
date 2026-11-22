@@ -607,6 +607,186 @@
     user-select: none;
   }
 
+  /* The command a stack job ran, above its output. */
+  .log-line.log-command {
+    color: var(--sl-accent);
+  }
+
+  /* ---------- Code editor (CodeMirror over a textarea; the textarea alone without scripts) ---------- */
+  .code-input {
+    display: block;
+    width: 100%;
+    min-height: 120px;
+    padding: var(--sl-space-sm) var(--sl-space-md);
+    resize: vertical;
+    background: var(--sl-bg);
+    border: 1px solid var(--sl-border);
+    border-radius: var(--sl-radius-sm);
+    color: var(--sl-text);
+    font-family: var(--sl-font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    tab-size: 2;
+  }
+  .code-input::placeholder {
+    color: var(--sl-text-muted);
+  }
+  .code-input:focus {
+    border-color: var(--sl-accent-line);
+    box-shadow: 0 0 0 2px rgb(var(--sl-accent-rgb) / 0.15);
+    outline: none;
+  }
+  /* Selectors start at .code-editor .cm-editor to outrank CodeMirror's own theme. */
+  .code-editor .cm-editor {
+    min-height: 8rem;
+    max-height: 70vh;
+    background: var(--sl-bg);
+    border: 1px solid var(--sl-border);
+    border-radius: var(--sl-radius-sm);
+    color: var(--sl-text);
+    font-size: 0.8125rem;
+  }
+  .code-editor .cm-editor.cm-focused {
+    border-color: var(--sl-accent-line);
+    outline: 2px solid var(--sl-focus);
+    outline-offset: 2px;
+  }
+  .code-editor .cm-editor .cm-scroller {
+    font-family: var(--sl-font-mono);
+    line-height: 1.6;
+  }
+  .code-editor .cm-editor .cm-content {
+    caret-color: var(--sl-accent);
+    padding: var(--sl-space-sm) 0;
+  }
+  .code-editor .cm-editor .cm-cursor {
+    border-left-color: var(--sl-accent);
+  }
+  .code-editor .cm-editor .cm-gutters {
+    background: var(--sl-surface);
+    border-right: 1px solid var(--sl-border);
+    color: var(--sl-text-secondary);
+  }
+  .code-editor .cm-editor .cm-activeLine {
+    background: rgb(var(--sl-accent-rgb) / 0.06);
+  }
+  .code-editor .cm-editor .cm-activeLineGutter {
+    background: rgb(var(--sl-accent-rgb) / 0.1);
+    color: var(--sl-text-heading);
+  }
+  .code-editor .cm-editor .cm-selectionBackground,
+  .code-editor .cm-editor.cm-focused .cm-selectionBackground,
+  .code-editor .cm-editor .cm-content ::selection {
+    background: rgb(var(--sl-accent-rgb) / 0.3);
+  }
+  .code-editor .cm-editor .cm-selectionMatch {
+    background: rgb(var(--sl-info-rgb) / 0.2);
+  }
+  .code-editor .cm-editor .cm-matchingBracket {
+    background: rgb(var(--sl-accent-rgb) / 0.2);
+    outline: 1px solid var(--sl-accent-line);
+  }
+  .code-editor .cm-editor .cm-foldPlaceholder {
+    background: var(--sl-raised);
+    border: 1px solid var(--sl-border);
+    color: var(--sl-text-secondary);
+  }
+  .code-editor .cm-editor .cm-panels {
+    background: var(--sl-surface);
+    border-color: var(--sl-border);
+    color: var(--sl-text);
+  }
+  .code-editor .cm-editor .cm-panels input,
+  .code-editor .cm-editor .cm-panels button {
+    background: var(--sl-raised);
+    border: 1px solid var(--sl-border);
+    border-radius: var(--sl-radius-xs);
+    color: var(--sl-text);
+  }
+  .code-editor .cm-editor .cm-tooltip {
+    background: var(--sl-raised);
+    border: 1px solid var(--sl-border);
+    color: var(--sl-text);
+  }
+  .code-editor .cm-editor .cm-diagnostic-error {
+    border-left-color: var(--sl-danger);
+  }
+  /* Highlighting (@lezer/highlight classHighlighter). Every colour passes AA on the editor's iron. */
+  .code-editor .tok-propertyName,
+  .code-editor .tok-definition {
+    color: var(--sl-accent);
+  }
+  .code-editor .tok-string {
+    color: var(--sl-accent-2);
+  }
+  .code-editor .tok-number,
+  .code-editor .tok-bool,
+  .code-editor .tok-null,
+  .code-editor .tok-atom {
+    color: var(--sl-info);
+  }
+  .code-editor .tok-comment {
+    color: var(--sl-text-secondary);
+    font-style: italic;
+  }
+  .code-editor .tok-punctuation,
+  .code-editor .tok-meta,
+  .code-editor .tok-operator {
+    color: var(--sl-text-secondary);
+  }
+  .code-editor .tok-keyword,
+  .code-editor .tok-labelName,
+  .code-editor .tok-typeName {
+    color: var(--sl-text-heading);
+  }
+
+  /* ---------- Diff (review before deploy). Lines carry +/− and a hidden word as well as a tint. ---------- */
+  .diff {
+    overflow-x: auto;
+    padding: 0.25rem 0;
+    background: var(--sl-bg);
+    border: 1px solid var(--sl-border);
+    border-radius: var(--sl-radius-sm);
+    font-family: var(--sl-font-mono);
+    font-size: 0.75rem;
+    line-height: 1.6;
+  }
+  .diff-line {
+    display: grid;
+    grid-template-columns: 3rem 3rem 1.25rem minmax(0, 1fr);
+    color: var(--sl-text);
+  }
+  .diff-no {
+    padding-right: 0.5rem;
+    text-align: right;
+    color: var(--sl-text-secondary);
+    user-select: none;
+  }
+  .diff-sign {
+    text-align: center;
+    color: var(--sl-text-secondary);
+    user-select: none;
+  }
+  .diff-text {
+    padding-right: var(--sl-space-md);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .diff-line.added {
+    background: rgb(var(--sl-info-rgb) / 0.1);
+    box-shadow: inset 2px 0 0 var(--sl-info);
+  }
+  .diff-line.added .diff-sign {
+    color: var(--sl-info);
+  }
+  .diff-line.removed {
+    background: rgb(var(--sl-danger-rgb) / 0.1);
+    box-shadow: inset 2px 0 0 var(--sl-danger);
+  }
+  .diff-line.removed .diff-sign {
+    color: var(--sl-danger);
+  }
+
   /* ---------- Charts and terminal ---------- */
   .chart {
     position: relative;

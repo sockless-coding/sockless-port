@@ -50,6 +50,17 @@ public sealed class EngineDetectionTests
     }
 
     [Fact]
+    public void Rootless_engines_are_detected_from_their_security_options()
+    {
+        var version = Fixture.Load("podman-version.json", Json.VersionResponse);
+        var info = Fixture.Load("podman-info.json", Json.SystemInfo);
+        var rootless = info with { SecurityOptions = ["name=seccomp,profile=default", "name=rootless"] };
+
+        Assert.False(EngineDescriptor.Detect(version, info, DockerClient.Negotiate(version)).Has(EngineCapabilities.Rootless));
+        Assert.True(EngineDescriptor.Detect(version, rootless, DockerClient.Negotiate(version)).Has(EngineCapabilities.Rootless));
+    }
+
+    [Fact]
     public void Podman_is_detected_from_its_engine_component()
     {
         var engine = Detect("podman");

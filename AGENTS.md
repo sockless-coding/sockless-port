@@ -7,10 +7,11 @@ Sockless Port is a self-hosted container management UI for Docker, Docker Swarm 
 | Path | What |
 |---|---|
 | `src/Sockless.Port.Docker` | Thin Engine API client: transports (unix socket, named pipe, TCP/TLS), version negotiation, models, streams, engine detection. No ASP.NET dependencies; AOT-compatible (the agent will share it) |
-| `src/Sockless.Port.Core` | Options, EF Core model (SQLite), Identity, first-run setup, endpoints (`Engines/`: connections, state, monitor, local detection), and per resource: `Containers/`, `Images/`, `Volumes/` (create form, usage, file browser), `Networks/` (create form, usage), `Registries/` |
+| `src/Sockless.Port.Core` | Options, EF Core model (SQLite), Identity, first-run setup, endpoints (`Engines/`: connections, state, monitor, local detection), and per resource: `Containers/`, `Images/`, `Volumes/` (create form, usage, file browser), `Networks/` (create form, usage), `Registries/`, `Stacks/` (files, Compose CLI runner, validation, jobs, diff, adoption) |
 | `src/Sockless.Port.Web` | Razor Pages UI, htmx, SignalR hub, Tailwind styles, static assets |
 | `tests/*` | xUnit v3 on Microsoft.Testing.Platform (`dotnet test`) |
 | `build/Tailwind.targets` | Downloads the pinned Tailwind 3 standalone CLI to `.tools/` and builds `wwwroot/css/app.css` |
+| `build/codemirror/` | Source of the checked-in CodeMirror bundle (`wwwroot/lib/codemirror/`); rebuilt by hand with npm when bumping it |
 | `docker/` | Server `Dockerfile` and `compose.yaml` |
 
 ## Commands
@@ -38,6 +39,7 @@ SOCKLESS_PORT_TEST_ENGINE=unix:///var/run/docker.sock SOCKLESS_PORT_TEST_EXPECT=
 - Container operations that need care (recreate, create bodies) live in `Core/Containers` and work on raw inspect JSON (`JsonObject`), so settings the UI doesn't model survive. Engine quirks found by the integration tests are handled there too (e.g. no `Hostname` with host networking, no `ShmSize` with host IPC).
 - Helper containers Sockless Port starts for itself (the volume file browser) carry the `sockless-port.helper` label, are started only from a POST, mount what they need read-only with no network, and end by themselves (`sleep`). They never count as a resource's users (`ContainerLabels.IsHelper`), and are released before removing or pruning what they mount.
 - Form posts that call the engine go through `EndpointPageModel.TryEngineAsync`: failures become a flash message, success a confirmation, then post/redirect/get.
+- Stacks run the Compose CLI through `ComposeCli`, never a shell: arguments as a list, a clean environment (only `DOCKER_HOST`, a private `DOCKER_CONFIG` with registry credentials, and what the OS needs), and a project folder or the project name. Long runs are `StackJobs` (one per stack), streamed to the page like image jobs. Never stop, redeploy or take down the project Sockless Port runs in (`ComposeProject.IsSelf`).
 - Live updates: the monitor forwards engine events to `EngineHub`, and `site.js` turns them into the htmx body events `engine-changed` (current endpoint's resources changed), `endpoint-state` (current endpoint's connection changed) and `endpoints-changed` (any endpoint's state). Make a fragment live with `hx-get` + `hx-trigger="engine-changed from:body"`. htmx trigger filters (`[...]`) need eval, which the CSP forbids.
 
 ## UI: follow the Sockless guidelines

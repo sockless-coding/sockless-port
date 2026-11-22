@@ -1,0 +1,132 @@
+@model Sockless.Port.Web.Pages.Engine.Stacks.IndexModel
+@using Sockless.Port.Stacks
+@{
+    var refreshUrl = Url.Page("/Engine/Stacks/Index", "Table", Model.Filters);
+}
+<div id="stack-table" hx-get="@refreshUrl" hx-trigger="engine-changed from:body, endpoint-state from:body, stack-job-ended from:body" hx-swap="outerHTML">
+    @if (Model.Error is not null)
+    {
+        <div class="callout danger mb-4" role="alert">
+            <icon name="exclamation-triangle" class="h-5 w-5" />
+            <p>@Model.Error</p>
+        </div>
+    }
+
+    @if (Model.Rows.Count == 0)
+    {
+        <section class="card">
+            <div class="empty-state">
+                <icon name="rectangle-stack" class="h-12 w-12" stroke-width="1.5" />
+                @if (Model.Filtered && Model.Total > 0)
+                {
+                    <p class="text-base text-heading">No stacks match</p>
+                    <p class="text-secondary"><a asp-page="/Engine/Stacks/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Clear the search</a> to see all @Model.Total.</p>
+                }
+                else
+                {
+                    <p class="text-base text-heading">No stacks yet</p>
+                    <p class="text-secondary">Create one from a compose file. Projects started with docker compose on this engine show up here too.</p>
+                }
+            </div>
+        </section>
+    }
+    else
+    {
+        <p class="mb-3 text-secondary">@Model.Rows.Count of @Model.Total shown</p>
+        <div class="table-wrap">
+            <table class="table">
+                <caption class="sr-only">Stacks</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Stack</th>
+                        <th scope="col">State</th>
+                        <th scope="col">Services</th>
+                        <th scope="col">Deployed</th>
+                        <th scope="col" class="num"><span class="sr-only">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.Rows)
+                    {
+                        var deployed = row.Definition?.DeployedAt;
+                        <tr>
+                            <th scope="row">
+                                <a asp-page="/Engine/Stacks/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-stackName="@row.Name"
+                                   class="font-mono font-semibold hover:underline">@row.Name</a>
+                                <span class="mt-1 flex flex-wrap gap-1">
+                                    <span class="badge-stat" title="Kind">Compose</span>
+                                    @if (row.IsExternal)
+                                    {
+                                        <span class="badge-stat" title="Deployed outside Sockless Port">External</span>
+                                    }
+                                    @if (row.Project.IsSelf)
+                                    {
+                                        <span class="badge-stat" title="Sockless Port runs in this stack">Sockless Port</span>
+                                    }
+                                </span>
+                            </th>
+                            <td>
+                                @if (row.Job is { IsRunning: true } job)
+                                {
+                                    <partial name="_StatusBadge" model="StackDisplay.JobBadge(job.Status, job.Operation)" />
+                                }
+                                else if (Model.Client is null)
+                                {
+                                    <span class="text-secondary">Unknown while offline</span>
+                                }
+                                else
+                                {
+                                    <partial name="_StatusBadge" model="StackDisplay.State(row.Project)" />
+                                }
+                            </td>
+                            <td>
+                                @if (row.Project.Services.Count == 0)
+                                {
+                                    <span class="text-secondary">—</span>
+                                }
+                                else
+                                {
+                                    <span class="font-mono text-xs">@string.Join(", ", row.Project.Services.Take(4).Select(s => s.Name))</span>
+                                    @if (row.Project.Services.Count > 4)
+                                    {
+                                        <span class="block text-xs text-secondary">and @(row.Project.Services.Count - 4) more</span>
+                                    }
+                                }
+                            </td>
+                            <td class="whitespace-nowrap text-secondary">
+                                @if (row.IsExternal)
+                                {
+                                    <span>Not from here</span>
+                                }
+                                else if (deployed is { } at)
+                                {
+                                    <span title="@Format.Timestamp(at)">@Format.Relative(at)</span>
+                                }
+                                else
+                                {
+                                    <span>Never</span>
+                                }
+                            </td>
+                            <td class="num">
+                                @if (row.IsExternal && !row.Project.IsSelf)
+                                {
+                                    <a asp-page="/Engine/Stacks/Create" asp-route-endpointId="@Model.EndpointId" asp-route-adopt="@row.Name" class="btn-soft"
+                                       aria-label="Adopt @row.Name">
+                                        <icon name="arrow-down-on-square" class="h-4 w-4" /> Adopt
+                                    </a>
+                                }
+                                else if (!row.IsExternal)
+                                {
+                                    <a asp-page="/Engine/Stacks/Editor" asp-route-endpointId="@Model.EndpointId" asp-route-stackName="@row.Name" class="btn-soft"
+                                       aria-label="Edit @row.Name">
+                                        <icon name="pencil-square" class="h-4 w-4" /> Edit
+                                    </a>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

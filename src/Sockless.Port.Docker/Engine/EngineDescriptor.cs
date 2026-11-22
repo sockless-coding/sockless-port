@@ -25,6 +25,12 @@ public enum EngineCapabilities
 
     /// <summary>Podman pods, via the libpod API on the same socket.</summary>
     Pods = 1 << 2,
+
+    /// <summary>
+    /// The engine runs as an unprivileged user (rootless Docker or Podman), so it can't publish
+    /// ports below 1024 and may lack cgroup controllers for resource limits.
+    /// </summary>
+    Rootless = 1 << 3,
 }
 
 /// <summary>An engine as detected when connecting.</summary>
@@ -52,6 +58,9 @@ public sealed record EngineDescriptor(
         var capabilities = EngineCapabilities.None;
         if (isPodman)
             capabilities |= EngineCapabilities.Pods;
+
+        if (info.SecurityOptions?.Any(o => o.Split(',').Contains("name=rootless", StringComparer.Ordinal)) == true)
+            capabilities |= EngineCapabilities.Rootless;
 
         if (string.Equals(info.Swarm?.LocalNodeState, "active", StringComparison.OrdinalIgnoreCase))
         {

@@ -1,0 +1,30 @@
+@* The compose.yaml and .env editors of a stack form. Model: the form's input. Without scripts they're plain text areas. *@
+@model Sockless.Port.Web.Infrastructure.StackInput
+<section class="card space-y-3" aria-labelledby="compose-title">
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 id="compose-title" class="section-title mb-0"><label for="Input_Compose">compose.yaml</label></h3>
+        <a href="https://docs.docker.com/reference/compose-file/" class="text-xs hover:underline" rel="noreferrer" target="_blank">Compose file reference</a>
+    </div>
+    <div class="code-editor">
+        <textarea id="Input_Compose" name="Input.Compose" class="code-input" rows="22" spellcheck="false" autocomplete="off"
+                  aria-describedby="compose-hint" data-code-editor="yaml"
+                  placeholder="services:&#10;  web:&#10;    image: nginx:1.27&#10;    ports:&#10;      - &quot;8080:80&quot;">@Model.Compose</textarea>
+    </div>
+    <p class="hint text-xs text-secondary" id="compose-hint">
+        Use images rather than <span class="font-mono">build:</span>, and absolute host paths or named volumes rather than
+        <span class="font-mono">./relative</span> bind mounts: Compose runs inside Sockless Port, not on the engine's host.
+    </p>
+    <partial name="_FieldError" model='"Input_Compose"' />
+</section>
+
+<section class="card space-y-3" aria-labelledby="env-title">
+    <h3 id="env-title" class="section-title mb-0"><label for="Input_Env">.env</label></h3>
+    <div class="code-editor">
+        <textarea id="Input_Env" name="Input.Env" class="code-input" rows="6" spellcheck="false" autocomplete="off"
+                  aria-describedby="env-hint" data-code-editor="env" placeholder="TAG=1.27&#10;POSTGRES_PASSWORD=change-me">@Model.Env</textarea>
+    </div>
+    <p class="hint text-xs text-secondary" id="env-hint">
+        One <span class="font-mono">KEY=value</span> per line. Compose fills <span class="font-mono">${KEY}</span> in the file from here.
+        Values are stored as plain text in the data volume and shown to anyone who can open this page.
+    </p>
+</section>

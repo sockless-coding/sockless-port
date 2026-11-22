@@ -1,0 +1,53 @@
+@* Outcome of docker compose config. Model: the result, or null before anything was checked. *@
+@model Sockless.Port.Web.Infrastructure.StackValidationView?
+<div id="stack-validation" aria-live="polite">
+    @if (Model is { Unavailable: { } unavailable })
+    {
+        <div class="callout warning" data-compose-diagnostics="[]">
+            <icon name="exclamation-triangle" class="h-5 w-5" />
+            <p>The files can't be checked: @unavailable</p>
+        </div>
+    }
+    else if (Model?.Check is { } check)
+    {
+        @if (!check.Valid)
+        {
+            <div class="callout danger" role="alert" data-compose-diagnostics="@Model.Diagnostics">
+                <icon name="exclamation-triangle" class="h-5 w-5" />
+                <div class="min-w-0">
+                    <p class="font-semibold">Compose rejected the files</p>
+                    <ul class="mt-1 space-y-1">
+                        @foreach (var error in check.Errors)
+                        {
+                            <li class="break-words font-mono text-xs">@(error.Line is { } line ? $"Line {line}: " : "")@error.Message</li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="callout success" data-compose-diagnostics="[]">
+                <icon name="check-circle" class="h-5 w-5" />
+                <p>
+                    Valid. @(check.Services.Count == 1 ? "1 service" : $"{check.Services.Count} services")@(check.Services.Count > 0 ? ": " : "")<span class="font-mono text-xs">@string.Join(", ", check.Services)</span>
+                </p>
+            </div>
+        }
+        @if (check.Warnings.Count > 0)
+        {
+            <div class="callout warning mt-3">
+                <icon name="exclamation-triangle" class="h-5 w-5" />
+                <div class="min-w-0">
+                    <p class="font-semibold">@(check.Warnings.Count == 1 ? "1 warning" : $"{check.Warnings.Count} warnings")</p>
+                    <ul class="mt-1 list-disc space-y-1 pl-4">
+                        @foreach (var warning in check.Warnings)
+                        {
+                            <li class="break-words">@warning</li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+    }
+</div>

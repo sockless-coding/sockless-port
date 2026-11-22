@@ -1,0 +1,167 @@
+@* Name, badges, actions (on the overview) and tabs of a stack. Model: any stack page. *@
+@model Sockless.Port.Web.Infrastructure.StackPageModel
+@using Sockless.Port.Web.Pages.Engine.Stacks
+@{
+    var current = ViewContext.RouteData.Values["page"] as string;
+    var tab = DetailModel.Tabs.FirstOrDefault(t => t.Page == current).Tab;
+    var name = Model.StackName;
+    var detail = Model as DetailModel;
+    var canAct = detail is not null && Model.Client is not null && !Model.Project.IsSelf && detail.ComposeProblem is null && !Model.IsGone;
+    var busy = Model.IsBusy;
+    var runUrl = Url.Page("/Engine/Stacks/Detail", "Run", new { endpointId = Model.EndpointId, stackName = name });
+    var hasContainers = Model.Project.Containers.Count > 0;
+}
+
+<nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+    <a asp-page="/Engine/Stacks/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Stacks</a>
+    <span class="text-line-accent" aria-hidden="true">/</span>
+    <span aria-current="page">@name</span>
+</nav>
+
+<div class="mb-4 flex flex-wrap items-start justify-between gap-4">
+    <div class="min-w-0">
+        <h2 class="page-title break-all">@name</h2>
+        <div class="mt-2 flex flex-wrap items-center gap-1">
+            <span class="badge-stat" title="Kind">Compose</span>
+            @if (!Model.IsManaged && !Model.IsGone)
+            {
+                <span class="badge-stat" title="Deployed outside Sockless Port">External</span>
+            }
+            @if (Model.Definition?.Adopted == true)
+            {
+                <span class="badge-stat" title="Deployed elsewhere first, then adopted">Adopted</span>
+            }
+            @if (Model.Project.IsSelf)
+            {
+                <span class="badge-stat" title="Sockless Port runs in this stack">Sockless Port</span>
+            }
+        </div>
+    </div>
+
+    @if (canAct)
+    {
+        <div class="flex flex-wrap items-center gap-2">
+            @if (Model.IsManaged)
+            {
+                @if (detail!.HasUndeployedChanges)
+                {
+                    <a asp-page="/Engine/Stacks/Editor" asp-route-endpointId="@Model.EndpointId" asp-route-stackName="@name" asp-route-review="true" class="btn-primary">
+                        <icon name="rocket-launch" class="h-4 w-4" /> Review and deploy
+                    </a>
+                }
+                else
+                {
+                    <form method="post" action="@runUrl">
+                        <input type="hidden" name="operation" value="deploy" />
+                        <button type="submit" class="btn-primary" disabled="@busy">
+                            <icon name="rocket-launch" class="h-4 w-4" /> @(Model.Definition!.DeployedAt is null ? "Deploy" : "Redeploy")
+                        </button>
+                    </form>
+                }
+                <form method="post" action="@runUrl">
+                    <input type="hidden" name="operation" value="update" />
+                    <button type="submit" class="btn-soft" disabled="@busy" title="Pull every image again, then recreate the services whose image changed">
+                        <icon name="cloud-arrow-down" class="h-4 w-4" /> Pull and update
+                    </button>
+                </form>
+            }
+            else
+            {
+                <a asp-page="/Engine/Stacks/Create" asp-route-endpointId="@Model.EndpointId" asp-route-adopt="@name" class="btn-primary">
+                    <icon name="arrow-down-on-square" class="h-4 w-4" /> Adopt
+                </a>
+            }
+
+            <details class="menu" data-menu>
+                <summary class="btn-soft" aria-label="More actions for @name">More <icon name="chevron-down" class="h-4 w-4" /></summary>
+                <div class="menu-panel w-80 space-y-4 p-3">
+                    @if (hasContainers)
+                    {
+                        <div class="flex flex-wrap gap-2">
+                            @foreach (var (op, label, icon) in new[] { ("start", "Start", "play"), ("restart", "Restart", "arrow-path") })
+                            {
+                                <form method="post" action="@runUrl">
+                                    <input type="hidden" name="operation" value="@op" />
+                                    <button type="submit" class="btn-soft" disabled="@busy"><icon name="@icon" class="h-4 w-4" /> @label</button>
+                                </form>
+                            }
+                            <form method="post" action="@runUrl">
+                                <input type="hidden" name="operation" value="stop" />
+                                <button type="submit" class="btn-soft danger" disabled="@busy" data-confirm="Stop every container of @name?">
+                                    <icon name="stop" class="h-4 w-4" /> Stop
+                                </button>
+                            </form>
+                        </div>
+
+                        <form method="post" action="@runUrl">
+                            <input type="hidden" name="operation" value="down" />
+                            <p class="label-caps mb-1">Take down</p>
+                            <p class="mb-2 text-xs text-secondary">Removes the containers and networks. Volumes are kept@(Model.IsManaged ? ", and so are the files: deploy again any time" : "").</p>
+                            <button type="submit" class="btn-soft danger" disabled="@busy"
+                                    data-confirm="Take @name down? Its containers and networks are removed. Volumes are kept.">
+                                <icon name="stop" class="h-4 w-4" /> Take down
+                            </button>
+                        </form>
+                        <form method="post" action="@runUrl">
+                            <input type="hidden" name="operation" value="down" />
+                            <input type="hidden" name="removeVolumes" value="true" />
+                            <button type="submit" class="btn-soft danger" disabled="@busy"
+                                    data-confirm="Take @name down and remove its volumes? Their data is deleted and can't be recovered.">
+                                <icon name="trash" class="h-4 w-4" /> Take down and remove volumes
+                            </button>
+                        </form>
+                    }
+
+                    @if (Model.IsManaged)
+                    {
+                        <div class="space-y-2 border-t border-line pt-3">
+                            <p class="label-caps">Remove stack</p>
+                            <p class="text-xs text-secondary">Deletes the files from Sockless Port.</p>
+                            <form method="post" action="@runUrl">
+                                <input type="hidden" name="operation" value="remove" />
+                                <button type="submit" class="btn-soft danger" disabled="@busy"
+                                        data-confirm="Remove the stack @name? It's taken down and its files are deleted. Volumes are kept.">
+                                    <icon name="trash" class="h-4 w-4" /> Take down and remove
+                                </button>
+                            </form>
+                            @if (hasContainers)
+                            {
+                                <form method="post" action="@runUrl">
+                                    <input type="hidden" name="operation" value="remove" />
+                                    <input type="hidden" name="keepRunning" value="true" />
+                                    <button type="submit" class="btn-soft danger" disabled="@busy"
+                                            data-confirm="Remove the stack @name from Sockless Port but leave its containers running? Its files are deleted.">
+                                        Forget, keep containers
+                                    </button>
+                                </form>
+                            }
+                        </div>
+                    }
+                </div>
+            </details>
+        </div>
+    }
+</div>
+
+@if (Model.IsManaged)
+{
+    <nav aria-label="Stack" class="tabs mb-6">
+        @foreach (var (key, tabPage, label) in DetailModel.Tabs)
+        {
+            <a asp-page="@tabPage" asp-route-endpointId="@Model.EndpointId" asp-route-stackName="@name"
+               class="tab" aria-current="@(key == tab ? "page" : null)">@label</a>
+        }
+    </nav>
+}
+
+@if (Model.Error is not null)
+{
+    <div class="callout danger mb-4" role="alert">
+        <icon name="exclamation-triangle" class="h-5 w-5" />
+        <p>@Model.Error</p>
+    </div>
+}
+else if (Model.Client is null)
+{
+    <div class="mb-4"><partial name="_EndpointStateCallout" model="Model.Connection" /></div>
+}

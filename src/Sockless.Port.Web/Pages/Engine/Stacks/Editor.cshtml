@@ -1,0 +1,80 @@
+@page "/endpoints/{endpointId:int}/stacks/{stackName}/editor"
+@model Sockless.Port.Web.Pages.Engine.Stacks.EditorModel
+@{
+    ViewData["Title"] = $"{Model.StackName} editor";
+    var validateUrl = Url.Page("/Engine/Stacks/Editor", "Validate", new { endpointId = Model.EndpointId, stackName = Model.StackName });
+    var review = Model.Review;
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <partial name="_StackHeader" model="Model" />
+
+    @if (Model.Project.IsSelf)
+    {
+        <div class="callout mb-4">
+            <icon name="information-circle" class="h-5 w-5" />
+            <p>Sockless Port runs in this stack, so the files can be edited and saved here but not deployed.</p>
+        </div>
+    }
+
+    <form method="post" class="space-y-6" novalidate>
+        @if (review is not null)
+        {
+            <section class="card space-y-4" aria-labelledby="review-title" id="review">
+                <div class="flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 id="review-title" class="section-title mb-0">Review changes</h3>
+                    <span class="text-secondary">
+                        @(review.FirstDeploy ? "Nothing was deployed from here yet: everything is new."
+                            : review.Unchanged ? "Same as what's deployed. Deploying again recreates only what drifted."
+                            : $"Against what was deployed {Format.Relative(Model.Definition!.DeployedAt!.Value)}.")
+                    </span>
+                </div>
+                @if (Model.Notice is not null)
+                {
+                    <div class="callout warning" role="alert">
+                        <icon name="exclamation-triangle" class="h-5 w-5" />
+                        <p>@Model.Notice</p>
+                    </div>
+                }
+                @if (!review.FirstDeploy)
+                {
+                    <partial name="_StackDiff" model='("compose.yaml", review.Compose)' />
+                    <partial name="_StackDiff" model='(".env", review.Env)' />
+                }
+                <input type="hidden" name="Reviewed" value="@Model.Reviewed" />
+                <div class="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-4">
+                    <label class="flex items-center gap-2 text-secondary">
+                        <input type="checkbox" name="pull" value="true" class="accent-accent" /> Pull every image again first
+                    </label>
+                    <button type="submit" class="btn-primary" asp-page-handler="Deploy" disabled="@(Model.Client is null || Model.Project.IsSelf || Model.IsBusy)">
+                        <icon name="rocket-launch" class="h-4 w-4" /> Deploy
+                    </button>
+                </div>
+                @if (Model.Client is null)
+                {
+                    <p class="text-right text-xs text-secondary">The engine is offline. Save the files now and deploy once it's back.</p>
+                }
+                else if (Model.IsBusy)
+                {
+                    <p class="text-right text-xs text-secondary">Something is running on this stack. Deploy once it has finished.</p>
+                }
+            </section>
+        }
+
+        <div>
+            <partial name="_StackValidation" model="Model.Validation" />
+        </div>
+
+        <partial name="_StackFiles" model="Model.Input" />
+
+        <div class="flex flex-wrap items-center justify-end gap-2">
+            <button type="submit" class="btn-soft" formaction="@validateUrl" hx-post="@validateUrl" hx-target="#stack-validation" hx-swap="outerHTML">
+                <icon name="document-check" class="h-4 w-4" /> Validate
+            </button>
+            <button type="submit" class="btn-soft" asp-page-handler="Save">Save without deploying</button>
+            <button type="submit" class="btn-primary" asp-page-handler="Review">
+                <icon name="rocket-launch" class="h-4 w-4" /> Review and deploy
+            </button>
+        </div>
+    </form>
+</div>

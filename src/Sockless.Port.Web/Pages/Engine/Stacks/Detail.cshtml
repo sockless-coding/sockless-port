@@ -1,0 +1,14 @@
+@page "/endpoints/{endpointId:int}/stacks/{stackName}"
+@model Sockless.Port.Web.Pages.Engine.Stacks.DetailModel
+@{
+    ViewData["Title"] = Model.StackName;
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <partial name="_StackHeader" model="Model" />
+    @if (Model.Job is { } job)
+    {
+        <partial name="_StackJob" model="job.View()" />
+    }
+    <partial name="_StackOverview" model="Model" />
+</div>

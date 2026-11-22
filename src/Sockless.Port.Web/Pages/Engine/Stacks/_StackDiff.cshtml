@@ -1,0 +1,40 @@
+@* One file's changes. Model: (file name, hunks). Additions and removals carry a sign and a hidden word, not colour alone. *@
+@model (string File, IReadOnlyList<Sockless.Port.Stacks.DiffHunk> Hunks)
+@using Sockless.Port.Stacks
+@{
+    var added = Model.Hunks.Sum(h => h.Added);
+    var removed = Model.Hunks.Sum(h => h.Removed);
+}
+<section aria-label="Changes to @Model.File" class="space-y-2">
+    <p class="flex flex-wrap items-baseline gap-3">
+        <span class="font-mono font-semibold text-heading">@Model.File</span>
+        @if (Model.Hunks.Count == 0)
+        {
+            <span class="text-secondary">No changes</span>
+        }
+        else
+        {
+            <span class="text-secondary">@added added, @removed removed</span>
+        }
+    </p>
+    @foreach (var hunk in Model.Hunks)
+    {
+        <div class="diff" role="table" aria-label="Changed lines of @Model.File">
+            @foreach (var line in hunk.Lines)
+            {
+                var (kind, sign, word) = line.Kind switch
+                {
+                    DiffKind.Added => ("added", "+", "Added: "),
+                    DiffKind.Removed => ("removed", "−", "Removed: "),
+                    _ => ("", " ", ""),
+                };
+                <div class="diff-line @kind" role="row">
+                    <span class="diff-no" role="cell" aria-label="Old line">@line.OldLine</span>
+                    <span class="diff-no" role="cell" aria-label="New line">@line.NewLine</span>
+                    <span class="diff-sign" aria-hidden="true">@sign</span>
+                    <span class="diff-text" role="cell">@if (word.Length > 0) {<span class="sr-only">@word</span>}@line.Text</span>
+                </div>
+            }
+        </div>
+    }
+</section>

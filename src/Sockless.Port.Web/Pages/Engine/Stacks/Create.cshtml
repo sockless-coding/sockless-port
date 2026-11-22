@@ -1,0 +1,105 @@
+@page "/endpoints/{endpointId:int}/stacks/create"
+@model Sockless.Port.Web.Pages.Engine.Stacks.CreateModel
+@{
+    ViewData["Title"] = Model.Adopting ? $"Adopt {Model.Adopt}" : "Create stack";
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+        <a asp-page="/Engine/Stacks/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Stacks</a>
+        <span class="text-line-accent" aria-hidden="true">/</span>
+        <span aria-current="page">@(Model.Adopting ? "Adopt" : "Create")</span>
+    </nav>
+    <div class="mb-6">
+        <h2 class="page-title">@(Model.Adopting ? $"Adopt {Model.Adopt}" : "Create stack")</h2>
+        <p class="mt-1 text-secondary">
+            @if (Model.Adopting)
+            {
+                <text>Manage a Compose project that was deployed outside Sockless Port. Adopting saves its files here and leaves its containers running.</text>
+            }
+            else
+            {
+                <text>A Compose project on @Model.Connection.Name. Its files are kept in Sockless Port's data volume, and Compose runs from there.</text>
+            }
+        </p>
+    </div>
+
+    @if (Model.Error is not null)
+    {
+        <div class="callout danger mb-4" role="alert">
+            <icon name="exclamation-triangle" class="h-5 w-5" />
+            <p>@Model.Error</p>
+        </div>
+    }
+
+    @if (Model.Adopting)
+    {
+        <div class="callout mb-4">
+            <icon name="information-circle" class="h-5 w-5" />
+            @if (Model.AdoptSource is { } source)
+            {
+                <p>This is the project's own compose file, read from <span class="break-all font-mono text-xs">@source</span>. Later changes to that file aren't picked up: from now on, edit the stack here.</p>
+            }
+            else
+            {
+                <p>
+                    Sockless Port can't read the project's compose file, so this one was rebuilt from its containers.
+                    Check it against the original before deploying: <span class="font-mono">build:</span>, <span class="font-mono">depends_on:</span>,
+                    profiles and healthchecks aren't recorded on containers, and settings that come from the image are left out.
+                </p>
+            }
+        </div>
+    }
+
+    <form method="post" class="space-y-6" novalidate asp-route-adopt="@Model.Adopt">
+        @if (!Model.Adopting)
+        {
+            <section class="card space-y-4" aria-labelledby="stack-basics">
+                <h3 id="stack-basics" class="section-title">Stack</h3>
+                <div class="field max-w-md">
+                    <label asp-for="Input.Name">Name</label>
+                    <input asp-for="Input.Name" class="font-mono" placeholder="web" autocomplete="off" spellcheck="false" aria-describedby="name-hint" />
+                    <p class="hint" id="name-hint">The Compose project name: lower-case letters, digits, - and _. Containers are named after it (web-app-1).</p>
+                    <partial name="_FieldError" model='"Input_Name"' />
+                </div>
+            </section>
+        }
+        else
+        {
+            <partial name="_FieldError" model='"Input_Name"' />
+        }
+
+        <div class="space-y-3">
+            <partial name="_StackValidation" model="Model.Validation" />
+        </div>
+
+        <partial name="_StackFiles" model="Model.Input" />
+
+        <div class="flex flex-wrap items-center justify-end gap-2">
+            @{
+                var validateUrl = Url.Page("/Engine/Stacks/Create", "Validate", new { endpointId = Model.EndpointId, adopt = Model.Adopt });
+            }
+            <button type="submit" class="btn-soft" formnovalidate formaction="@validateUrl"
+                    hx-post="@validateUrl" hx-target="#stack-validation" hx-swap="outerHTML">
+                <icon name="document-check" class="h-4 w-4" /> Validate
+            </button>
+            @if (Model.Adopting)
+            {
+                <button type="submit" class="btn-soft" name="deploy" value="true"
+                        data-confirm="Adopt and deploy @Model.Adopt now? Compose recreates every container whose settings differ from this file.">
+                    <icon name="rocket-launch" class="h-4 w-4" /> Adopt and deploy
+                </button>
+                <button type="submit" class="btn-primary" name="deploy" value="false">
+                    <icon name="arrow-down-on-square" class="h-4 w-4" /> Adopt
+                </button>
+            }
+            else
+            {
+                <button type="submit" class="btn-soft" name="deploy" value="false">Save without deploying</button>
+                <button type="submit" class="btn-primary" name="deploy" value="true">
+                    <icon name="rocket-launch" class="h-4 w-4" /> Deploy
+                </button>
+            }
+        </div>
+    </form>
+</div>

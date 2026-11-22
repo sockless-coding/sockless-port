@@ -94,7 +94,7 @@ Each phase can ship on its own and ends with a working, containerised build.
 - Auth uses ASP.NET Core Identity on SQLite. Lockout after 5 failed attempts covers brute force per account; a per-IP rate limit stays in Phase 9.
 - A strict CSP (`'self'` only, no inline script or style, htmx without eval) is already in place.
 - The UI is served over HTTP on 8080. TLS comes from a reverse proxy for now; built-in TLS arrives with the internal CA in Phase 6.
-- The `docker compose` plugin is not in the image yet; it's added in Phase 5.
+- The `docker compose` binary was added to the image in Phase 5.
 
 ### Phase 1: Docker client and local endpoint
 
@@ -173,6 +173,18 @@ Each phase can ship on its own and ends with a working, containerised build.
 - On Podman, the same flow runs through `docker compose` against the Podman socket. Known Compose gaps on Podman are listed in the UI when they come up.
 - Stack model designed with a `Kind` (Compose, Swarm) from the start, so Phase 7 adds Swarm stacks without a migration rewrite.
 - Later: git-backed stacks (repo + path + branch, manual or webhook redeploy).
+
+**Status: done.** Notes:
+- **Pages** are `/endpoints/{id}/stacks`, plus `/create` (and `/create?adopt={name}`), and for each stack `/{name}` (overview: job, services and containers) and `/{name}/editor`. Lists and overviews refresh live on engine events and when a job ends. Container pages link their Compose stack.
+- **Compose** is the standalone `docker-compose` 5.7.0 binary, pinned in the image and checked against its release SHA-256 (`Port:Compose` picks another; from source, `docker-compose` then `docker compose` are tried). It runs as a child process with an argument list and a **clean environment**: only `DOCKER_HOST` for the endpoint, a private `DOCKER_CONFIG` holding the stored registry credentials (deleted after the run), and what the OS needs. Sockless Port's own variables never reach `${…}` interpolation. TCP+TLS endpoints get their certificates in that folder, ready for Phase 6.
+- **Storage:** a `Stacks` table (endpoint, name, `Kind` = Compose or Swarm, adopted, saved/deployed times) and the files in `/data/stacks/{endpoint}/{name}/`. A successful deploy copies the files to `.deployed/`, which the review diffs against; a down removes that copy.
+- **Editor:** CodeMirror 6 (self-hosted bundle, source in `build/codemirror/`) over plain text areas that remain the form fields, so it works without scripts. Validation runs `docker compose config` on a temporary copy; errors that name a line show in the editor's gutter. It also warns about what's valid but won't work here: `build:` (no context, no Buildx), relative bind mounts (they resolve inside the data volume) and, on rootless engines, ports below 1024. A new `Rootless` capability comes from `/info` `SecurityOptions`.
+- **Review before deploy:** "Review and deploy" shows a line diff of both files against what was last deployed, and Deploy carries a hash of the reviewed content: if the files changed after the review, the review is shown again instead. Diff lines carry +/− and a hidden word, tinted gaslight (added) and rust (removed), not success green.
+- **Jobs** (`StackJobs`): deploy (`up --detach --remove-orphans`), pull and update (`--pull always`), start, stop, restart, take down (optionally `--volumes`) and remove (take down, then delete the files; or forget the stack and leave its containers running). One job per stack, at most 4 per endpoint, kept 15 minutes after they end. Output streams over SignalR; failures name Compose's last error line and add hints for known problems (`ComposeHints`).
+- **External projects** (containers with `com.docker.compose.project`, not managed here) are listed with an External badge. Compose can start, stop, restart and take them down by project name, without the file. **Adopting** uses the project's own compose file and `.env` when the label's path is readable from the server; otherwise it rebuilds a file from the containers, leaving out what the image sets, doubling `$` so values aren't interpolated, and declaring volumes and networks the project didn't create as external.
+- **Self-protection:** the project Sockless Port runs in (found from its own mounts and cgroup) is badged and can't be stopped, redeployed or taken down from the UI.
+- **Engine differences** found by the integration tests: Podman records image names fully qualified (`docker.io/library/busybox:1.37`), and words a refused pull as "requested access to the resource is denied"; both are handled. Known Podman gaps (short names, rootless ports, cgroup limits, SELinux relabelling) are recognised in Compose's output and explained with the error.
+- **Not built:** Swarm stacks (Phase 7, the `Kind` column is ready), git-backed stacks, extra files next to the compose file (`env_file:`, configs), and an unsaved-changes warning in the editor.
 
 ### Phase 6: Remote agent
 

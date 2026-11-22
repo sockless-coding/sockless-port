@@ -50,6 +50,9 @@ public sealed record SystemInfo
     public string? CgroupDriver { get; init; }
     public SwarmInfo? Swarm { get; init; }
     public PluginsInfo? Plugins { get; init; }
+
+    /// <summary>E.g. <c>name=seccomp,profile=builtin</c>; rootless engines list <c>name=rootless</c>.</summary>
+    public IReadOnlyList<string>? SecurityOptions { get; init; }
     public IReadOnlyList<string>? Warnings { get; init; }
 }
 
