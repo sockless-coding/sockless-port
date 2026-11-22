@@ -1,0 +1,95 @@
+@page "/endpoints/{endpointId:int}/images/{imageId}/vulnerabilities/accepted/{riskId:int}"
+@model Sockless.Port.Web.Pages.Engine.Images.AcceptedRiskModel
+@using Sockless.Port.Vulnerabilities
+@{
+    var risk = Model.Risk;
+    ViewData["Title"] = $"Accepted risk: {risk.VulnerabilityId}";
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+        <a asp-page="/Engine/Images/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Images</a>
+        <span class="text-line-accent" aria-hidden="true">/</span>
+        <a asp-page="/Engine/Images/Vulnerabilities" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId" asp-route-status="all" class="hover:underline">@Model.DisplayName</a>
+        <span class="text-line-accent" aria-hidden="true">/</span>
+        <span aria-current="page">Accepted risk</span>
+    </nav>
+
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div class="min-w-0">
+            <h2 class="page-title break-all">@risk.VulnerabilityId in @risk.Package</h2>
+            <div class="mt-2 flex flex-wrap items-center gap-1">
+                @if (Model.Active)
+                {
+                    <span class="badge-stat">Accepted</span>
+                }
+                else
+                {
+                    <span class="badge warning">Expired: counts again</span>
+                }
+                <span class="badge-stat">@ScanDisplay.RiskScope(risk, Model.Now)</span>
+            </div>
+        </div>
+        @if (Model.CanRevoke)
+        {
+            <form method="post" asp-page="/Engine/Images/AcceptedRisk" asp-page-handler="Revoke"
+                  asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId" asp-route-riskId="@risk.Id">
+                <button type="submit" class="btn-soft danger"
+                        data-confirm="Revoke the acceptance of @risk.VulnerabilityId in @risk.Package@(risk.ImageId is null ? " for every image" : "")? It counts again, and its comments are deleted (the audit log keeps who did what).">
+                    <icon name="trash" class="h-4 w-4" /> Revoke
+                </button>
+            </form>
+        }
+    </div>
+
+    <section class="card mb-6" aria-labelledby="risk-title">
+        <h3 id="risk-title" class="section-title">What was accepted</h3>
+        <dl class="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+            <dt class="text-secondary">Vulnerability</dt>
+            <dd class="font-mono">@risk.VulnerabilityId</dd>
+            <dt class="text-secondary">Package</dt>
+            <dd class="break-all font-mono">@risk.Package</dd>
+            <dt class="text-secondary">Found in</dt>
+            <dd class="break-all font-mono">@(risk.Target ?? "OS packages")</dd>
+            <dt class="text-secondary">Holds for</dt>
+            <dd>@(risk.ImageId is null ? "Every image with this finding, on every endpoint" : $"This image only{(risk.ImageName is { } name ? $" ({name})" : "")}")</dd>
+            <dt class="text-secondary">Accepted</dt>
+            <dd>By @risk.CreatedBy, <span title="@Format.Timestamp(risk.CreatedAt)">@Format.Relative(risk.CreatedAt, Model.Now)</span></dd>
+            <dt class="text-secondary">Expires</dt>
+            <dd>@(risk.ExpiresAt is { } at ? Format.Timestamp(at) : "Never: until revoked")</dd>
+        </dl>
+    </section>
+
+    <section class="card" aria-labelledby="comments-title">
+        <h3 id="comments-title" class="section-title">Comments</h3>
+        <ol class="mb-4 space-y-4">
+            @foreach (var (comment, index) in risk.Comments.Select((c, i) => (c, i)))
+            {
+                <li class="border-l-2 border-line-accent pl-3">
+                    <p class="text-xs text-secondary">
+                        <span class="font-semibold text-heading">@comment.UserName</span>
+                        · <span title="@Format.Timestamp(comment.At)">@Format.Relative(comment.At, Model.Now)</span>
+                        @if (index == 0)
+                        {
+                            <span> · the reason</span>
+                        }
+                    </p>
+                    <p class="mt-1 whitespace-pre-line break-words">@comment.Text</p>
+                </li>
+            }
+        </ol>
+
+        <form sp-can="write" method="post" asp-page="/Engine/Images/AcceptedRisk" asp-page-handler="Comment"
+              asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId" asp-route-riskId="@risk.Id" class="space-y-3">
+            <div class="field">
+                <label asp-for="Comment">Add a comment</label>
+                <textarea asp-for="Comment" rows="3" maxlength="@AcceptedRisks.MaxComment" required
+                          placeholder="e.g. Checked again: still no Compose release with the fixed module."></textarea>
+                <partial name="_FieldError" model="nameof(Model.Comment)" />
+            </div>
+            <div class="flex justify-end">
+                <button type="submit" class="btn-soft secondary">Comment</button>
+            </div>
+        </form>
+    </section>
+</div>

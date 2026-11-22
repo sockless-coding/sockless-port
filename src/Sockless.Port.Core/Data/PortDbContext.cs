@@ -28,6 +28,12 @@ public sealed class PortDbContext(DbContextOptions<PortDbContext> options) : Ide
 
     public DbSet<ImageScan> ImageScans => Set<ImageScan>();
 
+    public DbSet<ImageFinding> ImageFindings => Set<ImageFinding>();
+
+    public DbSet<AcceptedRisk> AcceptedRisks => Set<AcceptedRisk>();
+
+    public DbSet<AcceptedRiskComment> AcceptedRiskComments => Set<AcceptedRiskComment>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -85,6 +91,49 @@ public sealed class PortDbContext(DbContextOptions<PortDbContext> options) : Ide
             scan.Property(s => s.DatabaseUpdatedAt).HasConversion(SortableUtc);
             scan.Property(s => s.Os).HasMaxLength(128);
             scan.Ignore(s => s.Counts);
+            scan.HasMany(s => s.Findings).WithOne().HasForeignKey(f => f.ScanId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<ImageFinding>(finding =>
+        {
+            finding.ToTable("ImageFindings");
+            finding.Property(f => f.VulnerabilityId).HasMaxLength(64);
+            finding.Property(f => f.Package).HasMaxLength(256);
+            finding.Property(f => f.InstalledVersion).HasMaxLength(256);
+            finding.Property(f => f.FixedVersion).HasMaxLength(512);
+            finding.Property(f => f.Severity).HasConversion<string>().HasMaxLength(16);
+            finding.Property(f => f.Status).HasMaxLength(32);
+            finding.Property(f => f.Title).HasMaxLength(512);
+            finding.Property(f => f.Target).HasMaxLength(1024);
+            finding.Property(f => f.Type).HasMaxLength(64);
+            finding.Property(f => f.Url).HasMaxLength(1024);
+            // Accepted risks are matched by vulnerability.
+            finding.HasIndex(f => new { f.ScanId, f.VulnerabilityId });
+        });
+
+        builder.Entity<AcceptedRisk>(risk =>
+        {
+            risk.ToTable("AcceptedRisks");
+            risk.Property(r => r.VulnerabilityId).HasMaxLength(64);
+            risk.Property(r => r.Package).HasMaxLength(256);
+            risk.Property(r => r.Target).HasMaxLength(1024);
+            // No foreign key: an acceptance outlives the scan it came from, and may hold for every image.
+            risk.Property(r => r.ImageId).HasMaxLength(80);
+            risk.Property(r => r.ImageName).HasMaxLength(512);
+            risk.Property(r => r.CreatedBy).HasMaxLength(256);
+            risk.Property(r => r.CreatedAt).HasConversion(SortableUtc);
+            risk.Property(r => r.ExpiresAt).HasConversion(SortableUtc);
+            risk.HasIndex(r => r.VulnerabilityId);
+            risk.Ignore(r => r.Key);
+            risk.HasMany(r => r.Comments).WithOne().HasForeignKey(c => c.RiskId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<AcceptedRiskComment>(comment =>
+        {
+            comment.ToTable("AcceptedRiskComments");
+            comment.Property(c => c.UserName).HasMaxLength(256);
+            comment.Property(c => c.At).HasConversion(SortableUtc);
+            comment.Property(c => c.Text).HasMaxLength(Vulnerabilities.AcceptedRisks.MaxComment);
         });
 
         builder.Entity<EngineEndpoint>(endpoint =>

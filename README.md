@@ -104,6 +104,8 @@ Without a certificate of yours, the internal CA (the one that signs agent certif
 
 Images can be scanned for known vulnerabilities with [Trivy](https://github.com/aquasecurity/trivy), which the image includes. Scan one image from its Vulnerabilities tab, a container's image from its overview, or everything containers use from the Images page; Settings can scan daily or weekly. Each image is copied from its engine to the Sockless Port server and scanned there, so it works the same for remote agents and Podman, and the result is shared by every endpoint with the same image. Packages installed in a running container after it started aren't part of the image, so they aren't covered.
 
+A finding you've reviewed can be marked as an accepted risk, with the reason and an optional expiry: it stays in the scan but no longer counts, and its comment thread keeps the reasoning for whoever looks next.
+
 Trivy downloads its vulnerability databases into `/data/scanner` when they're due. Without internet access, point it at a mirror (`Port__Scanner__DatabaseRepositories__0`, `Port__Scanner__JavaDatabaseRepositories__0`), or copy the databases in and set `Port__Scanner__SkipDatabaseUpdate=true`.
 
 ### Backups

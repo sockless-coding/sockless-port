@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -75,7 +74,7 @@ public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scop
         return false;
     }
 
-    /// <summary>The stored results for the images that have one, by image ID.</summary>
+    /// <summary>The stored results for the images that have one, by image ID. Counts leave out accepted findings.</summary>
     public async Task<IReadOnlyDictionary<string, ScanSummary>> SummariesAsync(IEnumerable<string> imageIds, CancellationToken cancellationToken = default)
     {
         var ids = imageIds.Select(Normalize).Distinct(StringComparer.Ordinal).ToList();
@@ -83,41 +82,70 @@ public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scop
             return new Dictionary<string, ScanSummary>();
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<PortDbContext>();
+        var risks = await ActiveRisksAsync(db, cancellationToken);
+        var riskIds = risks.Select(r => r.VulnerabilityId).Distinct(StringComparer.Ordinal).ToList();
         var result = new Dictionary<string, ScanSummary>(StringComparer.Ordinal);
         // SQLite allows a limited number of parameters per statement.
         foreach (var chunk in ids.Chunk(500))
         {
             var rows = await db.ImageScans.AsNoTracking()
                 .Where(s => chunk.Contains(s.ImageId))
-                .Select(s => new { s.ImageId, s.ScannedAt, s.Critical, s.High, s.Medium, s.Low, s.Unknown, s.Fixable, s.Os, s.OsEndOfLife, s.ScannerVersion, s.DatabaseUpdatedAt })
+                .Select(s => new
+                {
+                    s.Id, s.ImageId, s.ScannedAt, s.Critical, s.High, s.Medium, s.Low, s.Unknown, s.Fixable, s.Os, s.OsEndOfLife, s.ScannerVersion, s.DatabaseUpdatedAt,
+                })
                 .ToListAsync(cancellationToken);
+            // Only findings of vulnerabilities someone accepted can be accepted: few rows.
+            var scanIds = rows.Select(r => r.Id).ToList();
+            var candidates = riskIds.Count == 0
+                ? []
+                : await db.ImageFindings.AsNoTracking()
+                    .Where(f => scanIds.Contains(f.ScanId) && riskIds.Contains(f.VulnerabilityId))
+                    .ToListAsync(cancellationToken);
+            var byScan = candidates.ToLookup(f => f.ScanId);
             foreach (var s in rows)
-                result[s.ImageId] = new ScanSummary(s.ImageId, s.ScannedAt, new ScanCounts(s.Critical, s.High, s.Medium, s.Low, s.Unknown, s.Fixable),
-                    s.Os, s.OsEndOfLife, s.ScannerVersion, s.DatabaseUpdatedAt);
+            {
+                var all = new ScanCounts(s.Critical, s.High, s.Medium, s.Low, s.Unknown, s.Fixable);
+                var accepted = byScan[s.Id].Where(f => risks.Any(r => r.Covers(s.ImageId, new RiskKey(f.VulnerabilityId, f.Package, f.Target)))).ToList();
+                result[s.ImageId] = new ScanSummary(s.ImageId, s.ScannedAt, Subtract(all, accepted), s.Os, s.OsEndOfLife, s.ScannerVersion, s.DatabaseUpdatedAt,
+                    accepted.Count);
+            }
         }
         return result;
     }
 
-    /// <summary>The stored result of an image, with its findings; null when it wasn't scanned.</summary>
+    /// <summary>The stored result of an image with all its findings, worst first; null when it wasn't scanned.</summary>
     public async Task<ScanResult?> GetAsync(string imageId, CancellationToken cancellationToken = default)
     {
         imageId = Normalize(imageId);
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<PortDbContext>();
-        var scan = await db.ImageScans.AsNoTracking().FirstOrDefaultAsync(s => s.ImageId == imageId, cancellationToken);
+        var scan = await db.ImageScans.AsNoTracking().Include(s => s.Findings).AsSplitQuery()
+            .FirstOrDefaultAsync(s => s.ImageId == imageId, cancellationToken);
         if (scan is null)
             return null;
-        List<VulnerabilityFinding> findings;
-        try
-        {
-            findings = JsonSerializer.Deserialize(scan.Findings, ScanJsonContext.Default.ListVulnerabilityFinding) ?? [];
-        }
-        catch (JsonException ex)
-        {
-            LogUnreadable(logger, imageId, ex.Message);
-            findings = [];
-        }
-        return new ScanResult(scan.ToSummary(), findings);
+        var findings = TrivyReport.Sort(scan.Findings.Select(f => f.ToFinding()));
+        var risks = await ActiveRisksAsync(db, cancellationToken);
+        var accepted = scan.Findings.Where(f => risks.Any(r => r.Covers(imageId, new RiskKey(f.VulnerabilityId, f.Package, f.Target)))).ToList();
+        var summary = new ScanSummary(scan.ImageId, scan.ScannedAt, Subtract(scan.Counts, accepted), scan.Os, scan.OsEndOfLife, scan.ScannerVersion,
+            scan.DatabaseUpdatedAt, accepted.Count);
+        return new ScanResult(summary, findings);
+    }
+
+    /// <summary>Accepted risks that haven't expired. Expiry is compared in memory: dates are stored as strings.</summary>
+    private async Task<List<AcceptedRisk>> ActiveRisksAsync(PortDbContext db, CancellationToken cancellationToken)
+    {
+        var now = time.GetUtcNow();
+        return [.. (await db.AcceptedRisks.AsNoTracking().ToListAsync(cancellationToken)).Where(r => r.IsActive(now))];
+    }
+
+    private static ScanCounts Subtract(ScanCounts all, IReadOnlyCollection<ImageFinding> accepted)
+    {
+        if (accepted.Count == 0)
+            return all;
+        var minus = ScanCounts.Of(accepted.Select(f => f.ToFinding()));
+        return new ScanCounts(all.Critical - minus.Critical, all.High - minus.High, all.Medium - minus.Medium, all.Low - minus.Low,
+            all.Unknown - minus.Unknown, all.Fixable - minus.Fixable);
     }
 
     /// <summary>
@@ -189,7 +217,7 @@ public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scop
         }
         catch (Exception ex) when (ex is OperationCanceledException or ScannerUnavailableException or DockerApiException or DockerApiVersionException
                                        or HttpRequestException or IOException or UnauthorizedAccessException or TimeoutException or ObjectDisposedException
-                                       or InvalidDataException or JsonException or DbUpdateException)
+                                       or InvalidDataException or System.Text.Json.JsonException or DbUpdateException)
         {
             var reason = ex switch
             {
@@ -233,14 +261,18 @@ public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scop
     internal async Task StoreAsync(string imageId, ImageInspect image, TrivyReport report, ScannerStatus status, CancellationToken cancellationToken)
     {
         var counts = ScanCounts.Of(report.Findings);
-        var findings = JsonSerializer.Serialize([.. report.Findings], ScanJsonContext.Default.ListVulnerabilityFinding);
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<PortDbContext>();
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         var scan = await db.ImageScans.FirstOrDefaultAsync(s => s.ImageId == imageId, cancellationToken);
         if (scan is null)
         {
-            scan = new ImageScan { ImageId = imageId, ScannerVersion = status.Version, Findings = findings };
+            scan = new ImageScan { ImageId = imageId, ScannerVersion = status.Version };
             db.ImageScans.Add(scan);
+        }
+        else
+        {
+            await db.ImageFindings.Where(f => f.ScanId == scan.Id).ExecuteDeleteAsync(cancellationToken);
         }
         scan.ImageName = ImageName(image);
         scan.ScannedAt = time.GetUtcNow();
@@ -254,8 +286,9 @@ public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scop
         scan.Low = counts.Low;
         scan.Unknown = counts.Unknown;
         scan.Fixable = counts.Fixable;
-        scan.Findings = findings;
+        scan.Findings = [.. report.Findings.Select(ImageFinding.From)];
         await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     private async Task PhaseAsync(EngineConnection connection, string imageId, string phase, DateTimeOffset started, bool notify)
@@ -309,9 +342,6 @@ public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scop
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Couldn't scan {Image} from {Endpoint}: {Reason}")]
     private static partial void LogFailed(ILogger logger, string image, string endpoint, string reason);
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "The stored scan of {Image} is unreadable: {Reason}")]
-    private static partial void LogUnreadable(ILogger logger, string image, string reason);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Couldn't tell browsers a scan changed: {Reason}")]
     private static partial void LogNotifyFailed(ILogger logger, string reason);

@@ -13,15 +13,31 @@
             <section class="card">
                 <div class="empty-state">
                     <icon name="shield-check" class="h-12 w-12" stroke-width="1.5" />
-                    <p class="text-base text-heading">No vulnerabilities match these filters</p>
-                    <p class="text-secondary"><a asp-page="/Engine/Images/Vulnerabilities" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId" class="hover:underline">Clear the filters</a> to see all @result.Findings.Count.</p>
+                    @if (!Model.Filtered && Model.AcceptedCount > 0)
+                    {
+                        <p class="text-base text-heading">No open vulnerabilities</p>
+                        <p class="text-secondary">
+                            The risk of every finding was accepted.
+                            <a asp-page="/Engine/Images/Vulnerabilities" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId" asp-route-status="accepted" class="hover:underline">See the @Model.AcceptedCount accepted</a>.
+                        </p>
+                    }
+                    else
+                    {
+                        <p class="text-base text-heading">No vulnerabilities match these filters</p>
+                        <p class="text-secondary"><a asp-page="/Engine/Images/Vulnerabilities" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId" class="hover:underline">Clear the filters</a> to see the open ones.</p>
+                    }
                 </div>
             </section>
         }
         else
         {
             <p class="mb-3 text-secondary" aria-live="polite">
-                @(Model.Filtered ? $"{Model.Matching} of {result.Findings.Count} match" : $"{result.Findings.Count} found"), worst first.
+                @(Model.Filtered ? $"{Model.Matching} of {result.Findings.Count} match" : $"{Model.Matching} open"), worst first.
+                @if (string.IsNullOrEmpty(Model.Status) && Model.AcceptedCount > 0)
+                {
+                    <a asp-page="/Engine/Images/Vulnerabilities" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId" asp-route-status="accepted"
+                       class="hover:underline">@(Model.AcceptedCount == 1 ? "1 accepted risk is hidden" : $"{Model.AcceptedCount} accepted risks are hidden").</a>
+                }
                 @if (Model.Matching > Model.Shown.Count)
                 {
                     <text>The first @Model.Shown.Count are shown; filter to see the rest.</text>
@@ -38,11 +54,13 @@
                             <th scope="col">Installed</th>
                             <th scope="col">Fixed in</th>
                             <th scope="col">Found in</th>
+                            <th scope="col">Risk</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var finding in Model.Shown)
+                        @foreach (var row in Model.Shown)
                         {
+                            var finding = row.Finding;
                             var kind = ScanDisplay.Kind(finding.Severity);
                             <tr>
                                 <th scope="row" class="max-w-[24rem]">
@@ -79,6 +97,30 @@
                                     }
                                 </td>
                                 <td class="max-w-[16rem] break-all font-mono text-xs">@(finding.Target ?? (summary?.Os is { } os ? $"{os} packages" : "OS packages"))</td>
+                                <td class="whitespace-nowrap">
+                                    @if (row.Risk is { } risk)
+                                    {
+                                        <a asp-page="/Engine/Images/AcceptedRisk" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId" asp-route-riskId="@risk.Id"
+                                           class="inline-flex flex-col gap-1 hover:underline" aria-label="The accepted risk of @finding.Id in @finding.Package, with its comments">
+                                            @if (row.Accepted)
+                                            {
+                                                <span class="badge-stat">Accepted</span>
+                                                <span class="text-xs text-secondary">@ScanDisplay.RiskScope(risk, Model.Now)</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge warning">Acceptance expired</span>
+                                            }
+                                            <span class="text-xs text-secondary">@(risk.Comments.Count == 1 ? "1 comment" : $"{risk.Comments.Count} comments")</span>
+                                        </a>
+                                    }
+                                    @if (!row.Accepted)
+                                    {
+                                        <a sp-can="write" asp-page="/Engine/Images/AcceptRisk" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId"
+                                           asp-route-vulnerability="@finding.Id" asp-route-package="@finding.Package" asp-route-target="@finding.Target"
+                                           class="btn-soft mt-1" aria-label="Accept the risk of @finding.Id in @finding.Package">Accept risk</a>
+                                    }
+                                </td>
                             </tr>
                         }
                     </tbody>

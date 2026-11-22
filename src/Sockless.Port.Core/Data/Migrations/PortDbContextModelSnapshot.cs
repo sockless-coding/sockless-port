@@ -15,7 +15,7 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261122185418_AddImageScans";
+    public override string LastMigrationId => "20261122192926_AddVulnerabilityScans";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -466,6 +466,142 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                 b.ToTable("Stacks");
             });
 
+        modelBuilder.Entity("Sockless.Port.Vulnerabilities.AcceptedRisk", b =>
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("CreatedAt")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("CreatedBy")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("ExpiresAt")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("ImageId")
+                    .HasMaxLength(80)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("ImageName")
+                    .HasMaxLength(512)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Package")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Target")
+                    .HasMaxLength(1024)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("VulnerabilityId")
+                    .IsRequired()
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
+
+                b.HasKey("Id");
+
+                b.HasIndex("VulnerabilityId");
+
+                b.ToTable("AcceptedRisks");
+            });
+
+        modelBuilder.Entity("Sockless.Port.Vulnerabilities.AcceptedRiskComment", b =>
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("At")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
+
+                b.Property<int>("RiskId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("Text")
+                    .IsRequired()
+                    .HasMaxLength(2000)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("UserName")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
+
+                b.HasKey("Id");
+
+                b.HasIndex("RiskId");
+
+                b.ToTable("AcceptedRiskComments");
+            });
+
+        modelBuilder.Entity("Sockless.Port.Vulnerabilities.ImageFinding", b =>
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("FixedVersion")
+                    .HasMaxLength(512)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("InstalledVersion")
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Package")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
+
+                b.Property<int>("ScanId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("Severity")
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Status")
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Target")
+                    .HasMaxLength(1024)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Title")
+                    .HasMaxLength(512)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Type")
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Url")
+                    .HasMaxLength(1024)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("VulnerabilityId")
+                    .IsRequired()
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
+
+                b.HasKey("Id");
+
+                b.HasIndex("ScanId", "VulnerabilityId");
+
+                b.ToTable("ImageFindings");
+            });
+
         modelBuilder.Entity("Sockless.Port.Vulnerabilities.ImageScan", b =>
             {
                 b.Property<int>("Id")
@@ -476,10 +612,6 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                     .HasColumnType("INTEGER");
 
                 b.Property<string>("DatabaseUpdatedAt")
-                    .HasColumnType("TEXT");
-
-                b.Property<string>("Findings")
-                    .IsRequired()
                     .HasColumnType("TEXT");
 
                 b.Property<int>("Fixable")
@@ -603,6 +735,34 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                     .HasForeignKey("EndpointId")
                     .OnDelete(DeleteBehavior.Cascade)
                     .IsRequired();
+            });
+
+        modelBuilder.Entity("Sockless.Port.Vulnerabilities.AcceptedRiskComment", b =>
+            {
+                b.HasOne("Sockless.Port.Vulnerabilities.AcceptedRisk", null)
+                    .WithMany("Comments")
+                    .HasForeignKey("RiskId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
+
+        modelBuilder.Entity("Sockless.Port.Vulnerabilities.ImageFinding", b =>
+            {
+                b.HasOne("Sockless.Port.Vulnerabilities.ImageScan", null)
+                    .WithMany("Findings")
+                    .HasForeignKey("ScanId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
+
+        modelBuilder.Entity("Sockless.Port.Vulnerabilities.AcceptedRisk", b =>
+            {
+                b.Navigation("Comments");
+            });
+
+        modelBuilder.Entity("Sockless.Port.Vulnerabilities.ImageScan", b =>
+            {
+                b.Navigation("Findings");
             });
 #pragma warning restore 612, 618
     }

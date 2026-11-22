@@ -24,6 +24,15 @@
                     }
                 </select>
             </div>
+            <div class="field">
+                <label for="vuln-status">Show</label>
+                <select id="vuln-status" name="status">
+                    @foreach (var (value, label) in Sockless.Port.Web.Pages.Engine.Images.VulnerabilitiesModel.StatusFilters)
+                    {
+                        <option value="@value" selected="@(value == (Model.Status ?? ""))">@label</option>
+                    }
+                </select>
+            </div>
             <label class="mb-2 flex items-center gap-2 text-secondary">
                 <input type="checkbox" name="fixable" value="true" checked="@Model.Fixable" class="accent-accent" /> Only with a fix
             </label>

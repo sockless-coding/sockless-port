@@ -50,9 +50,13 @@
         {
             var counts = summary.Counts;
             <div class="mb-3 flex flex-wrap items-center gap-2">
-                @if (counts.Total == 0)
+                @if (counts.Total == 0 && summary.Accepted == 0)
                 {
                     <span class="badge success">No known vulnerabilities</span>
+                }
+                else if (counts.Total == 0)
+                {
+                    <span class="badge-stat">No open vulnerabilities</span>
                 }
                 else
                 {
@@ -62,6 +66,11 @@
                         <span class="@(kind.Length == 0 ? "badge-stat" : $"badge {kind}")">@counts.Of(severity) @ScanDisplay.Label(severity).ToLowerInvariant()</span>
                     }
                     <span class="badge-stat">@counts.Fixable with a fix</span>
+                }
+                @if (summary.Accepted > 0)
+                {
+                    <a asp-page="/Engine/Images/Vulnerabilities" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId" asp-route-status="accepted"
+                       class="badge-stat hover:underline">@summary.Accepted accepted</a>
                 }
                 @if (summary.OsEndOfLife)
                 {

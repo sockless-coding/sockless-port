@@ -7,8 +7,12 @@ using SeverityLevel = Sockless.Port.Vulnerabilities.Severity;
 
 namespace Sockless.Port.Web.Pages.Engine.Images;
 
+/// <param name="Risk">The acceptance that holds for it now, or else the last one that expired; null when none was made.</param>
+public sealed record FindingRow(VulnerabilityFinding Finding, AcceptedRisk? Risk, bool Accepted);
+
 /// <summary>An image's known vulnerabilities, from its last scan, and the button to scan it.</summary>
-public sealed class VulnerabilitiesModel(EngineConnections connections, ImageUpdates updates, ImageScans scans) : ImagePageModel(connections, updates)
+public sealed class VulnerabilitiesModel(EngineConnections connections, ImageUpdates updates, ImageScans scans, AcceptedRisks risks, TimeProvider time)
+    : ImagePageModel(connections, updates)
 {
     /// <summary>Rows shown at most; filters narrow the rest down.</summary>
     public const int MaxShown = 1000;
@@ -25,19 +29,30 @@ public sealed class VulnerabilitiesModel(EngineConnections connections, ImageUpd
     [BindProperty(SupportsGet = true)]
     public string? Q { get; set; }
 
+    public static readonly IReadOnlyList<(string Value, string Label)> StatusFilters = [("", "Open"), ("accepted", "Accepted"), ("all", "All")];
+
+    /// <summary>Open findings by default; accepted ones only when asked.</summary>
+    [BindProperty(SupportsGet = true)]
+    public string? Status { get; set; }
+
     public ScanResult? Result { get; private set; }
 
     public ScanState? State { get; private set; }
 
     /// <summary>The findings that match the filters, worst first.</summary>
-    public IReadOnlyList<VulnerabilityFinding> Shown { get; private set; } = [];
+    public IReadOnlyList<FindingRow> Shown { get; private set; } = [];
+
+    /// <summary>Findings hidden because their risk was accepted (shown with the Accepted or All filter).</summary>
+    public int AcceptedCount { get; private set; }
 
     /// <summary>How many match the filters, of which <see cref="Shown"/> holds up to <see cref="MaxShown"/>.</summary>
     public int Matching { get; private set; }
 
-    public bool Filtered => !string.IsNullOrEmpty(Severity) || Fixable || !string.IsNullOrWhiteSpace(Q);
+    public bool Filtered => !string.IsNullOrEmpty(Severity) || Fixable || !string.IsNullOrWhiteSpace(Q) || !string.IsNullOrEmpty(Status);
 
-    public object Filters => new { endpointId = EndpointId, imageId = ImageId, Severity, Fixable, Q };
+    public object Filters => new { endpointId = EndpointId, imageId = ImageId, Severity, Fixable, Q, Status };
+
+    public DateTimeOffset Now { get; } = time.GetUtcNow();
 
     /// <summary>The full image ID: from the engine, or from the route while it's offline.</summary>
     private string FullId => Image?.Id ?? ImageScans.Normalize(ImageId);
@@ -79,15 +94,27 @@ public sealed class VulnerabilitiesModel(EngineConnections connections, ImageUpd
         if (Result is null)
             return;
         var minimum = Severity is { Length: > 0 } ? Severities.Parse(Severity) : (SeverityLevel?)null;
+        var acceptances = await risks.ForImageAsync(FullId, cancellationToken);
+        var rows = Result.Findings.Select(f =>
+        {
+            var covering = acceptances.Where(r => r.Covers(FullId, f.Key)).ToList();
+            var active = covering.FirstOrDefault(r => r.IsActive(Now));
+            return new FindingRow(f, active ?? covering.FirstOrDefault(), active is not null);
+        }).ToList();
+        AcceptedCount = rows.Count(r => r.Accepted);
         var q = Q?.Trim();
-        var matching = Result.Findings.Where(f =>
-            (minimum is not { } min || f.Severity >= min)
-            && (!Fixable || f.Fixable)
-            && (string.IsNullOrEmpty(q)
-                || f.Id.Contains(q, StringComparison.OrdinalIgnoreCase)
-                || f.Package.Contains(q, StringComparison.OrdinalIgnoreCase)
-                || (f.Target?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-                || (f.Title?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false))).ToList();
+        var matching = rows.Where(row =>
+        {
+            var f = row.Finding;
+            return Status switch { "accepted" => row.Accepted, "all" => true, _ => !row.Accepted }
+                   && (minimum is not { } min || f.Severity >= min)
+                   && (!Fixable || f.Fixable)
+                   && (string.IsNullOrEmpty(q)
+                       || f.Id.Contains(q, StringComparison.OrdinalIgnoreCase)
+                       || f.Package.Contains(q, StringComparison.OrdinalIgnoreCase)
+                       || (f.Target?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+                       || (f.Title?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false));
+        }).ToList();
         Matching = matching.Count;
         Shown = [.. matching.Take(MaxShown)];
     }

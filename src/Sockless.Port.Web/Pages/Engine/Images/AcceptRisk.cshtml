@@ -1,0 +1,100 @@
+@page "/endpoints/{endpointId:int}/images/{imageId}/vulnerabilities/accept"
+@model Sockless.Port.Web.Pages.Engine.Images.AcceptRiskModel
+@using Sockless.Port.Vulnerabilities
+@{
+    ViewData["Title"] = $"Accept the risk of {Model.Vulnerability}";
+    var finding = Model.Finding!;
+    var kind = ScanDisplay.Kind(finding.Severity);
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+        <a asp-page="/Engine/Images/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Images</a>
+        <span class="text-line-accent" aria-hidden="true">/</span>
+        <a asp-page="/Engine/Images/Vulnerabilities" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId" class="hover:underline">@Model.DisplayName</a>
+        <span class="text-line-accent" aria-hidden="true">/</span>
+        <span aria-current="page">Accept risk</span>
+    </nav>
+
+    <h2 class="page-title mb-2 break-all">Accept the risk of @finding.Id</h2>
+    <p class="mb-6 text-secondary">
+        An accepted finding stays in the scan but leaves the counts and badges, until the acceptance expires or is revoked.
+        Say why, so whoever looks next knows what was checked.
+    </p>
+
+    <section class="card mb-6" aria-labelledby="finding-title">
+        <h3 id="finding-title" class="section-title">The finding</h3>
+        <dl class="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+            <dt class="text-secondary">Vulnerability</dt>
+            <dd class="font-mono">
+                @if (finding.Url is { } url)
+                {
+                    <a href="@url" target="_blank" rel="noopener noreferrer" class="hover:underline">@finding.Id<span class="sr-only"> (opens in a new tab)</span></a>
+                }
+                else
+                {
+                    @finding.Id
+                }
+            </dd>
+            @if (finding.Title is { } title)
+            {
+                <dt class="text-secondary">Title</dt>
+                <dd>@title</dd>
+            }
+            <dt class="text-secondary">Severity</dt>
+            <dd><span class="@(kind.Length == 0 ? "badge-stat" : $"badge {kind}")">@ScanDisplay.Label(finding.Severity)</span></dd>
+            <dt class="text-secondary">Package</dt>
+            <dd class="break-all font-mono">@finding.Package @(finding.InstalledVersion ?? "")</dd>
+            <dt class="text-secondary">Fixed in</dt>
+            <dd class="break-all font-mono">@(finding.FixedVersion ?? "No fix yet")</dd>
+            <dt class="text-secondary">Found in</dt>
+            <dd class="break-all font-mono">@(finding.Target ?? (Model.Os is { } os ? $"{os} packages" : "OS packages"))</dd>
+        </dl>
+    </section>
+
+    <form method="post" asp-page="/Engine/Images/AcceptRisk" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId" class="card space-y-4">
+        <partial name="_FormErrors" />
+        <input type="hidden" name="vulnerability" value="@Model.Vulnerability" />
+        <input type="hidden" name="package" value="@Model.Package" />
+        <input type="hidden" name="target" value="@Model.Target" />
+
+        <div class="field">
+            <label asp-for="Reason">Why is the risk acceptable?</label>
+            <textarea asp-for="Reason" rows="4" maxlength="@AcceptedRisks.MaxComment" required aria-describedby="reason-hint"
+                      placeholder="e.g. Compose never parses HTML; no release with the fixed module yet. Bump when one ships."></textarea>
+            <p class="hint" id="reason-hint">The first comment on the acceptance. Anyone who can see the image can read it; operators can add to it later.</p>
+        </div>
+
+        <fieldset class="field">
+            <legend>Holds for</legend>
+            <label class="flex items-center gap-2">
+                <input type="radio" name="EveryImage" value="false" checked="@(!Model.EveryImage)" class="accent-accent" />
+                This image only (@Model.DisplayName). A new build or pull gets a new image, which counts it again.
+            </label>
+            <label sp-can="admin" class="flex items-center gap-2">
+                <input type="radio" name="EveryImage" value="true" checked="@Model.EveryImage" class="accent-accent" />
+                Every image with this finding in the same place, on every endpoint
+            </label>
+            @if (!Model.Access.IsAdmin)
+            {
+                <p class="hint">Only administrators can accept a risk for every image.</p>
+            }
+        </fieldset>
+
+        <div class="field">
+            <label asp-for="ExpiresInDays">Expires</label>
+            <select asp-for="ExpiresInDays" aria-describedby="expiry-hint">
+                @foreach (var days in AcceptedRisks.ExpiryChoices)
+                {
+                    <option value="@days" selected="@(Model.ExpiresInDays == days)">@ScanDisplay.ExpiryLabel(days)</option>
+                }
+            </select>
+            <p class="hint" id="expiry-hint">After this the finding counts again, so it gets looked at again.</p>
+        </div>
+
+        <div class="flex flex-wrap justify-end gap-2">
+            <a asp-page="/Engine/Images/Vulnerabilities" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@Model.ImageId" class="btn-soft">Cancel</a>
+            <button type="submit" class="btn-soft secondary"><icon name="shield-check" class="h-4 w-4" /> Accept risk</button>
+        </div>
+    </form>
+</div>

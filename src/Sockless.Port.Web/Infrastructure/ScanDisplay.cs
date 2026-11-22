@@ -31,7 +31,7 @@ public static class ScanDisplay
         if (summary is null)
             return null;
         if (summary.Counts.Worst is not { } worst)
-            return new("No known vulnerabilities", "success");
+            return summary.Accepted > 0 ? new("Only accepted risks", "") : new("No known vulnerabilities", "success");
         return new($"{summary.Counts.Of(worst)} {Label(worst).ToLowerInvariant()}", Kind(worst));
     }
 
@@ -49,8 +49,9 @@ public static class ScanDisplay
     {
         var counts = summary.Counts;
         var when = $"Scanned {Format.Relative(summary.ScannedAt)}.";
+        var accepted = summary.Accepted switch { 0 => "", 1 => " 1 accepted risk isn't counted.", var n => $" {n} accepted risks aren't counted." };
         if (counts.Total == 0)
-            return $"No known vulnerabilities. {when}";
+            return $"No known vulnerabilities.{accepted} {when}";
         var parts = Severities.WorstFirst.Where(s => counts.Of(s) > 0).Select(s => $"{counts.Of(s)} {Label(s).ToLowerInvariant()}");
         var fixable = counts.Fixable switch
         {
@@ -59,8 +60,29 @@ public static class ScanDisplay
             1 => "1 has a fix",
             var n => $"{n} have a fix",
         };
-        return $"{string.Join(", ", parts)}; {fixable}. {when}";
+        return $"{string.Join(", ", parts)}; {fixable}.{accepted} {when}";
     }
+
+    /// <summary>"This image · expires in 30 days", "Every image · no expiry", "Expired 3 days ago".</summary>
+    public static string RiskScope(Sockless.Port.Vulnerabilities.AcceptedRisk risk, DateTimeOffset now)
+    {
+        var scope = risk.ImageId is null ? "Every image" : "This image";
+        return risk.ExpiresAt switch
+        {
+            null => $"{scope} · no expiry",
+            { } at when at > now => $"{scope} · expires {Format.Until(at, now)}",
+            { } at => $"Expired {Format.Relative(at, now)}",
+        };
+    }
+
+    /// <summary>For the expiry select: 0 is never.</summary>
+    public static string ExpiryLabel(int days) => days switch
+    {
+        0 => "Never (until revoked)",
+        30 => "In 30 days",
+        365 => "In a year",
+        _ => $"In {days / 30} months",
+    };
 
     public static string StateDetail(ScanState state) => state switch
     {
