@@ -172,13 +172,18 @@ public sealed class AgentTests : IDisposable
     }
 
     [Theory]
-    [InlineData("0.0.1", true)]
-    [InlineData("999.0.0", false)]
-    [InlineData(null, false)]
-    [InlineData("garbage", false)]
-    public void Older_agents_are_flagged(string? version, bool outdated)
+    [InlineData("0.0.1", "2026.11.0", true)]
+    [InlineData("2026.10.3", "2026.11.0", true)]
+    [InlineData("2026.11.0", "2026.11.0", false)]
+    [InlineData("2027.1.0", "2026.11.0", false)]
+    [InlineData("2026.11.0-rc1", "2026.11.1", true)]
+    [InlineData(null, "2026.11.0", false)]
+    [InlineData("garbage", "2026.11.0", false)]
+    // A development server (0.0.0-dev) flags nothing.
+    [InlineData("0.0.1", "0.0.0-dev", false)]
+    public void Older_agents_are_flagged(string? version, string server, bool outdated)
     {
-        Assert.Equal(outdated, AgentCommands.IsOutdated(version));
+        Assert.Equal(outdated, AgentCommands.IsOutdated(version, server));
     }
 
     // ---------------------------------------------------------------- upgrade

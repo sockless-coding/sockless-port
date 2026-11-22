@@ -146,8 +146,11 @@ public static class AgentCommands
     }
 
     /// <summary>True when <paramref name="agentVersion"/> is older than the server's.</summary>
-    public static bool IsOutdated(string? agentVersion) =>
-        TryNumeric(agentVersion, out var agent) && TryNumeric(ServerVersion, out var server) && agent < server;
+    public static bool IsOutdated(string? agentVersion) => IsOutdated(agentVersion, ServerVersion);
+
+    /// <summary>True when <paramref name="agentVersion"/> is older than <paramref name="serverVersion"/>. Development builds are 0.0.0, so nothing is older.</summary>
+    internal static bool IsOutdated(string? agentVersion, string serverVersion) =>
+        TryNumeric(agentVersion, out var agent) && TryNumeric(serverVersion, out var server) && agent < server;
 
     private static bool TryNumeric(string? version, out Version parsed)
     {
