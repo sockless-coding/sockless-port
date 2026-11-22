@@ -30,6 +30,8 @@ SOCKLESS_PORT_TEST_ENGINE=unix:///var/run/docker.sock SOCKLESS_PORT_TEST_EXPECT=
   dotnet test -- --filter-trait "Category=Integration"
 ```
 
+Releases: publishing a GitHub release whose tag is the version (`yyyy.m.rev`, e.g. `2026.11.0`) builds, tests and pushes both images; see [docs/releasing.md](docs/releasing.md).
+
 `SOCKLESS_PORT_TEST_EXPECT` is `docker`, `swarm` or `podman`. CI runs all three (Podman both rootful and rootless). Locally, you can use throwaway engines, never your own: run `docker:dind` (add `docker swarm init` for swarm) or `quay.io/podman/stable` with `podman system service`, privileged, with the API published on 127.0.0.1. Web tests use `Port:LocalEngine` pointing at a socket that doesn't exist, so they never touch the developer's engine.
 
 ## Engines

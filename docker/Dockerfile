@@ -7,7 +7,7 @@ ARG DOTNET_VERSION=11.0
 # ---- build (runs on the build machine's architecture, cross-publishes for the target) ----
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
 ARG TARGETARCH
-ARG VERSION=0.1.0-dev
+ARG VERSION=0.0.0-dev
 WORKDIR /src
 
 # Restore first so the layer is cached until a project or package version changes.

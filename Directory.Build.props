@@ -9,7 +9,7 @@
     <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
     <Authors>sockless-coding</Authors>
     <Product>Sockless Port</Product>
-    <!-- Overridden by CI/Docker builds (-p:Version=…); local builds identify as dev builds. -->
-    <Version Condition="'$(Version)' == ''">0.1.0-dev</Version>
+    <!-- Releases set it from the tag (yyyy.mm.rev, see docs/releasing.md); other builds identify as dev builds. -->
+    <Version Condition="'$(Version)' == ''">0.0.0-dev</Version>
   </PropertyGroup>
 </Project>

@@ -3,8 +3,18 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
+  # Releases (release.yml): the same build and tests, then the images are pushed under the version.
+  workflow_call:
+    inputs:
+      version:
+        description: Release version (yyyy.mm.rev), also the image tag
+        type: string
+        required: true
+      prerelease:
+        description: Push only the version tag, not the yyyy.mm series or latest
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -115,7 +125,8 @@ jobs:
         if: failure() && startsWith(matrix.engine, 'podman')
         run: cat /tmp/podman.log || true
 
-  # The server and the agent. Install commands name the agent image of the server's version.
+  # The server and the agent, built on every run and pushed only for releases.
+  # Install commands name the agent image of the server's version.
   image:
     runs-on: ubuntu-latest
     needs: [build-test, integration]
@@ -130,11 +141,22 @@ jobs:
             image: ghcr.io/${{ github.repository }}
           - file: docker/Dockerfile.agent
             image: ghcr.io/${{ github.repository }}-agent
+    env:
+      VERSION: ${{ inputs.version }}
+      RELEASE: ${{ inputs.version != '' }}
+      STABLE: ${{ inputs.version != '' && !inputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
+
+      # 2026.11.0 is also tagged 2026.11 (the month's latest revision) and latest.
+      - name: Version
+        id: version
+        run: |
+          echo "build=${VERSION:-0.0.0-dev}" >> "$GITHUB_OUTPUT"
+          echo "series=${VERSION%.*}" >> "$GITHUB_OUTPUT"
 
       - name: Image metadata
         id: meta
@@ -142,29 +164,33 @@ jobs:
         with:
           images: ${{ matrix.image }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=sha
+            type=raw,value=${{ inputs.version }},enable=${{ env.RELEASE }}
+            type=raw,value=${{ steps.version.outputs.series }},enable=${{ env.STABLE }}
+            type=raw,value=latest,enable=${{ env.STABLE }}
+            type=sha,enable=${{ env.RELEASE != 'true' }}
+          labels: |
+            org.opencontainers.image.version=${{ steps.version.outputs.build }}
+          flavor: |
+            latest=false
 
       - name: Log in to GHCR
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: env.RELEASE == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build (push on version tags only)
+      - name: Build (push for releases only)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ matrix.file }}
           platforms: linux/amd64,linux/arm64
-          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          push: ${{ env.RELEASE == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ steps.meta.outputs.version }}
+            VERSION=${{ steps.version.outputs.build }}
           cache-from: type=gha,scope=${{ matrix.file }}
           cache-to: type=gha,mode=max,scope=${{ matrix.file }}

@@ -7,7 +7,7 @@ ARG DOTNET_VERSION=11.0
 
 # ---- build: Native AOT compiles for the platform it runs on (emulated in multi-arch builds) ----
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
-ARG VERSION=0.1.0-dev
+ARG VERSION=0.0.0-dev
 RUN apt-get update \
     && apt-get install -y --no-install-recommends clang zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
