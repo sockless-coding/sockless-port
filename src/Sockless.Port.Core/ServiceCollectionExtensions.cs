@@ -126,6 +126,7 @@ public static class ServiceCollectionExtensions
 
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<PortDbContext>();
+        await ReplacedMigrations.ApplyAsync(db, cancellationToken);
         await db.Database.MigrateAsync(cancellationToken);
         await services.GetRequiredService<SetupState>().InitializeAsync(db, cancellationToken);
         await services.GetRequiredService<PortSettings>().LoadAsync(db, cancellationToken);

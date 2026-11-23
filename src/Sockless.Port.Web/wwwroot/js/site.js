@@ -187,6 +187,76 @@
       .catch((err) => console.error('Sockless Port: before-submit hook failed', err));
   });
 
+  // ---------------------------------------------------------------- busy feedback
+
+  // Every form post and boosted navigation shows that it's under way: the button that started it
+  // spins (and so does the summary of the menu it's in), its form takes no second submit, the bar
+  // along the top sweeps, and screen readers hear "Working…" if it takes a while. Live refreshes
+  // (htmx GETs that aren't boosted) stay quiet. Cleared on loadend: after htmx has swapped the
+  // response in, or when the request failed.
+  const STATUS_DELAY_MS = 1000;
+  let inFlight = 0;
+  let statusTimer = null;
+
+  function setStatus(text) {
+    const status = document.querySelector('[data-busy-status]');
+    if (status) status.textContent = text;
+  }
+
+  function markBusy(elt, submitter) {
+    const button = submitter ?? (elt.matches?.('button') ? elt : null);
+    const busy = [button, button?.closest('details[data-menu]')?.querySelector(':scope > summary')].filter(Boolean);
+    elt.dataset.busy = '';
+    for (const b of busy) {
+      b.setAttribute('aria-busy', 'true');
+      b.setAttribute('aria-disabled', 'true');
+    }
+    return () => {
+      delete elt.dataset.busy;
+      for (const b of busy) {
+        b.removeAttribute('aria-busy');
+        b.removeAttribute('aria-disabled');
+      }
+    };
+  }
+
+  document.addEventListener('htmx:beforeSend', (event) => {
+    const detail = event.detail;
+    const config = detail.requestConfig ?? {};
+    const boosted = detail.boosted ?? config.boosted;
+    if (config.verb === 'get' && !boosted) return;
+
+    const clear = markBusy(detail.elt, config.triggeringEvent?.submitter ?? null);
+    inFlight++;
+    body().dataset.busy = '';
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => setStatus('Working…'), STATUS_DELAY_MS);
+
+    detail.xhr.addEventListener('loadend', () => {
+      clear();
+      inFlight = Math.max(0, inFlight - 1);
+      if (inFlight > 0) return;
+      delete body().dataset.busy;
+      clearTimeout(statusTimer);
+      setStatus('');
+    }, { once: true });
+  });
+
+  // A busy form or htmx button takes no second request; htmx listens on the element itself, so
+  // stopping the event while it captures at the document gets there first.
+  document.addEventListener('submit', (event) => {
+    if (event.target.matches?.('[data-busy]')) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }, true);
+  document.addEventListener('click', (event) => {
+    if (event.target.closest?.('button[data-busy], [aria-busy="true"][aria-disabled="true"]:not(summary)')) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }, true);
+
   // ---------------------------------------------------------------- bulk selection
 
   function updateBulk(form) {

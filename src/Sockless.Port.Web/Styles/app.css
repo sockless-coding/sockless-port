@@ -914,6 +914,44 @@
     background: transparent;
   }
 
+  /* ---------- Busy (a post or navigation under way; site.js) ---------- */
+  /* The bar fades in only after a moment, so quick actions don't flicker. */
+  .busy-bar {
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 60;
+    height: 3px;
+    pointer-events: none;
+    opacity: 0;
+    background: linear-gradient(90deg, transparent 0%, var(--sl-accent) 50%, transparent 100%) 0 0 / 200% 100%;
+    animation: sl-sweep 1.5s linear infinite;
+    transition: opacity var(--sl-duration-fast) var(--sl-ease);
+  }
+  body[data-busy] .busy-bar {
+    opacity: 1;
+    transition-delay: 150ms;
+  }
+  body[data-busy] {
+    cursor: progress;
+  }
+  /* The busy button's leading icon becomes a spinner; a summary keeps its chevron. */
+  :is(.btn-primary, .btn-soft)[aria-busy='true'] {
+    cursor: progress;
+  }
+  button:is(.btn-primary, .btn-soft)[aria-busy='true'] > svg:first-child {
+    display: none;
+  }
+  :is(.btn-primary, .btn-soft)[aria-busy='true']::before {
+    content: '';
+    flex: none;
+    width: 1em;
+    height: 1em;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 9999px;
+    animation: sl-spin 0.8s linear infinite;
+  }
+
   .job-layers {
     display: grid;
     gap: 0.25rem;
@@ -970,8 +1008,14 @@
 @media (prefers-reduced-motion: reduce) {
   .gear-spin,
   .live-indicator::before,
-  .progress:indeterminate {
+  .progress:indeterminate,
+  .busy-bar,
+  :is(.btn-primary, .btn-soft)[aria-busy='true']::before {
     animation: none;
+  }
+  /* Still: a solid bar and an open ring instead of the sweep and the spin. */
+  .busy-bar {
+    background: var(--sl-accent);
   }
   .progress::-webkit-progress-value {
     transition: none;
