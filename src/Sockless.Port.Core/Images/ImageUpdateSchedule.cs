@@ -14,7 +14,7 @@ namespace Sockless.Port.Images;
 /// a start, since results are only kept in memory. Open pages refresh when a check ends.
 /// </summary>
 internal sealed partial class ImageUpdateSchedule(ImageUpdates updates, EngineConnections connections, PortSettings settings, IEngineEventSink sink,
-    TimeProvider time, ILogger<ImageUpdateSchedule> logger) : BackgroundService
+    TimeProvider time, ILogger<ImageUpdateSchedule> logger, Notifications.Alerts? alerts = null) : BackgroundService
 {
     internal static readonly TimeSpan Tick = TimeSpan.FromMinutes(15);
 
@@ -52,12 +52,17 @@ internal sealed partial class ImageUpdateSchedule(ImageUpdates updates, EngineCo
             {
                 await updates.CheckEndpointAsync(connection, client, cancellationToken);
                 await sink.EngineEventAsync(connection, new DockerEvent { Type = "image", Action = "update-check" }, cancellationToken);
+                if (alerts is not null)
+                    await alerts.UpdatesCheckedAsync(connection, updates.Available(connection.Id), cancellationToken);
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested
                                        && ex is DockerApiException or DockerApiVersionException or HttpRequestException or IOException or TimeoutException
                                            or TaskCanceledException or ObjectDisposedException or InvalidDataException or System.Text.Json.JsonException)
             {
-                LogFailed(logger, connection.Name, EngineErrors.ForCall(ex, connection.Address));
+                var reason = EngineErrors.ForCall(ex, connection.Address);
+                LogFailed(logger, connection.Name, reason);
+                if (alerts is not null)
+                    await alerts.TaskFailedAsync(connection, $"The scheduled update check of {connection.Name} failed", reason, $"/endpoints/{connection.Id}/images", cancellationToken);
             }
         }
     }

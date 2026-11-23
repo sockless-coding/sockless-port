@@ -1,0 +1,159 @@
+@page "/notifications/channels/{id:int?}"
+@model Sockless.Port.Web.Pages.Notifications.ChannelModel
+@using Sockless.Port.Notifications
+@{
+    var title = Model.Existing is null ? $"Add {Model.KindName.ToLowerInvariant() switch { "email" => "an email", "ntfy" => "an ntfy", "webhook" => "a webhook", _ => $"a {Model.KindName}" }} channel" : Model.Existing.Name;
+    ViewData["Title"] = title;
+    var pageErrors = ViewData.ModelState.TryGetValue("", out var entry) ? entry.Errors.Select(e => e.ErrorMessage).ToList() : [];
+    var hasSecret = Model.Existing?.HasSecret == true;
+    var (secretLabel, secretHint) = Model.Kind switch
+    {
+        "ntfy" => ("Access token", "For a protected topic (tk_…). Leave empty for a public one."),
+        "gotify" => ("Application token", "Create an application in Gotify and copy its token."),
+        "email" => ("Password", "For the user name above."),
+        _ => ("Header value", "Sent in the header below with every request, e.g. Bearer abc123. Leave empty to send none."),
+    };
+}
+
+<nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+    <a asp-page="/Notifications/Index" class="hover:underline">Notifications</a>
+    <span class="text-line-accent" aria-hidden="true">/</span>
+    <span aria-current="page">@(Model.Existing?.Name ?? "Add channel")</span>
+</nav>
+<div class="mb-6">
+    <h2 class="page-title">@title</h2>
+    <p class="mt-1 max-w-3xl text-secondary">
+        @switch (Model.Kind)
+        {
+            case "ntfy":
+                <text>Push notifications through an ntfy server, ntfy.sh or your own. Subscribe to the topic in the ntfy app.</text>
+                break;
+            case "gotify":
+                <text>Push notifications through your Gotify server.</text>
+                break;
+            case "email":
+                <text>Mail through an SMTP server, with STARTTLS (usually port 587) or, for a relay on a trusted network, without encryption. Implicit TLS on port 465 isn't supported.</text>
+                break;
+            default:
+                <text>
+                    A JSON POST to any address, for scripts, automations and chat services. The body has <span class="font-mono">kind</span>, <span class="font-mono">severity</span>,
+                    <span class="font-mono">resolved</span>, <span class="font-mono">title</span>, <span class="font-mono">message</span>, <span class="font-mono">endpoint</span>,
+                    <span class="font-mono">url</span> and <span class="font-mono">at</span>, and <span class="font-mono">text</span> with all of it, which Slack, Mattermost and Rocket.Chat incoming webhooks post as the message.
+                </text>
+                break;
+        }
+    </p>
+</div>
+
+@foreach (var error in pageErrors)
+{
+    <div class="callout danger mb-4" role="alert">
+        <icon name="exclamation-triangle" class="h-5 w-5" />
+        <p>@error</p>
+    </div>
+}
+@if (Model.Existing is { SecretReadable: false })
+{
+    <div class="callout danger mb-4" role="alert">
+        <icon name="exclamation-triangle" class="h-5 w-5" />
+        <p>The stored secret can't be decrypted: the encryption keys changed since it was saved. Enter it again.</p>
+    </div>
+}
+
+<form method="post" class="space-y-6" novalidate asp-route-id="@Model.Id" asp-route-kind="@(Model.Id is null ? Model.Kind : null)">
+    <section class="card space-y-4" aria-labelledby="channel-title">
+        <h3 id="channel-title" class="section-title">@Model.KindName</h3>
+        <div class="field max-w-md">
+            <label asp-for="Form.Name">Name</label>
+            <input asp-for="Form.Name" autocomplete="off" placeholder="On-call phone" />
+            <partial name="_FieldError" model='"Form_Name"' />
+        </div>
+
+        @if (Model.Kind == "email")
+        {
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-[1fr_8rem_14rem]">
+                <div class="field">
+                    <label asp-for="Form.Host">Mail server</label>
+                    <input asp-for="Form.Host" class="font-mono" autocomplete="off" spellcheck="false" placeholder="smtp.example.com" />
+                    <partial name="_FieldError" model='"Form_Host"' />
+                </div>
+                <div class="field">
+                    <label asp-for="Form.Port">Port</label>
+                    <input asp-for="Form.Port" type="number" min="1" max="65535" class="font-mono" />
+                    <partial name="_FieldError" model='"Form_Port"' />
+                </div>
+                <div class="field">
+                    <label asp-for="Form.Security">Encryption</label>
+                    <select asp-for="Form.Security">
+                        <option value="StartTls">STARTTLS</option>
+                        <option value="None">None (trusted relay)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div class="field">
+                    <label asp-for="Form.UserName">User name</label>
+                    <input asp-for="Form.UserName" autocomplete="off" spellcheck="false" placeholder="Empty when the server needs no sign-in" />
+                </div>
+                <div class="field">
+                    <label asp-for="Form.From">From</label>
+                    <input asp-for="Form.From" type="email" autocomplete="off" placeholder="port@example.com" />
+                    <partial name="_FieldError" model='"Form_From"' />
+                </div>
+            </div>
+            <div class="field">
+                <label asp-for="Form.To">To</label>
+                <input asp-for="Form.To" autocomplete="off" placeholder="ops@example.com, me@example.com" aria-describedby="to-hint" />
+                <p class="hint" id="to-hint">One or more addresses, separated by commas.</p>
+                <partial name="_FieldError" model='"Form_To"' />
+            </div>
+        }
+        else
+        {
+            <div class="field">
+                <label asp-for="Form.Url">@(Model.Kind switch { "ntfy" => "Topic address", "gotify" => "Server address", _ => "Webhook address" })</label>
+                <input asp-for="Form.Url" type="url" class="font-mono" autocomplete="off" spellcheck="false"
+                       placeholder="@(Model.Kind switch { "ntfy" => "https://ntfy.sh/my-topic", "gotify" => "https://gotify.example.com", _ => "https://hooks.example.com/sockless-port" })" />
+                <partial name="_FieldError" model='"Form_Url"' />
+            </div>
+            @if (Model.Kind == "webhook")
+            {
+                <div class="field max-w-md">
+                    <label asp-for="Form.HeaderName">Header for the secret</label>
+                    <input asp-for="Form.HeaderName" class="font-mono" autocomplete="off" spellcheck="false" placeholder="Authorization" />
+                    <partial name="_FieldError" model='"Form_HeaderName"' />
+                </div>
+            }
+        }
+
+        <div class="field max-w-md">
+            <label asp-for="Form.Secret">@secretLabel</label>
+            <input asp-for="Form.Secret" type="password" autocomplete="new-password" spellcheck="false"
+                   placeholder="@(hasSecret ? "Saved; enter a new one to change it" : "")" aria-describedby="secret-hint" />
+            <p class="hint" id="secret-hint">@secretHint It's stored encrypted and never shown again.</p>
+            <partial name="_FieldError" model='"Form_Secret"' />
+        </div>
+        @if (hasSecret && Model.Kind != "gotify")
+        {
+            <label class="flex items-center gap-2">
+                <input type="checkbox" name="Form.ClearSecret" value="true" class="accent-accent" /> Remove the saved @secretLabel.ToLowerInvariant()
+            </label>
+        }
+    </section>
+
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+            @if (Model.Existing is not null)
+            {
+                <button type="submit" class="btn-soft danger" asp-page-handler="Delete" formnovalidate
+                        data-confirm="Remove the channel @Model.Existing.Name? The rules that send to it are removed too.">
+                    <icon name="trash" class="h-4 w-4" /> Remove
+                </button>
+            }
+        </div>
+        <div class="flex gap-2">
+            <a asp-page="/Notifications/Index" class="btn-soft">Cancel</a>
+            <button type="submit" class="btn-primary">@(Model.Existing is null ? "Add channel" : "Save")</button>
+        </div>
+    </div>
+</form>

@@ -4,8 +4,8 @@ using Sockless.Port.Settings;
 
 namespace Sockless.Port.Audit;
 
-/// <summary>Deletes audit entries past the retention setting, a minute after start and then daily.</summary>
-internal sealed partial class AuditRetention(AuditLog audit, PortSettings settings, TimeProvider time, ILogger<AuditRetention> logger) : BackgroundService
+/// <summary>Deletes audit entries and notification history past the retention setting, a minute after start and then daily.</summary>
+internal sealed partial class AuditRetention(AuditLog audit, Notifications.Notifier notifier, PortSettings settings, TimeProvider time, ILogger<AuditRetention> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -19,6 +19,8 @@ internal sealed partial class AuditRetention(AuditLog audit, PortSettings settin
                 var removed = await audit.PruneAsync(TimeSpan.FromDays(days), stoppingToken);
                 if (removed > 0)
                     LogPruned(logger, removed, days);
+                // Sent notifications are kept as long as the audit log.
+                await notifier.PruneAsync(TimeSpan.FromDays(days), stoppingToken);
             }
             while (await timer.WaitForNextTickAsync(stoppingToken));
         }

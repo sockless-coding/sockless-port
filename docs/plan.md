@@ -331,16 +331,25 @@ Shown only on endpoints with the `Pods` capability. These use Podman's libpod AP
 ### Phase 13: Notifications and alerts
 
 - Tell people when something needs them, without the UI open.
-- **Channels** (Settings, admins only): webhook (JSON body, optional secret header), ntfy, Gotify, and email (SMTP). Secrets stored with Data Protection, a "Send test" button, and delivery failures shown in the channel's status.
-- **Rules:** what to send to which channel, per endpoint or for all:
-  - a container exits unexpectedly, restarts repeatedly, or turns unhealthy (from engine events the monitor already receives);
-  - an endpoint goes offline or comes back; an agent's version differs from the server's;
-  - new critical or high findings from a vulnerability scan;
-  - updates available after a scheduled update check;
-  - resource thresholds (CPU or memory above a level for some minutes, per container or endpoint totals), from the resource sampler;
-  - a stack job or scheduled task failed.
-- **Noise control:** each alert fires once until it clears, with a quiet period per rule, and a digest option for update and scan results. Helper containers never alert.
+- **Channels** (admins only): webhook, ntfy, Gotify and email. Secrets stored with Data Protection, a "Send test" button, and delivery failures shown in the channel's status.
+- **Rules:** what to send to which channel, per endpoint or for all: containers that exit with an error, restart repeatedly or turn unhealthy; endpoints offline; outdated agents; new critical or high findings; updates found by a scheduled check; resource thresholds; failed stack jobs and scheduled checks.
+- **Noise control:** each alert fires once until it clears, with a quiet period per rule. Helper containers never alert.
 - **History:** sent notifications listed on `/notifications` (admins), kept as long as the audit log.
+
+**Status: done.** Notes:
+- **Pages** (admins; sidebar "Notifications"): `/notifications` (the server's address for links, channels with status and a Test button, rules, active alerts, sent history by pages of 50), `/notifications/channels/{id?}` (`?kind=webhook|ntfy|gotify|email` to add), `/notifications/rules/{id?}`.
+- **Core** (`Notifications/`): `Notifier` stores channels (`NotificationChannels`: name, target as JSON of a closed `ChannelTarget` hierarchy, secret encrypted with Data Protection, last sent/failed and error), rules (`NotificationRules`: kinds, channel, endpoint or all, quiet period, resolved notices, thresholds; cascade with their channel and endpoint) and history (`NotificationHistory`, no foreign keys, pruned with the audit log by `AuditRetention`). The server's address is a setting (`notifications-public-url`); without it, notifications carry no links.
+- **Alerts** (`Alerts`): an alert has a key and fires once until it clears; a rule then skips the same key for its quiet period (off, 15 minutes, an hour, 6 hours, a day). "Resolved" notices go only to the rules that sent that occurrence. Active alerts are in memory: a restart forgets them.
+  - Containers, from every engine event (before the UI's filter): `die` with a non-zero code or after `oom`, unless a `kill` or `stop` came within a minute (so `docker stop` and Compose don't alert); cleared by `start`. Three deaths in ten minutes is a restart loop (cleared after ten quiet minutes), and while it lasts its single exits say nothing. `health_status: unhealthy`/`healthy`. `destroy` forgets them silently. Helpers are skipped. Podman's `health_status` and `containerExitCode` are normalised to Docker's in `EventNormalizer` (not yet checked against a captured Podman event).
+  - Endpoints: offline for two minutes (checked every 30 s), resolved when online again; an agent older than the server (`AgentCommands.IsOutdated`).
+  - Scans: critical and high findings the image's previous scan didn't have, leaving out accepted risks (`ImageScans.StoreAsync` returns them); one alert per scan.
+  - Scheduled update checks: one alert per endpoint when the list of references with updates changes (`ImageUpdates.Available`); a failed check is a task failure.
+  - Stack jobs that fail (with Compose's hints).
+  - Resources: each minute `ResourceHistory` writes, rules' thresholds are checked for the endpoint's total and each container, as a share of the host (CPU / host CPUs, memory / host memory), for N minutes in a row. Needs resource history to be on.
+- **Delivery** (`NotificationSender`): a queue of up to 1000, four at a time, two retries (5 s, 30 s), 15 s per attempt. Webhook: a JSON POST with `kind`, `severity`, `resolved`, `test`, `title`, `message`, `endpoint`, `url`, `at` and `text` (which Slack, Mattermost and Rocket.Chat incoming webhooks post), the secret in a header of choice (`Authorization` by default), and a Content-Length (simple receivers don't read chunked bodies). ntfy: the message as the body, `Title` (RFC 2047 when not ASCII), `Priority`, `Tags`, `Click`, and a bearer token. Gotify: `/message` with `X-Gotify-Key`, priority, and the link as a click action. Email: SMTP with STARTTLS or none (implicit TLS on 465 isn't supported by `System.Net.Mail`). Addresses may be on the local network: administrators enter them.
+- **Checked against a real engine** (Docker 27 in Docker, a local webhook receiver): exits with a code, a failing health check, `docker stop` (no alert), a restart loop, and the endpoint going offline and back.
+- **Audit:** `Notifications: add channel`, `edit channel`, `remove channel`, `test channel`, `add rule`, `edit rule`, `remove rule`, `set address`. Secrets never reach it.
+- **Not built:** digests (several alerts in one message), per-container memory limits as thresholds (shares of the host only), alerts for swarm services and nodes, implicit TLS for email, and a backup alert (Phase 17).
 
 ### Phase 14: Git-backed stacks
 

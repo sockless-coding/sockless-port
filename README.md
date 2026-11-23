@@ -124,6 +124,10 @@ To use another Compose binary, set `Port__Compose` (for example `docker compose`
 
 About 20 common apps come with Sockless Port and need no internet access. Administrators can add feeds under **Template sources**: Portainer's app template format (version 2 or 3, e.g. Portainer's own list or Lissy93/portainer-templates) and the linuxserver.io API, offered there with one click. Feeds are downloaded when added and again daily, and kept in `/data/templates`. Stack templates' compose files are fetched from GitHub or GitLab when the template is opened. Nothing is downloaded until an administrator adds a feed.
 
+### Notifications
+
+Administrators set up notifications under **Notifications**: channels (a webhook, an ntfy topic, a Gotify server or email over SMTP) and rules that say what goes to which channel, for one endpoint or all. Rules can send containers that exit with an error, keep restarting or turn unhealthy; endpoints that are offline for two minutes; agents older than the server; new critical or high vulnerabilities; image updates found by the scheduled check; CPU or memory above a threshold for some minutes (needs resource history on); and failed stack jobs. Each alert is sent once until it clears, and a rule's quiet period holds back repeats. Set the server's address there too, so notifications link to the page about each alert.
+
 ### Docker Swarm
 
 When the endpoint is a swarm manager, the sidebar gets a Swarm section: the cluster (nodes, managers, resources and join tokens, shown only on request), services (create, edit, scale, restart, update the image, roll back, and logs of every task), nodes (drain, pause, promote, demote, labels, remove), secrets and configs. A worker only shows that it's one: managers know the cluster.

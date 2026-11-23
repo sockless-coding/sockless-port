@@ -6,6 +6,7 @@ using Sockless.Port.Access;
 using Sockless.Port.Audit;
 using Sockless.Port.Engines;
 using Sockless.Port.Monitoring;
+using Sockless.Port.Notifications;
 using Sockless.Port.Registries;
 using Sockless.Port.Settings;
 using Sockless.Port.Stacks;
@@ -41,6 +42,12 @@ public sealed class PortDbContext(DbContextOptions<PortDbContext> options) : Ide
     public DbSet<ResourceTotalEntry> ResourceTotals => Set<ResourceTotalEntry>();
 
     public DbSet<TemplateSource> TemplateSources => Set<TemplateSource>();
+
+    public DbSet<NotificationChannel> NotificationChannels => Set<NotificationChannel>();
+
+    public DbSet<NotificationRule> NotificationRules => Set<NotificationRule>();
+
+    public DbSet<NotificationEntry> NotificationHistory => Set<NotificationEntry>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -184,6 +191,48 @@ public sealed class PortDbContext(DbContextOptions<PortDbContext> options) : Ide
             stack.Property(s => s.UpdatedAt).HasConversion(SortableUtc);
             stack.Property(s => s.DeployedAt).HasConversion(SortableUtc);
             stack.Property(s => s.Template).HasMaxLength(StackDefinition.MaxTemplate);
+        });
+
+        builder.Entity<NotificationChannel>(channel =>
+        {
+            channel.ToTable("NotificationChannels");
+            channel.Property(c => c.Name).HasMaxLength(NotificationChannel.MaxName);
+            channel.HasIndex(c => c.Name).IsUnique();
+            channel.Property(c => c.Target).HasMaxLength(4096);
+            channel.Property(c => c.CreatedAt).HasConversion(SortableUtc);
+            channel.Property(c => c.UpdatedAt).HasConversion(SortableUtc);
+            channel.Property(c => c.LastSentAt).HasConversion(SortableUtc);
+            channel.Property(c => c.LastFailedAt).HasConversion(SortableUtc);
+            channel.Property(c => c.LastError).HasMaxLength(512);
+        });
+
+        builder.Entity<NotificationRule>(rule =>
+        {
+            rule.ToTable("NotificationRules");
+            rule.Property(r => r.Name).HasMaxLength(NotificationRule.MaxName);
+            rule.HasIndex(r => r.Name).IsUnique();
+            rule.Property(r => r.Kinds).HasMaxLength(512);
+            rule.Property(r => r.CreatedAt).HasConversion(SortableUtc);
+            rule.Ignore(r => r.KindSet);
+            rule.HasOne<NotificationChannel>().WithMany().HasForeignKey(r => r.ChannelId).OnDelete(DeleteBehavior.Cascade);
+            rule.HasOne<EngineEndpoint>().WithMany().HasForeignKey(r => r.EndpointId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<NotificationEntry>(entry =>
+        {
+            entry.ToTable("NotificationHistory");
+            entry.Property(e => e.At).HasConversion(SortableUtc);
+            entry.HasIndex(e => e.At);
+            entry.Property(e => e.Kind).HasConversion<string>().HasMaxLength(32);
+            entry.Property(e => e.Severity).HasConversion<string>().HasMaxLength(16);
+            entry.Property(e => e.EndpointName).HasMaxLength(64);
+            entry.Property(e => e.Title).HasMaxLength(NotificationEntry.MaxTitle);
+            entry.Property(e => e.Message).HasMaxLength(NotificationEntry.MaxMessage);
+            entry.Property(e => e.ChannelName).HasMaxLength(NotificationChannel.MaxName);
+            entry.Property(e => e.RuleName).HasMaxLength(NotificationRule.MaxName);
+            entry.Property(e => e.Outcome).HasConversion<string>().HasMaxLength(16);
+            entry.Property(e => e.Error).HasMaxLength(512);
+            // No foreign keys: history outlives the channels, rules and endpoints it names.
         });
 
         builder.Entity<TemplateSource>(source =>

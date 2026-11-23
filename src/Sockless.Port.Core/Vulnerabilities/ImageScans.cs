@@ -32,7 +32,7 @@ public sealed record ScanFailed(int EndpointId, string Reason, DateTimeOffset Si
 /// are kept in memory only.
 /// </summary>
 public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scopes, IEngineEventSink sink, IOptions<PortOptions> options,
-    TimeProvider time, ILogger<ImageScans> logger) : BackgroundService
+    TimeProvider time, ILogger<ImageScans> logger, Notifications.Alerts? alerts = null) : BackgroundService
 {
     /// <summary>Scans waiting at most; more are refused until some finish.</summary>
     public const int MaxQueued = 500;
@@ -206,9 +206,11 @@ public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scop
 
             await PhaseAsync(connection, imageId, "Scanning", started, notify: true);
             var report = await trivy.ScanAsync(tarball, work, limit, timeout.Token);
-            await StoreAsync(imageId, image, report, status, timeout.Token);
+            var fresh = await StoreAsync(imageId, image, report, status, timeout.Token);
             _states.TryRemove(imageId, out _);
             LogScanned(logger, ImageName(image) ?? imageId, connection.Name, report.Findings.Count);
+            if (alerts is not null && fresh.Count > 0)
+                await alerts.NewVulnerabilitiesAsync(connection, imageId, ImageName(image) ?? imageId[..Math.Min(19, imageId.Length)], fresh, stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -258,13 +260,16 @@ public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scop
         }
     }
 
-    internal async Task StoreAsync(string imageId, ImageInspect image, TrivyReport report, ScannerStatus status, CancellationToken cancellationToken)
+    /// <returns>The critical and high findings the image's previous scan didn't have, leaving out accepted risks (all of them on a first scan).</returns>
+    internal async Task<IReadOnlyList<(string Id, string Severity)>> StoreAsync(string imageId, ImageInspect image, TrivyReport report, ScannerStatus status,
+        CancellationToken cancellationToken)
     {
         var counts = ScanCounts.Of(report.Findings);
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<PortDbContext>();
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         var scan = await db.ImageScans.FirstOrDefaultAsync(s => s.ImageId == imageId, cancellationToken);
+        HashSet<string> before = new(StringComparer.Ordinal);
         if (scan is null)
         {
             scan = new ImageScan { ImageId = imageId, ScannerVersion = status.Version };
@@ -272,6 +277,8 @@ public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scop
         }
         else
         {
+            before.UnionWith(await db.ImageFindings.Where(f => f.ScanId == scan.Id && (f.Severity == Severity.Critical || f.Severity == Severity.High))
+                .Select(f => f.VulnerabilityId).ToListAsync(cancellationToken));
             await db.ImageFindings.Where(f => f.ScanId == scan.Id).ExecuteDeleteAsync(cancellationToken);
         }
         scan.ImageName = ImageName(image);
@@ -289,6 +296,13 @@ public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scop
         scan.Findings = [.. report.Findings.Select(ImageFinding.From)];
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+
+        var risks = await ActiveRisksAsync(db, cancellationToken);
+        return [.. scan.Findings
+            .Where(f => f.Severity is Severity.Critical or Severity.High && !before.Contains(f.VulnerabilityId)
+                        && !risks.Any(r => r.Covers(imageId, new RiskKey(f.VulnerabilityId, f.Package, f.Target))))
+            .Select(f => (f.VulnerabilityId, f.Severity.ToString()))
+            .DistinctBy(f => f.VulnerabilityId)];
     }
 
     private async Task PhaseAsync(EngineConnection connection, string imageId, string phase, DateTimeOffset started, bool notify)

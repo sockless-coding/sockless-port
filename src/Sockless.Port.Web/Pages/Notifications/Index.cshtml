@@ -1,0 +1,271 @@
+@page "/notifications"
+@model Sockless.Port.Web.Pages.Notifications.IndexModel
+@using Sockless.Port.Notifications
+@{
+    ViewData["Title"] = "Notifications";
+    static string Kinds(IReadOnlySet<AlertKind> kinds) => kinds.Count == Enum.GetValues<AlertKind>().Length
+        ? "Everything" : string.Join(", ", kinds.Order().Select(k => Alert.Describe(k).ToLowerInvariant()));
+    static string Quiet(int minutes) => minutes switch
+    {
+        0 => "No quiet period",
+        < 60 => $"Quiet for {minutes} minutes",
+        60 => "Quiet for an hour",
+        < 1440 => $"Quiet for {minutes / 60} hours",
+        _ => "Quiet for a day",
+    };
+}
+
+<div class="mb-6">
+    <h2 class="page-title">Notifications</h2>
+    <p class="mt-1 max-w-3xl text-secondary">
+        Tell people when something needs them, without the UI open. Channels say where notifications go; rules say what goes to which channel.
+        Each alert is sent once, and again only after it has cleared and the rule's quiet period has passed.
+    </p>
+</div>
+
+<section class="card mb-6" aria-labelledby="address-title">
+    <h3 id="address-title" class="section-title">Links</h3>
+    <form method="post" asp-page-handler="PublicUrl" class="flex flex-wrap items-end gap-3" novalidate>
+        <div class="field min-w-[18rem] flex-1">
+            <label asp-for="PublicUrl">This server's address</label>
+            <input asp-for="PublicUrl" type="url" class="font-mono" placeholder="https://port.example.com" autocomplete="off" aria-describedby="address-hint" />
+            <p class="hint" id="address-hint">Where people open Sockless Port. Notifications link to the page about each alert; leave it empty to send them without links.</p>
+            <partial name="_FieldError" model='"PublicUrl"' />
+        </div>
+        <button type="submit" class="btn-soft mb-6">Save</button>
+    </form>
+</section>
+
+<section class="mb-6" aria-labelledby="channels-title">
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h3 id="channels-title" class="section-title mb-0">Channels</h3>
+        <details class="menu" data-menu>
+            <summary class="btn-soft secondary"><icon name="plus" class="h-4 w-4" /> Add channel <icon name="chevron-down" class="h-4 w-4" /></summary>
+            <div class="menu-panel w-64 p-2">
+                <a asp-page="/Notifications/Channel" asp-route-kind="webhook" class="menu-item">Webhook</a>
+                <a asp-page="/Notifications/Channel" asp-route-kind="ntfy" class="menu-item">ntfy</a>
+                <a asp-page="/Notifications/Channel" asp-route-kind="gotify" class="menu-item">Gotify</a>
+                <a asp-page="/Notifications/Channel" asp-route-kind="email" class="menu-item">Email</a>
+            </div>
+        </details>
+    </div>
+    @if (Model.Channels.Count == 0)
+    {
+        <div class="card">
+            <div class="empty-state">
+                <icon name="bell" class="h-12 w-12" stroke-width="1.5" />
+                <p class="text-base text-heading">No channels yet</p>
+                <p class="text-secondary">Add a webhook, an ntfy topic, a Gotify server or an email address, then a rule that sends to it.</p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table">
+                <caption class="sr-only">Notification channels</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col">Kind</th>
+                        <th scope="col">Sends to</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="num"><span class="sr-only">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var channel in Model.Channels)
+                    {
+                        var failing = channel.LastFailedAt is { } failed && (channel.LastSentAt is not { } sent || failed > sent);
+                        <tr>
+                            <th scope="row"><a asp-page="/Notifications/Channel" asp-route-id="@channel.Id" class="font-semibold hover:underline">@channel.Name</a></th>
+                            <td>@(channel.Target?.KindName ?? "Unreadable")</td>
+                            <td class="break-all font-mono text-xs">@channel.Target?.Destination</td>
+                            <td>
+                                @if (!channel.SecretReadable)
+                                {
+                                    <span class="badge danger" title="The encryption keys changed since it was saved">Re-enter secret</span>
+                                }
+                                else if (failing)
+                                {
+                                    <span class="badge danger">Failing</span>
+                                    <span class="mt-1 block text-xs text-secondary">@channel.LastError</span>
+                                }
+                                else if (channel.LastSentAt is { } last)
+                                {
+                                    <span class="badge success">Working</span>
+                                    <span class="mt-1 block text-xs text-secondary" title="@Format.Timestamp(last)">Last sent @Format.Relative(last)</span>
+                                }
+                                else
+                                {
+                                    <span class="text-secondary">Nothing sent yet</span>
+                                }
+                            </td>
+                            <td class="num">
+                                <div class="flex justify-end gap-2">
+                                    <form method="post" asp-page-handler="Test" asp-route-id="@channel.Id">
+                                        <button type="submit" class="btn-soft" aria-label="Send a test notification to @channel.Name"><icon name="paper-airplane" class="h-4 w-4" /> Test</button>
+                                    </form>
+                                    <a asp-page="/Notifications/Channel" asp-route-id="@channel.Id" class="btn-soft" aria-label="Edit @channel.Name">Edit</a>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<section class="mb-6" aria-labelledby="rules-title">
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h3 id="rules-title" class="section-title mb-0">Rules</h3>
+        @if (Model.Channels.Count > 0)
+        {
+            <a asp-page="/Notifications/Rule" class="btn-soft secondary"><icon name="plus" class="h-4 w-4" /> Add rule</a>
+        }
+    </div>
+    @if (Model.Rules.Count == 0)
+    {
+        <p class="text-secondary">@(Model.Channels.Count == 0 ? "Rules need a channel to send to." : "No rules yet, so nothing is sent.")</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table">
+                <caption class="sr-only">Notification rules</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col">Sends</th>
+                        <th scope="col">From</th>
+                        <th scope="col">To</th>
+                        <th scope="col" class="num"><span class="sr-only">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var rule in Model.Rules)
+                    {
+                        <tr>
+                            <th scope="row">
+                                <a asp-page="/Notifications/Rule" asp-route-id="@rule.Id" class="font-semibold hover:underline">@rule.Name</a>
+                                @if (!rule.Enabled)
+                                {
+                                    <span class="mt-1 flex"><span class="badge">Off</span></span>
+                                }
+                            </th>
+                            <td>
+                                <span>@Kinds(rule.Kinds)</span>
+                                <span class="mt-1 block text-xs text-secondary">
+                                    @Quiet(rule.QuietMinutes)@(rule.CpuPercent is { } cpu ? $"; CPU ≥ {cpu}%" : "")@(rule.MemoryPercent is { } memory ? $"; memory ≥ {memory}%" : "")@(rule.CpuPercent is not null || rule.MemoryPercent is not null ? $" for {rule.ForMinutes} min" : "")
+                                </span>
+                            </td>
+                            <td>@Model.EndpointName(rule.EndpointId)</td>
+                            <td>@rule.ChannelName</td>
+                            <td class="num"><a asp-page="/Notifications/Rule" asp-route-id="@rule.Id" class="btn-soft" aria-label="Edit @rule.Name">Edit</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@if (Model.Active.Count > 0)
+{
+    <section class="mb-6" aria-labelledby="active-title">
+        <h3 id="active-title" class="section-title">Active alerts</h3>
+        <p class="mb-3 text-secondary">These fired and haven't cleared, so they won't be sent again until they do. A restart forgets them.</p>
+        <ul class="card space-y-2">
+            @foreach (var alert in Model.Active.OrderBy(a => a.Title, StringComparer.OrdinalIgnoreCase))
+            {
+                <li class="flex flex-wrap items-baseline gap-2">
+                    <span class="badge @(alert.Severity == AlertSeverity.Critical ? "danger" : alert.Severity == AlertSeverity.Warning ? "warning" : "info")">@alert.Severity</span>
+                    @if (alert.Link is { } link)
+                    {
+                        <a href="@link" class="hover:underline">@alert.Title</a>
+                    }
+                    else
+                    {
+                        <span>@alert.Title</span>
+                    }
+                </li>
+            }
+        </ul>
+    </section>
+}
+
+<section aria-labelledby="history-title">
+    <h3 id="history-title" class="section-title">Sent</h3>
+    @if (Model.History.Entries.Count == 0)
+    {
+        <p class="text-secondary">Nothing has been sent yet.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table">
+                <caption class="sr-only">Sent notifications, newest first</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">When</th>
+                        <th scope="col">Notification</th>
+                        <th scope="col">Channel</th>
+                        <th scope="col">Outcome</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var entry in Model.History.Entries)
+                    {
+                        <tr>
+                            <td class="whitespace-nowrap text-secondary" title="@Format.Timestamp(entry.At)">@Format.Relative(entry.At)</td>
+                            <td>
+                                <span>@entry.Title</span>
+                                @if (entry.Message.Length > 0)
+                                {
+                                    <span class="mt-1 block whitespace-pre-line text-xs text-secondary">@entry.Message</span>
+                                }
+                            </td>
+                            <td>
+                                @entry.ChannelName
+                                @if (entry.RuleName is not null)
+                                {
+                                    <span class="mt-1 block text-xs text-secondary">Rule: @entry.RuleName</span>
+                                }
+                                else if (entry.Test)
+                                {
+                                    <span class="mt-1 block text-xs text-secondary">Test</span>
+                                }
+                            </td>
+                            <td>
+                                @if (entry.Outcome == NotificationOutcome.Sent)
+                                {
+                                    <span class="badge success">Sent</span>
+                                }
+                                else
+                                {
+                                    <span class="badge danger">Failed</span>
+                                    <span class="mt-1 block text-xs text-secondary">@entry.Error</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.History.Page > 1 || Model.History.HasMore)
+        {
+            <nav aria-label="Pages" class="mt-4 flex items-center justify-center gap-2">
+                @if (Model.History.Page > 1)
+                {
+                    <a asp-page="/Notifications/Index" asp-route-p="@(Model.History.Page - 1)" class="btn-soft" rel="prev">Newer</a>
+                }
+                <span class="text-secondary">Page @Model.History.Page</span>
+                @if (Model.History.HasMore)
+                {
+                    <a asp-page="/Notifications/Index" asp-route-p="@(Model.History.Page + 1)" class="btn-soft" rel="next">Older</a>
+                }
+            </nav>
+        }
+    }
+</section>

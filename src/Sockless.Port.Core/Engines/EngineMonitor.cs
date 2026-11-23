@@ -16,7 +16,8 @@ public sealed partial class EngineMonitor(
     IEngineEventSink sink,
     TimeProvider time,
     ILogger<EngineMonitor> logger,
-    IAgentEnroller? enroller = null) : BackgroundService
+    IAgentEnroller? enroller = null,
+    Notifications.Alerts? alerts = null) : BackgroundService
 {
     internal static readonly TimeSpan InitialRetryDelay = TimeSpan.FromSeconds(1);
     internal static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(30);
@@ -260,6 +261,8 @@ public sealed partial class EngineMonitor(
         {
             await foreach (var engineEvent in client.MonitorEventsAsync(EventFilters, linked.Token))
             {
+                // Alerts want health and stop events too, which the UI ignores.
+                await AlertAsync(a => a.EngineEventAsync(connection, engineEvent, stopping));
                 if (IsRelevant(engineEvent))
                     await NotifyEventAsync(connection, engineEvent, stopping);
             }
@@ -310,8 +313,23 @@ public sealed partial class EngineMonitor(
         && !action.StartsWith("health_status", StringComparison.Ordinal)
         && action is not ("attach" or "detach" or "resize" or "top" or "copy" or "archive-path" or "export" or "commit");
 
+    private async Task AlertAsync(Func<Notifications.Alerts, Task> action)
+    {
+        if (alerts is null)
+            return;
+        try
+        {
+            await action(alerts);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            LogAlertFailed(logger, ex);
+        }
+    }
+
     private async Task NotifyStateAsync(EngineConnection connection, CancellationToken cancellationToken)
     {
+        await AlertAsync(a => a.StateChangedAsync(connection, cancellationToken));
         try
         {
             await sink.StateChangedAsync(connection, cancellationToken);
@@ -339,6 +357,9 @@ public sealed partial class EngineMonitor(
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Endpoint {Endpoint} offline: {Reason}")]
     private static partial void LogOffline(ILogger logger, string endpoint, string reason);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Checking an engine event for alerts failed")]
+    private static partial void LogAlertFailed(ILogger logger, Exception exception);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Forwarding an engine notification failed")]
     private static partial void LogSinkFailed(ILogger logger, Exception exception);

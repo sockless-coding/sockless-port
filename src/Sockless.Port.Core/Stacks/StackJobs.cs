@@ -21,7 +21,8 @@ public sealed record StackJobOptions(bool RemoveVolumes = false, bool Down = tru
 /// per stack at a time, and keeps finished jobs for a while so the stack's page can show how the
 /// last one ended.
 /// </summary>
-public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore store, SwarmServices services, TimeProvider time, ILogger<StackJobs> logger) : IDisposable
+public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore store, SwarmServices services, TimeProvider time, ILogger<StackJobs> logger,
+    Notifications.Alerts? alerts = null) : IDisposable
 {
     public const int MaxRunningPerEndpoint = 4;
 
@@ -186,6 +187,19 @@ public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore s
             outcome = new StackJobFailed("Something went wrong on the server. The log has the details.", []);
         }
         job.Finish(outcome, time.GetUtcNow());
+        if (outcome is StackJobFailed failed && alerts is not null)
+        {
+            try
+            {
+                await alerts.TaskFailedAsync(connection, $"{job.Operation} of the stack {job.StackName} failed on {connection.Name}",
+                    failed.Hints.Count == 0 ? failed.Error : $"{failed.Error}\n{string.Join('\n', failed.Hints)}",
+                    $"/endpoints/{connection.Id}/stacks/{Uri.EscapeDataString(job.StackName)}");
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                logger.LogWarning(ex, "Couldn't raise an alert for the failed job of {Stack}", job.StackName);
+            }
+        }
     }
 
     private async Task<StackJobStatus> RunStepsAsync(StackJob job, EngineConnection connection, StackKind kind, string? directory, StackJobOptions options)

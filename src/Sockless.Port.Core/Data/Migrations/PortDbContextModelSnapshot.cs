@@ -15,7 +15,7 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261123201518_AddAppTemplates";
+    public override string LastMigrationId => "20261123204651_AddNotifications";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -486,6 +486,172 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                 b.ToTable("ResourceUsage");
             });
 
+        modelBuilder.Entity("Sockless.Port.Notifications.NotificationChannel", b =>
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("CreatedAt")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("LastError")
+                    .HasMaxLength(512)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("LastFailedAt")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("LastSentAt")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("ProtectedSecret")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Target")
+                    .IsRequired()
+                    .HasMaxLength(4096)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("UpdatedAt")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
+
+                b.HasKey("Id");
+
+                b.HasIndex("Name")
+                    .IsUnique();
+
+                b.ToTable("NotificationChannels");
+            });
+
+        modelBuilder.Entity("Sockless.Port.Notifications.NotificationEntry", b =>
+            {
+                b.Property<long>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("At")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("ChannelName")
+                    .IsRequired()
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("EndpointName")
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Error")
+                    .HasMaxLength(512)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Kind")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Message")
+                    .IsRequired()
+                    .HasMaxLength(2048)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Outcome")
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasColumnType("TEXT");
+
+                b.Property<bool>("Resolved")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("RuleName")
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Severity")
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasColumnType("TEXT");
+
+                b.Property<bool>("Test")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("Title")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
+
+                b.HasKey("Id");
+
+                b.HasIndex("At");
+
+                b.ToTable("NotificationHistory");
+            });
+
+        modelBuilder.Entity("Sockless.Port.Notifications.NotificationRule", b =>
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("ChannelId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int?>("CpuPercent")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("CreatedAt")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
+
+                b.Property<bool>("Enabled")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int?>("EndpointId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("ForMinutes")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("Kinds")
+                    .IsRequired()
+                    .HasMaxLength(512)
+                    .HasColumnType("TEXT");
+
+                b.Property<int?>("MemoryPercent")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
+
+                b.Property<int>("QuietMinutes")
+                    .HasColumnType("INTEGER");
+
+                b.Property<bool>("SendResolved")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("Id");
+
+                b.HasIndex("ChannelId");
+
+                b.HasIndex("EndpointId");
+
+                b.HasIndex("Name")
+                    .IsUnique();
+
+                b.ToTable("NotificationRules");
+            });
+
         modelBuilder.Entity("Sockless.Port.Registries.RegistryCredential", b =>
             {
                 b.Property<int>("Id")
@@ -911,6 +1077,20 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                     .HasForeignKey("EndpointId")
                     .OnDelete(DeleteBehavior.Cascade)
                     .IsRequired();
+            });
+
+        modelBuilder.Entity("Sockless.Port.Notifications.NotificationRule", b =>
+            {
+                b.HasOne("Sockless.Port.Notifications.NotificationChannel", null)
+                    .WithMany()
+                    .HasForeignKey("ChannelId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Sockless.Port.Engines.EngineEndpoint", null)
+                    .WithMany()
+                    .HasForeignKey("EndpointId")
+                    .OnDelete(DeleteBehavior.Cascade);
             });
 
         modelBuilder.Entity("Sockless.Port.Stacks.StackDefinition", b =>

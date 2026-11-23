@@ -94,6 +94,17 @@ public sealed class StreamTests
         Assert.Equal("destroy", normalized.Action);
     }
 
+    // Synthetic: the attribute names follow libpod's event fields, not yet checked against a captured Podman event.
+    [Fact]
+    public void Podman_health_and_exit_codes_read_as_dockers()
+    {
+        var health = new DockerEvent { Type = "container", Action = "health_status", Actor = new EventActor { Id = "abc", Attributes = new Dictionary<string, string> { ["health_status"] = "unhealthy" } } };
+        var died = new DockerEvent { Type = "container", Action = "die", Actor = new EventActor { Id = "abc", Attributes = new Dictionary<string, string> { ["containerExitCode"] = "2" } } };
+
+        Assert.Equal("health_status: unhealthy", EventNormalizer.Normalize(health).Action);
+        Assert.Equal("2", EventNormalizer.Normalize(died).Actor!.Attributes!["exitCode"]);
+    }
+
     [Fact]
     public void Docker_events_pass_through_unchanged()
     {

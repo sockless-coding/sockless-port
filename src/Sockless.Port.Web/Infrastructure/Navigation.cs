@@ -55,6 +55,7 @@ public static class Navigation
         new("Endpoints", "/Endpoints/Index", "server-stack"),
         new("Registries", "/Registries/Index", "key", AdminOnly: true),
         new("Template sources", "/TemplateSources/Index", "squares-plus", AdminOnly: true),
+        new("Notifications", "/Notifications/Index", "bell", AdminOnly: true),
         new("Users", "/Users/Index", "users", AdminOnly: true),
         new("Audit log", "/Audit/Index", "clipboard-document-list", AdminOnly: true),
         new("Settings", "/Settings/Index", "cog-6-tooth", AdminOnly: true),

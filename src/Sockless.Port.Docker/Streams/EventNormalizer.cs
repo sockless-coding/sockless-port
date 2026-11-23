@@ -20,6 +20,15 @@ internal static class EventNormalizer
         // Podman reports a removed volume as "remove"; Docker says "destroy".
         var action = e is { Type: "volume", Action: "remove" } ? "destroy" : e.Action;
 
+        // Podman says "health_status" and puts the status in an attribute; Docker says "health_status: unhealthy".
+        if (action == "health_status" && actor?.Attributes?.GetValueOrDefault("health_status") is { Length: > 0 } health)
+            action = $"health_status: {health}";
+
+        // Podman names a container's exit code containerExitCode; Docker says exitCode.
+        if (action == "die" && actor?.Attributes is { } attributes && !attributes.ContainsKey("exitCode")
+            && attributes.GetValueOrDefault("containerExitCode") is { } exitCode)
+            actor = actor with { Attributes = new Dictionary<string, string>(attributes) { ["exitCode"] = exitCode } };
+
         return ReferenceEquals(actor, e.Actor) && action == e.Action ? e : e with { Actor = actor, Action = action };
     }
 }

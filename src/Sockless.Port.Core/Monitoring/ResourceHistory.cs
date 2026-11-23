@@ -44,7 +44,7 @@ public sealed record HistoryView(HistoryRange Range, DateTimeOffset From, TimeSp
 /// minute rows older than <see cref="MinuteRetention"/> are deleted, and hourly ones past the setting.
 /// </summary>
 public sealed partial class ResourceHistory(ResourceMonitor monitor, EngineConnections connections, PortSettings settings,
-    IServiceScopeFactory scopes, TimeProvider time, ILogger<ResourceHistory> logger) : BackgroundService
+    IServiceScopeFactory scopes, TimeProvider time, ILogger<ResourceHistory> logger, Notifications.Alerts? alerts = null) : BackgroundService
 {
     public const int MinuteSeconds = 60;
     public const int HourSeconds = 3600;
@@ -164,7 +164,7 @@ public sealed partial class ResourceHistory(ResourceMonitor monitor, EngineConne
                 if (bucket is not null && bucket.Start != start)
                 {
                     if (!bucket.IsEmpty)
-                        await WriteAsync(connection.Id, bucket, cancellationToken);
+                        await WriteAsync(connection, bucket, cancellationToken);
                     bucket = null;
                 }
                 (bucket ??= new MinuteBucket(start)).Add(snapshot);
@@ -180,19 +180,25 @@ public sealed partial class ResourceHistory(ResourceMonitor monitor, EngineConne
         finally
         {
             if (bucket is { IsEmpty: false })
-                await WriteAsync(connection.Id, bucket, CancellationToken.None);
+                await WriteAsync(connection, bucket, CancellationToken.None);
         }
     }
 
-    private async Task WriteAsync(int endpointId, MinuteBucket bucket, CancellationToken cancellationToken)
+    private async Task WriteAsync(EngineConnection connection, MinuteBucket bucket, CancellationToken cancellationToken)
     {
+        var endpointId = connection.Id;
         try
         {
             await using var scope = scopes.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<PortDbContext>();
-            db.ResourceTotals.Add(bucket.Totals(endpointId));
-            db.ResourceUsage.AddRange(bucket.Containers(endpointId));
+            var totals = bucket.Totals(endpointId);
+            var containers = bucket.Containers(endpointId).ToList();
+            db.ResourceTotals.Add(totals);
+            db.ResourceUsage.AddRange(containers);
             await db.SaveChangesAsync(cancellationToken);
+            // Thresholds are checked on what was recorded, a minute at a time.
+            if (alerts is not null)
+                await alerts.ResourceMinuteAsync(connection, totals, containers, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

@@ -1,0 +1,171 @@
+@page "/notifications/rules/{id:int?}"
+@model Sockless.Port.Web.Pages.Notifications.RuleModel
+@using Sockless.Port.Notifications
+@{
+    var title = Model.Existing?.Name ?? "Add rule";
+    ViewData["Title"] = title;
+    var pageErrors = ViewData.ModelState.TryGetValue("", out var entry) ? entry.Errors.Select(e => e.ErrorMessage).ToList() : [];
+    var kindsError = ViewData.ModelState.TryGetValue("Form.Kinds", out var kindsEntry) ? kindsEntry.Errors.FirstOrDefault()?.ErrorMessage : null;
+}
+
+<nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+    <a asp-page="/Notifications/Index" class="hover:underline">Notifications</a>
+    <span class="text-line-accent" aria-hidden="true">/</span>
+    <span aria-current="page">@title</span>
+</nav>
+<div class="mb-6">
+    <h2 class="page-title">@title</h2>
+    <p class="mt-1 max-w-3xl text-secondary">Which alerts, from where, go to a channel. Add more rules to send to more channels, or to send different things to each.</p>
+</div>
+
+@foreach (var error in pageErrors)
+{
+    <div class="callout danger mb-4" role="alert">
+        <icon name="exclamation-triangle" class="h-5 w-5" />
+        <p>@error</p>
+    </div>
+}
+
+<form method="post" class="space-y-6" novalidate asp-route-id="@Model.Id">
+    <section class="card space-y-4" aria-labelledby="rule-title">
+        <h3 id="rule-title" class="section-title">Rule</h3>
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div class="field">
+                <label asp-for="Form.Name">Name</label>
+                <input asp-for="Form.Name" autocomplete="off" placeholder="Problems to my phone" />
+                <partial name="_FieldError" model='"Form_Name"' />
+            </div>
+            <div class="field">
+                <label asp-for="Form.ChannelId">Send to</label>
+                <select asp-for="Form.ChannelId">
+                    @foreach (var channel in Model.Channels)
+                    {
+                        <option value="@channel.Id" selected="@(channel.Id == Model.Form.ChannelId)">@channel.Name (@(channel.Target?.KindName))</option>
+                    }
+                </select>
+                <partial name="_FieldError" model='"Form_ChannelId"' />
+            </div>
+            <div class="field">
+                <label asp-for="Form.EndpointId">From</label>
+                <select asp-for="Form.EndpointId">
+                    <option value="">Every endpoint</option>
+                    @foreach (var endpoint in Model.Endpoints)
+                    {
+                        <option value="@endpoint.Id" selected="@(endpoint.Id == Model.Form.EndpointId)">@endpoint.Name</option>
+                    }
+                </select>
+                <partial name="_FieldError" model='"Form_EndpointId"' />
+            </div>
+        </div>
+        <label class="flex items-center gap-2">
+            <input type="checkbox" name="Form.Enabled" value="true" class="accent-accent" checked="@Model.Form.Enabled" />
+            <input type="hidden" name="Form.Enabled" value="false" />
+            On
+        </label>
+    </section>
+
+    <fieldset class="card space-y-3" aria-describedby="@(kindsError is not null ? "kinds-error" : null)">
+        <legend class="section-title">What to send</legend>
+        @foreach (var kind in Enum.GetValues<AlertKind>())
+        {
+            <label class="flex items-start gap-2">
+                <input type="checkbox" name="Form.Kinds" value="@kind" class="mt-1 accent-accent" checked="@Model.Form.Kinds.Contains(kind)" />
+                <span>
+                    @Alert.Describe(kind)
+                    <span class="block text-xs text-secondary">
+                        @(kind switch
+                        {
+                            AlertKind.ContainerExited => "A non-zero exit code or running out of memory, when nobody asked it to stop. Says so again when it starts.",
+                            AlertKind.ContainerRestarting => $"It stopped {Alerts.RestartCount} times within {Alerts.RestartWindow.TotalMinutes:0} minutes.",
+                            AlertKind.ContainerUnhealthy => "Its health check fails. Says so again when it's healthy.",
+                            AlertKind.EndpointOffline => $"Unreachable for {Alerts.OfflineGrace.TotalMinutes:0} minutes. Says so again when it's back.",
+                            AlertKind.AgentOutdated => "An agent reports an older version than the server's.",
+                            AlertKind.Vulnerabilities => "Critical or high findings the image's last scan didn't have; accepted risks are left out.",
+                            AlertKind.UpdatesAvailable => "After a scheduled check (Settings), when the list of images with updates changes. One message per endpoint.",
+                            AlertKind.ResourceUsage => "Checked once a minute on the recorded history, for each container and the endpoint's total.",
+                            AlertKind.TaskFailed => "A stack's deploy, update or other job, or a scheduled update check.",
+                            _ => "",
+                        })
+                    </span>
+                </span>
+            </label>
+        }
+        @if (kindsError is not null)
+        {
+            <p class="error" id="kinds-error">@kindsError</p>
+        }
+    </fieldset>
+
+    <section class="card space-y-4" aria-labelledby="thresholds-title">
+        <div>
+            <h3 id="thresholds-title" class="section-title">Resource thresholds</h3>
+            <p class="text-secondary">For "@Alert.Describe(AlertKind.ResourceUsage)": a share of the host, for any one container or all of them together. Leave one empty to ignore it.</p>
+        </div>
+        @if (Model.HistoryOff)
+        {
+            <div class="callout warning" role="note">
+                <icon name="exclamation-triangle" class="h-5 w-5" />
+                <p>Resource history is off in <a asp-page="/Settings/Index" class="text-accent underline">Settings</a>, so these aren't checked. Keep it for at least a day to use them.</p>
+            </div>
+        }
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div class="field">
+                <label asp-for="Form.CpuPercent">CPU at least (%)</label>
+                <input asp-for="Form.CpuPercent" type="number" min="1" max="100" class="font-mono" />
+                <partial name="_FieldError" model='"Form_CpuPercent"' />
+            </div>
+            <div class="field">
+                <label asp-for="Form.MemoryPercent">Memory at least (%)</label>
+                <input asp-for="Form.MemoryPercent" type="number" min="1" max="100" class="font-mono" />
+                <partial name="_FieldError" model='"Form_MemoryPercent"' />
+            </div>
+            <div class="field">
+                <label asp-for="Form.ForMinutes">For minutes in a row</label>
+                <input asp-for="Form.ForMinutes" type="number" min="1" max="120" class="font-mono" />
+                <partial name="_FieldError" model='"Form_ForMinutes"' />
+            </div>
+        </div>
+    </section>
+
+    <section class="card space-y-4" aria-labelledby="noise-title">
+        <h3 id="noise-title" class="section-title">Noise</h3>
+        <div class="field max-w-md">
+            <label asp-for="Form.QuietMinutes">After sending about something</label>
+            <select asp-for="Form.QuietMinutes" aria-describedby="quiet-hint">
+                @foreach (var minutes in Notifier.QuietChoices)
+                {
+                    <option value="@minutes" selected="@(minutes == Model.Form.QuietMinutes)">@(minutes switch
+                    {
+                        0 => "Send it every time it happens",
+                        60 => "Stay quiet about it for an hour",
+                        1440 => "Stay quiet about it for a day",
+                        < 60 => $"Stay quiet about it for {minutes} minutes",
+                        _ => $"Stay quiet about it for {minutes / 60} hours",
+                    })</option>
+                }
+            </select>
+            <p class="hint" id="quiet-hint">An alert is sent once until it clears anyway; this also holds back the same alert when it comes back soon, e.g. a container that keeps failing.</p>
+            <partial name="_FieldError" model='"Form_QuietMinutes"' />
+        </div>
+        <label class="flex items-center gap-2">
+            <input type="checkbox" name="Form.SendResolved" value="true" class="accent-accent" checked="@Model.Form.SendResolved" />
+            <input type="hidden" name="Form.SendResolved" value="false" />
+            Also say when it's over (healthy again, back online, below the threshold)
+        </label>
+    </section>
+
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+            @if (Model.Existing is not null)
+            {
+                <button type="submit" class="btn-soft danger" asp-page-handler="Delete" formnovalidate data-confirm="Remove the rule @Model.Existing.Name?">
+                    <icon name="trash" class="h-4 w-4" /> Remove
+                </button>
+            }
+        </div>
+        <div class="flex gap-2">
+            <a asp-page="/Notifications/Index" class="btn-soft">Cancel</a>
+            <button type="submit" class="btn-primary">@(Model.Existing is null ? "Add rule" : "Save")</button>
+        </div>
+    </div>
+</form>

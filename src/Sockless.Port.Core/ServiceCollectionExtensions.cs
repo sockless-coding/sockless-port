@@ -108,6 +108,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Templates.TemplateCatalog>();
         services.AddSingleton<Templates.TemplateLogos>();
         services.AddHostedService<Templates.TemplateRefresh>();
+
+        services.AddSingleton<Notifications.NotificationSender>();
+        services.AddSingleton<Notifications.Notifier>();
+        services.AddHostedService(sp => sp.GetRequiredService<Notifications.Notifier>());
+        services.AddSingleton<Notifications.Alerts>();
+        services.AddHostedService(sp => sp.GetRequiredService<Notifications.Alerts>());
         return services;
     }
 

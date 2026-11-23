@@ -48,6 +48,10 @@ public sealed class ImageUpdates(RegistryCredentials registries, TimeProvider ti
 
     public UpdateStatus? Get(int endpointId, string imageId, string tag) => _results.GetValueOrDefault((endpointId, imageId, Key(tag)));
 
+    /// <summary>The references on the endpoint whose registry has a newer image, as last checked.</summary>
+    public IReadOnlyList<string> Available(int endpointId) =>
+        [.. _results.Where(r => r.Key.Endpoint == endpointId && r.Value is UpdateAvailable).Select(r => r.Key.Reference).Distinct(StringComparer.Ordinal)];
+
     /// <summary>When the last full check of the endpoint ran, from a page or on schedule.</summary>
     public DateTimeOffset? LastChecked(int endpointId) => _lastChecked.TryGetValue(endpointId, out var at) ? at : null;
 
