@@ -1,0 +1,30 @@
+@* The JSON or YAML check of the file editor's text. Model: the files page; nothing shows until it was checked. *@
+@model Sockless.Port.Web.Pages.Engine.Volumes.FilesModel
+@using Sockless.Port.Volumes
+@{
+    var language = Model.CurrentPath is { } path ? VolumeSyntax.Language(path) : null;
+}
+<div id="file-check" aria-live="polite" data-editor-diagnostics="@Model.Diagnostics" data-editor-for="file-content">
+    @if (Model.Problems is { Count: 0 })
+    {
+        <div class="callout success">
+            <icon name="check-circle" class="h-5 w-5" />
+            <p>Valid @language.</p>
+        </div>
+    }
+    else if (Model.Problems is { } problems)
+    {
+        <div class="callout danger" role="alert">
+            <icon name="exclamation-triangle" class="h-5 w-5" />
+            <div class="min-w-0">
+                <p class="font-semibold">Not valid @language</p>
+                <ul class="mt-1 space-y-1">
+                    @foreach (var problem in problems)
+                    {
+                        <li class="break-words font-mono text-xs">@(problem.Line is { } line ? $"Line {line}: " : "")@problem.Message</li>
+                    }
+                </ul>
+            </div>
+        </div>
+    }
+</div>

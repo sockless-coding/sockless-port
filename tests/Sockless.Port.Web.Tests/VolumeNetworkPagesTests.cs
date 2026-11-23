@@ -109,6 +109,33 @@ public sealed class VolumeNetworkPagesTests : IDisposable
     }
 
     [Fact]
+    public async Task Validate_checks_json_and_yaml_without_an_engine()
+    {
+        var browser = await _factory.CreateSignedInBrowserAsync();
+        var csrf = await PortFactory.GetAntiforgeryTokenAsync(browser, "/registries");
+        var ct = TestContext.Current.CancellationToken;
+        const string Url = "/endpoints/1/volumes/data/files?handler=Validate";
+
+        var htmx = new HttpRequestMessage(HttpMethod.Post, Url)
+        {
+            Content = PortFactory.Form(csrf, new() { ["path"] = "/conf/app.json", ["content"] = "{\n  \"a\": }" }),
+        };
+        htmx.Headers.Add("HX-Request", "true");
+        var fragment = WebUtility.HtmlDecode(await (await browser.SendAsync(htmx, ct)).Content.ReadAsStringAsync(ct));
+        Assert.StartsWith("""<div id="file-check" """.TrimEnd(), fragment.TrimStart());
+        Assert.Contains("Not valid JSON", fragment);
+        Assert.Contains("data-editor-diagnostics=\"[{\"line\":2,", fragment);
+        Assert.Contains("data-editor-for=\"file-content\"", fragment);
+
+        // Without scripts: the page, with the draft kept.
+        var page = WebUtility.HtmlDecode(await (await browser.PostAsync(Url,
+            PortFactory.Form(csrf, new() { ["path"] = "/compose.yaml", ["content"] = "services:\n  web: {}" }), ct)).Content.ReadAsStringAsync(ct));
+        Assert.Contains("Valid YAML.", page);
+        Assert.Contains("web: {}</textarea>", page);
+        Assert.Contains("data-code-editor=\"yaml\"", page);
+    }
+
+    [Fact]
     public async Task Downloads_need_an_engine()
     {
         var browser = await _factory.CreateSignedInBrowserAsync();

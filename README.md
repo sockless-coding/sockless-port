@@ -130,7 +130,7 @@ To see a node's own containers, logs and terminals, enrol the agent on that node
 
 ### Volume file browser
 
-Browsing a volume's files starts a short-lived helper container that mounts the volume read-only, without a network. Text files up to 1 MiB (config, JSON, YAML and so on) open in an editor; saving one starts a second helper that mounts the volume writable for that save only, keeps the file's owner, permissions and line endings, and refuses to overwrite changes made since you opened it. Both use `busybox:1.37`, pulled when missing. On hosts without internet access, set `Port__HelperImage` to an image the engine already has that provides `find` and `stat`.
+Browsing a volume's files starts a short-lived helper container that mounts the volume read-only, without a network. Text files up to 1 MiB (config, JSON, YAML and so on) open in an editor, with JSON and YAML highlighted and checked before they're saved; saving one starts a second helper that mounts the volume writable for that save only, keeps the file's owner, permissions and line endings, and refuses to overwrite changes made since you opened it. Both use `busybox:1.37`, pulled when missing. On hosts without internet access, set `Port__HelperImage` to an image the engine already has that provides `find` and `stat`.
 
 ### Podman
 

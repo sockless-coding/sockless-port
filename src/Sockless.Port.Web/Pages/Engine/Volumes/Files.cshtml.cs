@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
 using Sockless.Port.Access;
@@ -45,12 +46,27 @@ public sealed class FilesModel(EngineConnections connections, VolumeBrowser brow
     /// <summary>The save failed because the file changed meanwhile: offer to overwrite it.</summary>
     public bool Conflict { get; private set; }
 
+    /// <summary>The save failed because the text isn't valid JSON or YAML: offer to save it anyway.</summary>
+    public bool Invalid { get; private set; }
+
+    /// <summary>The syntax check of the text (after Validate or a refused save); null when it wasn't checked.</summary>
+    public IReadOnlyList<SyntaxProblem>? Problems { get; private set; }
+
+    /// <summary>Problems with a line, for the editor's gutter (<c>[{ line, message }]</c>).</summary>
+    public string Diagnostics => JsonSerializer.Serialize(
+        (Problems ?? []).Where(p => p.Line is not null).Select(p => new Diagnostic(p.Line!.Value, p.Message)),
+        DiagnosticJson.Default.IEnumerableDiagnostic);
+
     /// <summary>The text the editor shows, and the version a save names.</summary>
     public (string Text, string? Version)? Editor => Draft is not null ? (Draft, DraftVersion) : TextFile is { Text: { } text } ? (text, TextFile.Version) : null;
 
-    /// <summary>CodeMirror's highlighting for the file: YAML (which covers JSON), else plain text.</summary>
-    public static string EditorLanguage(string path) =>
-        System.IO.Path.GetExtension(path).ToLowerInvariant() is ".yml" or ".yaml" or ".json" ? "yaml" : "text";
+    /// <summary>CodeMirror's highlighting for the file, by its extension.</summary>
+    public static string EditorLanguage(string path) => VolumeSyntax.Language(path) switch
+    {
+        "JSON" => "json",
+        "YAML" => "yaml",
+        _ => "text",
+    };
 
     public async Task<IActionResult> OnGetAsync(string? path, CancellationToken cancellationToken)
     {
@@ -118,25 +134,47 @@ public sealed class FilesModel(EngineConnections connections, VolumeBrowser brow
         return RedirectToPage("/Engine/Volumes/Detail", new { endpointId = EndpointId, volumeName = VolumeName });
     }
 
-    /// <summary>
-    /// Writes the editor's text to the file. When the save fails, the page shows the text again
-    /// with the reason instead of redirecting, so the edits survive; when the file changed since
-    /// it was opened, <paramref name="overwrite"/> replaces it anyway.
-    /// </summary>
-    public async Task<IActionResult> OnPostSaveAsync(string? path, string? content, string? version, bool overwrite, CancellationToken cancellationToken)
+    /// <summary>Checks the editor's text as JSON or YAML without saving it: the result for htmx, else the page with the draft.</summary>
+    [NoAudit]
+    public async Task<IActionResult> OnPostValidateAsync(string? path, string? content, string? version, CancellationToken cancellationToken)
     {
         var target = VolumePath.Normalize(path);
         if (target is null or "/")
             return NotFound();
-        AuditTrail.Action(HttpContext, overwrite ? "Volumes: overwrite file" : "Volumes: save file");
-        AuditTrail.Target(HttpContext, $"{VolumeName}:{target}");
         CurrentPath = target;
+        Problems = VolumeSyntax.Check(target, content ?? "");
+        if (Request.Headers.ContainsKey("HX-Request"))
+            return Partial("_FileCheck", this);
+        await ShowDraftAsync(target, content ?? "", version, cancellationToken);
+        return Page();
+    }
+
+    /// <summary>
+    /// Writes the editor's text to the file. When the save fails, the page shows the text again
+    /// with the reason instead of redirecting, so the edits survive. JSON and YAML are checked
+    /// first, unless <paramref name="skipCheck"/>; when the file changed since it was opened,
+    /// <paramref name="overwrite"/> replaces it anyway.
+    /// </summary>
+    public async Task<IActionResult> OnPostSaveAsync(string? path, string? content, string? version, bool overwrite, bool skipCheck,
+        CancellationToken cancellationToken)
+    {
+        var target = VolumePath.Normalize(path);
+        if (target is null or "/")
+            return NotFound();
+        AuditTrail.Action(HttpContext, overwrite ? "Volumes: overwrite file" : skipCheck ? "Volumes: save file unchecked" : "Volumes: save file");
+        AuditTrail.Target(HttpContext, $"{VolumeName}:{target}");
         content ??= "";
 
         string error;
         if (Client is not { } client || Volume is null)
         {
             error = "The engine is offline, so nothing was saved.";
+        }
+        else if (!skipCheck && VolumeSyntax.Check(target, content) is { Count: > 0 } problems)
+        {
+            Problems = problems;
+            Invalid = true;
+            error = $"It isn't valid {VolumeSyntax.Language(target)}, so it wasn't saved. Fix it, or save it with the errors if the program reading it expects that.";
         }
         else
         {
@@ -159,26 +197,30 @@ public sealed class FilesModel(EngineConnections connections, VolumeBrowser brow
             {
                 error = $"Couldn't save {target}: {EngineFailures.Describe(ex, Connection)}";
             }
-
-            // Show the file's details again when the browser is still open; the editor doesn't need it.
-            if (BrowserOpen)
-            {
-                try
-                {
-                    Listing = await Browser.ListAsync(Connection, client, VolumeName, target, cancellationToken);
-                }
-                catch (Exception ex) when (ex is VolumeBrowseException || EngineFailures.IsFailure(ex, cancellationToken))
-                {
-                }
-            }
         }
 
         SaveError = error;
-        Draft = content;
-        DraftVersion = version;
         // Marks the audit entry as failed.
         ModelState.AddModelError(nameof(content), error);
+        await ShowDraftAsync(target, content, version, cancellationToken);
         return Page();
+    }
+
+    /// <summary>Shows the page with the user's text in the editor, and the file's details when the browser is still open.</summary>
+    private async Task ShowDraftAsync(string target, string content, string? version, CancellationToken cancellationToken)
+    {
+        CurrentPath = target;
+        Draft = content;
+        DraftVersion = version;
+        if (Client is not { } client || Volume is null || !BrowserOpen)
+            return;
+        try
+        {
+            Listing = await Browser.ListAsync(Connection, client, VolumeName, target, cancellationToken);
+        }
+        catch (Exception ex) when (ex is VolumeBrowseException || EngineFailures.IsFailure(ex, cancellationToken))
+        {
+        }
     }
 
     /// <summary>One regular file, as it is.</summary>

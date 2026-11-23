@@ -3,7 +3,7 @@
 <div id="stack-validation" aria-live="polite">
     @if (Model is { Unavailable: { } unavailable })
     {
-        <div class="callout warning" data-compose-diagnostics="[]">
+        <div class="callout warning" data-editor-diagnostics="[]" data-editor-for="Input_Compose">
             <icon name="exclamation-triangle" class="h-5 w-5" />
             <p>The files can't be checked: @unavailable</p>
         </div>
@@ -12,7 +12,7 @@
     {
         @if (!check.Valid)
         {
-            <div class="callout danger" role="alert" data-compose-diagnostics="@Model.Diagnostics">
+            <div class="callout danger" role="alert" data-editor-diagnostics="@Model.Diagnostics" data-editor-for="Input_Compose">
                 <icon name="exclamation-triangle" class="h-5 w-5" />
                 <div class="min-w-0">
                     <p class="font-semibold">Compose rejected the files</p>
@@ -27,7 +27,7 @@
         }
         else
         {
-            <div class="callout success" data-compose-diagnostics="[]">
+            <div class="callout success" data-editor-diagnostics="[]" data-editor-for="Input_Compose">
                 <icon name="check-circle" class="h-5 w-5" />
                 <p>
                     Valid. @(check.Services.Count == 1 ? "1 service" : $"{check.Services.Count} services")@(check.Services.Count > 0 ? ": " : "")<span class="font-mono text-xs">@string.Join(", ", check.Services)</span>

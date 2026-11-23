@@ -1,4 +1,4 @@
-// Sockless Port's CodeMirror 6 bundle: a YAML/plain-text editor bound to a <textarea>.
+// Sockless Port's CodeMirror 6 bundle: a YAML/JSON/plain-text editor bound to a <textarea>.
 // Built with esbuild into wwwroot/lib/codemirror/codemirror.js (see THIRD-PARTY-NOTICES.md).
 // Colours come from app.css (.cm-* and .tok-* rules using --sl-* tokens), not from here.
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, highlightSpecialChars } from '@codemirror/view';
@@ -6,12 +6,16 @@ import { EditorState, Compartment } from '@codemirror/state';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { indentOnInput, bracketMatching, foldGutter, foldKeymap, syntaxHighlighting, indentUnit } from '@codemirror/language';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
-import { lintGutter, setDiagnostics } from '@codemirror/lint';
+import { lintGutter, linter, setDiagnostics } from '@codemirror/lint';
 import { classHighlighter } from '@lezer/highlight';
 import { yaml } from '@codemirror/lang-yaml';
+import { json, jsonParseLinter } from '@codemirror/lang-json';
 
 function create(textarea, options = {}) {
-  const language = options.language === 'yaml' ? [yaml()] : [];
+  // JSON is checked as you type; YAML is checked by the server (Validate, and on save).
+  const language = options.language === 'yaml' ? [yaml()]
+    : options.language === 'json' ? [json(), linter(jsonParseLinter(), { delay: 400 })]
+    : [];
   const readOnly = new Compartment();
   const view = new EditorView({
     parent: textarea.parentElement,

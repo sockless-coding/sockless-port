@@ -189,6 +189,8 @@
             @if (Model.Editor is (var text, var version) && Model.CurrentPath is { } filePath)
             {
                 var fileName = VolumePath.Name(filePath);
+                var syntax = VolumeSyntax.Language(filePath);
+                var validateUrl = Url.Page("/Engine/Volumes/Files", "Validate", new { endpointId = Model.EndpointId, volumeName = Model.VolumeName });
                 <form method="post" asp-page="/Engine/Volumes/Files" asp-page-handler="Save" asp-route-endpointId="@Model.EndpointId"
                       asp-route-volumeName="@Model.VolumeName" class="mt-6 space-y-3" aria-labelledby="content-title">
                     <input type="hidden" name="path" value="@filePath" />
@@ -209,17 +211,38 @@
                             </p>
                         </div>
                     }
+                    @if (syntax is not null)
+                    {
+                        <partial name="_FileCheck" model="Model" />
+                    }
                     <div class="code-editor">
                         <textarea id="file-content" name="content" class="code-input" rows="24" spellcheck="false" autocomplete="off"
                                   aria-describedby="content-hint" data-code-editor="@FilesModel.EditorLanguage(filePath)">
 @text</textarea>
                     </div>
                     <p class="hint text-xs text-secondary" id="content-hint">
+                        @if (syntax is not null)
+                        {
+                            <text>Checked as @syntax before it's saved.</text>
+                        }
                         Saved as UTF-8 with the file's line endings, owner and permissions. Containers using this volume see the change at once,
                         but most programs read their configuration only when they start: restart them to apply it.
                     </p>
                     <div class="flex flex-wrap items-center gap-2" sp-can="write">
-                        <button type="submit" class="btn-primary"><icon name="document-check" class="h-4 w-4" /> Save @fileName</button>
+                        @if (syntax is not null)
+                        {
+                            <button type="submit" class="btn-soft" formaction="@validateUrl" hx-post="@validateUrl" hx-target="#file-check" hx-swap="outerHTML">
+                                <icon name="document-check" class="h-4 w-4" /> Validate
+                            </button>
+                        }
+                        <button type="submit" class="btn-primary"><icon name="arrow-down-on-square" class="h-4 w-4" /> Save @fileName</button>
+                        @if (Model.Invalid)
+                        {
+                            <button type="submit" name="skipCheck" value="true" class="btn-soft danger"
+                                    data-confirm="Save @fileName even though it isn't valid @syntax?">
+                                <icon name="exclamation-triangle" class="h-4 w-4" /> Save with errors
+                            </button>
+                        }
                         @if (Model.Conflict)
                         {
                             <button type="submit" name="overwrite" value="true" class="btn-soft danger"

@@ -107,7 +107,7 @@ public sealed partial class LiveVolumeNetworkTests : IAsyncLifetime
         Assert.Contains($"A volume named {_name} already exists.", await again.Content.ReadAsStringAsync(ct));
 
         // A container writes a file and stays, so the volume is in use.
-        var writer = await RunAsync("mkdir -p /data/conf && echo hello-volume > /data/conf/app.ini && sleep 300", _name);
+        var writer = await RunAsync("mkdir -p /data/conf && echo hello-volume > /data/conf/app.ini && echo 'port: 1' > /data/conf/app.yml && sleep 300", _name);
         var list = await _browser.GetStringAsync($"/endpoints/1/volumes?q={_name}&usage=used", ct);
         Assert.Contains($">{_name}</a>", list);
         await Task.Delay(500, ct);
@@ -146,6 +146,18 @@ public sealed partial class LiveVolumeNetworkTests : IAsyncLifetime
         Assert.Contains("changed after you opened it", conflict);
         Assert.Contains("Save anyway", conflict);
         Assert.Contains("mine</textarea>", conflict);
+
+        // JSON and YAML are checked before saving, unless the user saves with the errors.
+        var yamlUrl = $"{detailUrl}/files?path=/conf/app.yml";
+        var yamlVersion = System.Text.RegularExpressions.Regex.Match(WebUtility.HtmlDecode(await _browser.GetStringAsync(yamlUrl, ct)),
+            "name=\"version\" value=\"([0-9a-f]{64})\"").Groups[1].Value;
+        var invalid = WebUtility.HtmlDecode(await (await PostAsync(yamlUrl, $"{detailUrl}/files?handler=Save",
+            new() { ["path"] = "/conf/app.yml", ["content"] = "a: 1\na: 2\n", ["version"] = yamlVersion })).Content.ReadAsStringAsync(ct));
+        Assert.Contains("It isn't valid YAML, so it wasn't saved.", invalid);
+        Assert.Contains("Save with errors", invalid);
+        Assert.Equal("port: 1\n", await (await _browser.GetAsync($"{detailUrl}/files?handler=Download&path=/conf/app.yml", ct)).Content.ReadAsStringAsync(ct));
+        Assert.Contains("Saved /conf/app.yml.", await FollowAsync(await PostAsync(yamlUrl, $"{detailUrl}/files?handler=Save",
+            new() { ["path"] = "/conf/app.yml", ["content"] = "a: 1\na: 2\n", ["version"] = yamlVersion, ["skipCheck"] = "true" })));
 
         var outside = await _browser.GetStringAsync($"{detailUrl}/files?path=/conf/../..", ct);
         Assert.Contains("That path leaves the volume.", outside);

@@ -1,12 +1,9 @@
-// Stacks: the compose.yaml and .env editors (CodeMirror over a <textarea>, which stays the form
-// field), validation errors in the editor's gutter, and live output of stack jobs over SignalR.
+// Stacks: live output of stack jobs over SignalR. The compose.yaml and .env editors are editor.js.
 (() => {
   'use strict';
 
   const MAX_LOG_LINES = 5000;
   const hub = () => SocklessPort.connection;
-  // Editors by their textarea's id, so validation results can find the compose editor.
-  const editors = new Map();
 
   function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -14,42 +11,6 @@
     if (text !== undefined) node.textContent = text;
     return node;
   }
-
-  // ---------------------------------------------------------------- editors
-
-  // <textarea data-code-editor="yaml|env">: without the bundle (or scripts) it stays a plain text area.
-  SocklessPort.component('textarea[data-code-editor]', (textarea) => {
-    if (!window.SocklessEditor) return null;
-    // A page restored from htmx's history cache still holds the previous editor's markup.
-    for (const stale of textarea.parentElement.querySelectorAll(':scope > .cm-editor')) stale.remove();
-    const editor = window.SocklessEditor.create(textarea, {
-      language: textarea.dataset.codeEditor,
-      label: document.querySelector(`label[for="${textarea.id}"]`)?.textContent.trim(),
-    });
-    textarea.hidden = true;
-    editors.set(textarea.id, editor);
-    // Labels point at the textarea; send their clicks to the editor instead.
-    const label = document.querySelector(`label[for="${textarea.id}"]`);
-    const focus = (event) => { event.preventDefault(); editor.focus(); };
-    label?.addEventListener('click', focus);
-    return () => {
-      label?.removeEventListener('click', focus);
-      editors.delete(textarea.id);
-      editor.destroy();
-    };
-  });
-
-  // Validation results carry the errors that name a line: show them in the compose editor.
-  SocklessPort.component('[data-compose-diagnostics]', (result) => {
-    let diagnostics = [];
-    try {
-      diagnostics = JSON.parse(result.dataset.composeDiagnostics || '[]');
-    } catch {
-      return null;
-    }
-    editors.get('Input_Compose')?.setDiagnostics(diagnostics);
-    return null;
-  });
 
   // ---------------------------------------------------------------- jobs
 
