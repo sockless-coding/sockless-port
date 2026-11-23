@@ -57,7 +57,9 @@ public sealed class VolumeBrowserIntegrationTests : IAsyncLifetime
         var writer = await _client.CreateContainerAsync(null, new JsonObject
         {
             ["Image"] = Image,
-            ["Cmd"] = new JsonArray("sh", "-c", "mkdir -p /v/conf/deep && echo hello > /v/hello.txt && echo x > '/v/conf/a|b.ini' && ln -s hello.txt /v/link && ln -s / /v/escape"),
+            ["Cmd"] = new JsonArray("sh", "-c", "mkdir -p /v/conf/deep && echo hello > /v/hello.txt && echo x > '/v/conf/a|b.ini' && ln -s hello.txt /v/link && ln -s / /v/escape" +
+                " && printf 'a: 1\\r\\nb: 2\\r\\n' > /v/conf/app.yml && chown 65534:65534 /v/conf/app.yml && chmod 640 /v/conf/app.yml" +
+                " && printf 'a\\0b' > /v/blob.bin && touch /v/empty"),
             ["HostConfig"] = new JsonObject { ["Mounts"] = new JsonArray(new JsonObject { ["Type"] = "volume", ["Source"] = _volume, ["Target"] = "/v" }) },
         }, ct);
         await _client.StartContainerAsync(writer.Id, ct);
@@ -98,10 +100,10 @@ public sealed class VolumeBrowserIntegrationTests : IAsyncLifetime
         await _browser.OpenAsync(_connection, _client, _volume, ct);
 
         Assert.Equal(VolumeEntryKind.Directory, root.Self.Kind);
-        Assert.Equal(["conf", "escape", "hello.txt", "link"], root.Entries.Select(e => e.Name));
+        Assert.Equal(["conf", "blob.bin", "empty", "escape", "hello.txt", "link"], root.Entries.Select(e => e.Name));
         Assert.Equal(VolumeEntryKind.Directory, root.Entries[0].Kind);
-        Assert.Equal(VolumeEntryKind.Link, root.Entries[1].Kind);
-        Assert.Equal(["deep", "a|b.ini"], conf.Entries.Select(e => e.Name));
+        Assert.Equal(VolumeEntryKind.Link, root.Entries.Single(e => e.Name == "escape").Kind);
+        Assert.Equal(["deep", "app.yml", "a|b.ini"], conf.Entries.Select(e => e.Name));
         Assert.Equal((VolumeEntryKind.File, 6L), (file.Self.Kind, file.Self.Size));
         Assert.Empty(file.Entries);
         // A link to / is described, not followed.
@@ -142,6 +144,47 @@ public sealed class VolumeBrowserIntegrationTests : IAsyncLifetime
         Assert.Empty(await HelpersAsync());
         Assert.False(_browser.IsOpen(_connection.Id, _volume));
         await _client.RemoveVolumeAsync(_volume, cancellationToken: ct);
+    }
+
+    [Fact]
+    public async Task Saves_text_files_through_a_writable_helper_of_their_own()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await _browser.OpenAsync(_connection, _client, _volume, ct);
+        var readHelper = Assert.Single(await HelpersAsync()).Id;
+
+        var file = (await _browser.ListAsync(_connection, _client, _volume, "/conf/app.yml", ct)).Self;
+        var opened = await _browser.ReadTextAsync(_connection, _client, _volume, file, ct);
+        Assert.Equal("a: 1\r\nb: 2\r\n", opened.Text);
+        Assert.Contains("binary", (await _browser.ReadTextAsync(_connection, _client, _volume,
+            (await _browser.ListAsync(_connection, _client, _volume, "/blob.bin", ct)).Self, ct)).NotEditable);
+
+        // The browser sends CRLF; the file keeps its CRLF, owner and mode.
+        await _browser.SaveTextAsync(_connection, _client, _volume, "/conf/app.yml", "a: 1\r\nb: 3\r\nc: 4", opened.Version, ct);
+        var saved = (await _browser.ListAsync(_connection, _client, _volume, "/conf/app.yml", ct)).Self;
+        Assert.Equal(("640", "nobody"), (saved.Mode, saved.Owner));
+        var reread = await _browser.ReadTextAsync(_connection, _client, _volume, saved, ct);
+        Assert.Equal("a: 1\r\nb: 3\r\nc: 4", reread.Text);
+
+        // An edit of the old version doesn't overwrite the new one, unless asked to.
+        await Assert.ThrowsAsync<VolumeFileChangedException>(() =>
+            _browser.SaveTextAsync(_connection, _client, _volume, "/conf/app.yml", "stale", opened.Version, ct));
+        await _browser.SaveTextAsync(_connection, _client, _volume, "/conf/app.yml", "forced\n", version: null, ct);
+        Assert.Equal("forced\r\n", (await _browser.ReadTextAsync(_connection, _client, _volume,
+            (await _browser.ListAsync(_connection, _client, _volume, "/conf/app.yml", ct)).Self, ct)).Text);
+
+        // Empty files can be filled; links and missing files are refused, and the link's target is untouched.
+        var empty = (await _browser.ListAsync(_connection, _client, _volume, "/empty", ct)).Self;
+        var emptyOpened = await _browser.ReadTextAsync(_connection, _client, _volume, empty, ct);
+        Assert.Equal("", emptyOpened.Text);
+        await _browser.SaveTextAsync(_connection, _client, _volume, "/empty", "filled", emptyOpened.Version, ct);
+        Assert.Equal(6, (await _browser.ListAsync(_connection, _client, _volume, "/empty", ct)).Self.Size);
+        await Assert.ThrowsAsync<VolumeBrowseException>(() => _browser.SaveTextAsync(_connection, _client, _volume, "/link", "x", null, ct));
+        await Assert.ThrowsAsync<VolumeBrowseException>(() => _browser.SaveTextAsync(_connection, _client, _volume, "/nope", "x", null, ct));
+        Assert.Equal(6, (await _browser.ListAsync(_connection, _client, _volume, "/hello.txt", ct)).Self.Size);
+
+        // Each save's helper is gone afterwards; the read-only browsing helper is still the one.
+        Assert.Equal(readHelper, Assert.Single(await HelpersAsync()).Id);
     }
 
     [Fact]

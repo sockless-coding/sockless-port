@@ -131,6 +131,22 @@ public sealed partial class LiveVolumeNetworkTests : IAsyncLifetime
         var archive = await _browser.GetAsync($"{detailUrl}/files?handler=Archive&path=/conf", ct);
         Assert.Equal("application/x-tar", archive.Content.Headers.ContentType!.MediaType);
 
+        // Editing: the file opens in the editor, saves while the writer uses the volume, and a stale edit is refused.
+        var fileUrl = $"{detailUrl}/files?path=/conf/app.ini";
+        var opened = WebUtility.HtmlDecode(await _browser.GetStringAsync(fileUrl, ct));
+        Assert.Contains("hello-volume\n</textarea>", opened);
+        var version = System.Text.RegularExpressions.Regex.Match(opened, "name=\"version\" value=\"([0-9a-f]{64})\"").Groups[1].Value;
+        // Browsers send a text area's lines with CRLF; the file had LF, and keeps it.
+        var saved = await FollowAsync(await PostAsync(fileUrl, $"{detailUrl}/files?handler=Save",
+            new() { ["path"] = "/conf/app.ini", ["content"] = "edited\r\n", ["version"] = version }));
+        Assert.Contains("Saved /conf/app.ini.", saved);
+        Assert.Equal("edited\n", await (await _browser.GetAsync($"{detailUrl}/files?handler=Download&path=/conf/app.ini", ct)).Content.ReadAsStringAsync(ct));
+        var stale = await PostAsync(fileUrl, $"{detailUrl}/files?handler=Save", new() { ["path"] = "/conf/app.ini", ["content"] = "mine", ["version"] = version });
+        var conflict = WebUtility.HtmlDecode(await stale.Content.ReadAsStringAsync(ct));
+        Assert.Contains("changed after you opened it", conflict);
+        Assert.Contains("Save anyway", conflict);
+        Assert.Contains("mine</textarea>", conflict);
+
         var outside = await _browser.GetStringAsync($"{detailUrl}/files?path=/conf/../..", ct);
         Assert.Contains("That path leaves the volume.", outside);
 

@@ -24,8 +24,17 @@ public sealed record VolumeEntry(string Name, string Path, VolumeEntryKind Kind,
 /// <param name="Warning">What the engine printed when some entries couldn't be read (permissions).</param>
 public sealed record VolumeListing(string Path, VolumeEntry Self, IReadOnlyList<VolumeEntry> Entries, bool Truncated, string? Warning);
 
+/// <summary>A regular file read for the editor.</summary>
+/// <param name="Text">Its content without a byte order mark; null when it can't be edited (<see cref="NotEditable"/> says why).</param>
+/// <param name="Version">From <see cref="VolumeText.Version"/>; a save names it, so it never overwrites changes made meanwhile.</param>
+public sealed record VolumeTextFile(VolumeEntry Entry, string? Text, string? Version, string? NotEditable);
+
 /// <summary>A browse request that can't be answered, with a message for the page.</summary>
 public class VolumeBrowseException(string message) : Exception(message);
+
+/// <summary>The file isn't what the editor read any more: someone (or something) changed it.</summary>
+public sealed class VolumeFileChangedException(string path)
+    : VolumeBrowseException($"{path} changed after you opened it, so your edits weren't saved.");
 
 /// <summary>No helper is open for the volume (never opened, idle, or expired): open it again with a POST.</summary>
 public sealed class VolumeBrowserClosedException() : VolumeBrowseException("The file browser closed after a while without use. Open it again to go on.");

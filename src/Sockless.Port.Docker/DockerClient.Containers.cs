@@ -249,6 +249,18 @@ public sealed partial class DockerClient
         }
     }
 
+    /// <summary>
+    /// Extracts an uncompressed tar stream into a directory of a container's filesystem, as
+    /// <c>docker cp</c> does. The directory must exist. Entries keep the owner and mode in their
+    /// headers (no <c>copyUIDGID</c>, which would hand them to the container's user instead).
+    /// </summary>
+    public Task PutArchiveAsync(string containerId, string directory, Stream tar, CancellationToken cancellationToken = default)
+    {
+        var content = new StreamContent(tar);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/x-tar");
+        return SendAsync(HttpMethod.Put, Path($"/containers/{Escape(containerId)}/archive", Query(("path", directory))), content, cancellationToken);
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private static string Escape(string id) => Uri.EscapeDataString(id);

@@ -20,7 +20,7 @@ Every page needs a signed-in user. **Administrators** manage users, endpoints, r
 |---|---|
 | No access | The endpoint doesn't exist for them (404). |
 | Viewer | Read everything: lists, details, logs, stats, inspect JSON. |
-| Operator | Also start, stop, create and remove containers, images, volumes, networks, pods and Compose stacks, open consoles and browse volume files. |
+| Operator | Also start, stop, create and remove containers, images, volumes, networks, pods and Compose stacks, open consoles, and browse and edit volume files. |
 | Swarm operator | Also change services, nodes, secrets, configs, overlay networks and swarm stacks through a manager. |
 
 A user's *role on all endpoints* also applies to endpoints added later; single endpoints can differ. Roles are read from the database for every request and every hub call, so a change applies at once. Disabling a user or setting their password ends their sessions at their next request.

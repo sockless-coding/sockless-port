@@ -17,7 +17,7 @@ namespace Sockless.Port.Volumes;
 /// has no network. <see cref="OpenAsync"/> starts the helper (a change on the engine, so it's
 /// for POSTs); reads only use an open one. A helper is removed once idle, and its own command
 /// ends after <see cref="HelperLifetime"/>, so one left behind by a crash stops by itself.
-/// Nothing is ever written to the volume.
+/// The only write is <see cref="SaveTextAsync"/> (from a POST), through a writable helper of its own.
 /// </summary>
 public sealed class VolumeBrowser : IAsyncDisposable
 {
@@ -33,6 +33,9 @@ public sealed class VolumeBrowser : IAsyncDisposable
 
     /// <summary>How long a helper is reused; well inside <see cref="HelperLifetime"/>, so a command never meets a stopped one.</summary>
     internal static readonly TimeSpan ReuseFor = TimeSpan.FromMinutes(25);
+
+    /// <summary>How long a save's writable helper's own <c>sleep</c> runs; it's removed as soon as the save ends.</summary>
+    internal static readonly TimeSpan WriterLifetime = TimeSpan.FromMinutes(5);
 
     /// <summary>Unused this long, a helper is removed.</summary>
     internal static readonly TimeSpan IdleAfter = TimeSpan.FromMinutes(5);
@@ -135,6 +138,118 @@ public sealed class VolumeBrowser : IAsyncDisposable
         await write(archive);
     }
 
+    // ---------------------------------------------------------------- editing
+
+    /// <summary>Reads a regular file for the editor, through the open helper.</summary>
+    /// <param name="entry">The file, from <see cref="ListAsync"/>.</param>
+    public async Task<VolumeTextFile> ReadTextAsync(EngineConnection connection, DockerClient client, string volume, VolumeEntry entry,
+        CancellationToken cancellationToken = default)
+    {
+        if (entry.Kind != VolumeEntryKind.File)
+            throw new VolumeBrowseException($"{entry.Path} isn't a regular file, so it can't be edited.");
+        if (entry.Size > VolumeText.MaxBytes)
+            return new VolumeTextFile(entry, null, null, VolumeText.TooLarge);
+
+        var helper = await HelperAsync(connection, client, volume, create: false, cancellationToken);
+        var bytes = await ReadBytesAsync(client, helper, entry.Path, cancellationToken);
+        var (text, notEditable) = VolumeText.Decode(bytes);
+        return new VolumeTextFile(entry with { Size = bytes.Length }, text, text is null ? null : VolumeText.Version(bytes), notEditable);
+    }
+
+    /// <summary>
+    /// Replaces a regular file's content with <paramref name="text"/>, keeping its owner, mode,
+    /// byte order mark and line endings. Browsing stays read-only: the write goes through a helper
+    /// of its own that mounts the volume writable for this save only, and is removed after it.
+    /// </summary>
+    /// <param name="version">The <see cref="VolumeTextFile.Version"/> the text was edited from; null overwrites whatever is there.</param>
+    /// <returns>The version of the saved file.</returns>
+    /// <exception cref="VolumeFileChangedException">The file isn't at <paramref name="version"/> any more.</exception>
+    public async Task<string> SaveTextAsync(EngineConnection connection, DockerClient client, string volume, string path, string text, string? version,
+        CancellationToken cancellationToken = default)
+    {
+        if (path == "/")
+            throw new VolumeBrowseException("The volume's root is a folder, not a file.");
+
+        // The volume's lock: two saves can't interleave their check and write, and a release
+        // (before removing the volume) waits for the save to finish.
+        var gate = _locks.GetOrAdd((connection.Id, volume), _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureImageAsync(client, cancellationToken);
+            var helper = await StartHelperAsync(client, volume, readOnly: false, WriterLifetime, cancellationToken);
+            try
+            {
+                var target = MountPath + path;
+                // No -L: a link is described, never followed (it could point outside the volume).
+                var stat = await client.RunExecAsync(helper, ["stat", "-c", "%F|%u|%g|%a", target], maxOutputBytes: 64 * 1024,
+                    timeout: TimeSpan.FromSeconds(30), cancellationToken);
+                var fields = stat.Stdout.Trim().Split('|');
+                if (stat.ExitCode is not 0 || fields.Length != 4)
+                {
+                    throw new VolumeBrowseException(stat.Stderr.Contains("No such file", StringComparison.Ordinal)
+                        ? $"{path} doesn't exist in {volume} any more."
+                        : $"Couldn't read {path}: {FirstLine(stat.Stderr) ?? "the helper printed nothing."}");
+                }
+                if (fields[0] is not ("regular file" or "regular empty file")
+                    || !int.TryParse(fields[1], System.Globalization.CultureInfo.InvariantCulture, out var uid)
+                    || !int.TryParse(fields[2], System.Globalization.CultureInfo.InvariantCulture, out var gid)
+                    || fields[3] is not { Length: > 0 and <= 4 } octal || !octal.All(c => c is >= '0' and <= '7'))
+                    throw new VolumeBrowseException($"{path} isn't a regular file any more, so it wasn't saved.");
+                var mode = (UnixFileMode)Convert.ToInt32(fields[3], 8);
+
+                var current = await ReadBytesAsync(client, helper, path, cancellationToken);
+                if (version is not null && VolumeText.Version(current) != version)
+                    throw new VolumeFileChangedException(path);
+                var bytes = VolumeText.Encode(text, current);
+                if (bytes.Length > VolumeText.MaxBytes)
+                    throw new VolumeBrowseException($"The edited file is larger than {VolumeText.MaxBytes / 1024 / 1024} MiB, so it wasn't saved.");
+
+                using var tar = new MemoryStream();
+                await using (var writer = new TarWriter(tar, TarEntryFormat.Pax, leaveOpen: true))
+                {
+                    await writer.WriteEntryAsync(new PaxTarEntry(TarEntryType.RegularFile, VolumePath.Name(path))
+                    {
+                        Mode = mode,
+                        Uid = uid,
+                        Gid = gid,
+                        ModificationTime = _time.GetUtcNow(),
+                        DataStream = new MemoryStream(bytes),
+                    }, cancellationToken);
+                }
+                tar.Position = 0;
+                var parent = VolumePath.Parent(path)!;
+                await client.PutArchiveAsync(helper, MountPath + (parent == "/" ? "" : parent), tar, cancellationToken);
+                _logger.LogInformation("Saved {Path} in volume {Volume} on endpoint {Endpoint}", path, volume, connection.Id);
+                return VolumeText.Version(bytes);
+            }
+            finally
+            {
+                await RemoveAsync(client, helper);
+            }
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    /// <summary>A regular file's bytes, up to one more than <see cref="VolumeText.MaxBytes"/> (enough to tell it's too large).</summary>
+    private static async Task<byte[]> ReadBytesAsync(DockerClient client, string helper, string path, CancellationToken cancellationToken)
+    {
+        await using var archive = await client.GetArchiveAsync(helper, MountPath + path, cancellationToken);
+        await using var tar = new TarReader(archive);
+        var entry = await tar.GetNextEntryAsync(copyData: false, cancellationToken);
+        if (entry is not { EntryType: TarEntryType.RegularFile or TarEntryType.V7RegularFile })
+            throw new VolumeBrowseException($"{path} changed while it was being read. Try again.");
+        // An empty file's entry has no data stream.
+        if (entry.DataStream is not { } data || entry.Length == 0)
+            return [];
+        var buffer = new byte[Math.Min(entry.Length, VolumeText.MaxBytes + 1)];
+        var read = await data.ReadAtLeastAsync(buffer, buffer.Length, throwOnEndOfStream: false, cancellationToken);
+        return read == buffer.Length ? buffer : buffer[..read];
+    }
+
     // ---------------------------------------------------------------- helpers
 
     /// <summary>Removes the helper of a volume, so the volume can be removed.</summary>
@@ -206,43 +321,49 @@ public sealed class VolumeBrowser : IAsyncDisposable
 
             await SweepExitedAsync(connection, client, cancellationToken);
             await EnsureImageAsync(client, cancellationToken);
-
-            var name = $"sockless-port-files-{Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(4))}";
-            var body = new JsonObject
-            {
-                ["Image"] = HelperImage,
-                ["Cmd"] = new JsonArray("sleep", ((int)HelperLifetime.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                ["Labels"] = new JsonObject { [ContainerLabels.Helper] = HelperKind, [VolumeLabel] = volume },
-                ["HostConfig"] = new JsonObject
-                {
-                    ["NetworkMode"] = "none",
-                    ["Mounts"] = new JsonArray(new JsonObject
-                    {
-                        ["Type"] = "volume",
-                        ["Source"] = volume,
-                        ["Target"] = MountPath,
-                        ["ReadOnly"] = true,
-                    }),
-                },
-            };
-            var created = await client.CreateContainerAsync(name, body, cancellationToken);
-            try
-            {
-                await client.StartContainerAsync(created.Id, cancellationToken);
-            }
-            catch
-            {
-                await RemoveAsync(client, created.Id);
-                throw;
-            }
-            _helpers[key] = new Helper(connection, created.Id, now);
-            _logger.LogDebug("Started volume browser helper {Container} for {Volume} on endpoint {Endpoint}", created.Id[..12], volume, connection.Id);
-            return created.Id;
+            var id = await StartHelperAsync(client, volume, readOnly: true, HelperLifetime, cancellationToken);
+            _helpers[key] = new Helper(connection, id, now);
+            _logger.LogDebug("Started volume browser helper {Container} for {Volume} on endpoint {Endpoint}", id[..12], volume, connection.Id);
+            return id;
         }
         finally
         {
             gate.Release();
         }
+    }
+
+    /// <summary>Creates and starts a helper that mounts the volume, has no network and ends after <paramref name="lifetime"/>.</summary>
+    private async Task<string> StartHelperAsync(DockerClient client, string volume, bool readOnly, TimeSpan lifetime, CancellationToken cancellationToken)
+    {
+        var name = $"sockless-port-{(readOnly ? "files" : "write")}-{Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(4))}";
+        var body = new JsonObject
+        {
+            ["Image"] = HelperImage,
+            ["Cmd"] = new JsonArray("sleep", ((int)lifetime.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            ["Labels"] = new JsonObject { [ContainerLabels.Helper] = HelperKind, [VolumeLabel] = volume },
+            ["HostConfig"] = new JsonObject
+            {
+                ["NetworkMode"] = "none",
+                ["Mounts"] = new JsonArray(new JsonObject
+                {
+                    ["Type"] = "volume",
+                    ["Source"] = volume,
+                    ["Target"] = MountPath,
+                    ["ReadOnly"] = readOnly,
+                }),
+            },
+        };
+        var created = await client.CreateContainerAsync(name, body, cancellationToken);
+        try
+        {
+            await client.StartContainerAsync(created.Id, cancellationToken);
+        }
+        catch
+        {
+            await RemoveAsync(client, created.Id);
+            throw;
+        }
+        return created.Id;
     }
 
     private async Task EnsureImageAsync(DockerClient client, CancellationToken cancellationToken)

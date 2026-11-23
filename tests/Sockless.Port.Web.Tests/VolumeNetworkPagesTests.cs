@@ -88,6 +88,27 @@ public sealed class VolumeNetworkPagesTests : IDisposable
     }
 
     [Fact]
+    public async Task A_save_while_offline_keeps_the_edits()
+    {
+        var browser = await _factory.CreateSignedInBrowserAsync();
+        await _factory.WaitForStateAsync<Sockless.Port.Engines.EndpointOffline>();
+        var csrf = await PortFactory.GetAntiforgeryTokenAsync(browser, "/registries");
+        var ct = TestContext.Current.CancellationToken;
+
+        var post = await browser.PostAsync("/endpoints/1/volumes/data/files?handler=Save",
+            PortFactory.Form(csrf, new() { ["path"] = "/conf/app.yml", ["content"] = "port: 8080 <edited>", ["version"] = "abc" }), ct);
+
+        Assert.Equal(HttpStatusCode.OK, post.StatusCode);
+        var html = WebUtility.HtmlDecode(await post.Content.ReadAsStringAsync(ct));
+        Assert.Contains("The engine is offline, so nothing was saved.", html);
+        Assert.Contains("port: 8080 <edited></textarea>", html);
+        Assert.Contains("data-code-editor=\"yaml\"", html);
+
+        var outside = await browser.PostAsync("/endpoints/1/volumes/data/files?handler=Save", PortFactory.Form(csrf, new() { ["path"] = "/../x", ["content"] = "" }), ct);
+        Assert.Equal(HttpStatusCode.NotFound, outside.StatusCode);
+    }
+
+    [Fact]
     public async Task Downloads_need_an_engine()
     {
         var browser = await _factory.CreateSignedInBrowserAsync();
