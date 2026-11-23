@@ -4,18 +4,102 @@ Self-hosted container management for Docker, Docker Swarm and Podman. Sockless P
 
 > **Status:** early development. Phases 0 to 9 are done: Compose and swarm stacks, containers, images, volumes and networks, remote engines through agents, Docker Swarm, Podman pods, and users with roles per endpoint, an audit log, single sign-on, backups and built-in HTTPS. The roadmap is in [docs/plan.md](docs/plan.md).
 
-## Run it
+## Install
 
-```sh
-DOCKER_GID=$(stat -c %g /var/run/docker.sock) docker compose -f docker/compose.yaml up -d --build
-docker logs sockless-port      # copy the setup token
+Sockless Port is published as two images for `linux/amd64` and `linux/arm64`:
+
+| Image | What |
+|---|---|
+| `ghcr.io/sockless-coding/sockless-port` | The server: the web UI, which manages the engine it runs on |
+| `ghcr.io/sockless-coding/sockless-port-agent` | The agent, for each other host you want to manage. You don't need it for the server's own host |
+
+Each release is tagged with its version (for example `2026.11.0`), with its month (`2026.11`, the newest revision that month) and with `latest`. Pin a version if you want updates to happen only when you choose. The [releases](https://github.com/sockless-coding/sockless-port/releases) list what changed.
+
+### The server
+
+With Docker Compose, save this as `compose.yaml`:
+
+```yaml
+name: sockless-port
+
+services:
+  sockless-port:
+    image: ghcr.io/sockless-coding/sockless-port:latest
+    container_name: sockless-port
+    restart: unless-stopped
+    ports:
+      - "9000:8080"
+    volumes:
+      - port-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add:
+      - "${DOCKER_GID:-999}"   # the group that owns the socket, see below
+
+volumes:
+  port-data:
 ```
 
-Open <http://localhost:9000>, enter the setup token and create the first administrator. The token is printed to the log on every start until an account exists, and stops working once setup is complete.
+Then start it and get the setup token from the log:
 
-Data (the SQLite database, encryption keys and stack files) is kept in the `port-data` volume, mounted at `/data`.
+```sh
+DOCKER_GID=$(stat -c %g /var/run/docker.sock) docker compose up -d
+docker logs sockless-port
+```
 
-The app runs as a non-root user, so it needs the group that owns the engine socket. `DOCKER_GID` sets it: on Linux, `stat -c %g /var/run/docker.sock` prints it. On Docker Desktop the socket inside containers belongs to group `0`, so use `DOCKER_GID=0`. Without the group the dashboard shows the endpoint as offline with "Permission denied" and says what to change.
+Or without Compose:
+
+```sh
+docker run -d --name sockless-port --restart unless-stopped \
+  -p 9000:8080 \
+  -v sockless-port-data:/data \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  --group-add "$(stat -c %g /var/run/docker.sock)" \
+  ghcr.io/sockless-coding/sockless-port:latest
+docker logs sockless-port
+```
+
+On rootful Podman, mount its socket in place of Docker's:
+
+```sh
+sudo systemctl enable --now podman.socket
+sudo podman run -d --name sockless-port --restart always \
+  -p 9000:8080 \
+  -v sockless-port-data:/data \
+  -v /run/podman/podman.sock:/var/run/docker.sock \
+  --group-add "$(sudo stat -c %g /run/podman/podman.sock)" \
+  --security-opt label=disable \
+  ghcr.io/sockless-coding/sockless-port:latest
+sudo podman logs sockless-port
+```
+
+Open <http://localhost:9000> (or the host's address on port 9000), enter the setup token and create the first administrator. The token is printed to the log on every start until an account exists, and stops working once setup is complete.
+
+Data (the SQLite database, encryption keys, internal CA and stack files) is kept in the data volume, mounted at `/data`. Keep the volume: it's what makes updates and agents keep working.
+
+The app runs as a non-root user, so it needs the group that owns the engine socket. On Linux, `stat -c %g /var/run/docker.sock` prints it. On Docker Desktop the socket inside containers belongs to group `0`, so use `DOCKER_GID=0` (or `--group-add 0`). Without the group the dashboard shows the endpoint as offline with "Permission denied" and says what to change.
+
+[docker/compose.yaml](docker/compose.yaml) is the same file with comments on the optional settings: a reverse proxy, [HTTPS](#https) and [single sign-on](#single-sign-on).
+
+### Agents for other hosts
+
+You don't install the agent by hand. In Sockless Port, go to **Endpoints → Add agent** and give the host's name or address as Sockless Port reaches it. The endpoint's page then shows the install command for Docker, rootful or rootless Podman, or Docker Swarm (one agent per node), with a one-time enrolment token valid for an hour. Run it on that host; the endpoint comes online once the agent has enrolled.
+
+The agent listens on port 9001, which must be reachable from the Sockless Port server; the agent never connects back. The command uses the agent image of the same version as the server.
+
+### Updating
+
+Take a backup first (Settings → Backup). Then pull the new image and recreate the container; the data volume carries everything over:
+
+```sh
+docker compose pull && docker compose up -d
+# or, without Compose:
+docker pull ghcr.io/sockless-coding/sockless-port:latest
+docker rm -f sockless-port   # then the same docker run command as above
+```
+
+Agents older than the server are marked **Update available** under Endpoints, and their endpoint's page shows the command that replaces the agent's container. An agent keeps its identity in its volume, so it doesn't need enrolling again.
+
+## Using it
 
 ### Which engine it manages
 
@@ -124,6 +208,12 @@ Needs the .NET 11 SDK. Node is not needed: the build downloads the Tailwind stan
 dotnet build
 dotnet test
 dotnet run --project src/Sockless.Port.Web
+```
+
+To run your own build as a container, build the image from the repository:
+
+```sh
+DOCKER_GID=$(stat -c %g /var/run/docker.sock) docker compose -f docker/compose.yaml up -d --build
 ```
 
 See [AGENTS.md](AGENTS.md) for the project layout and conventions.
