@@ -103,6 +103,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<StackStore>();
         services.AddSingleton<StackValidator>();
         services.AddSingleton<StackJobs>();
+
+        services.AddSingleton<Templates.TemplateHttp>();
+        services.AddSingleton<Templates.TemplateCatalog>();
+        services.AddSingleton<Templates.TemplateLogos>();
+        services.AddHostedService<Templates.TemplateRefresh>();
         return services;
     }
 

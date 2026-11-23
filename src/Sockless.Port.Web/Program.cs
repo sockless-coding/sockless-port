@@ -118,6 +118,7 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AuthorizeFolder("/Audit", CurrentAccess.AdminPolicy);
     options.Conventions.AuthorizeFolder("/Settings", CurrentAccess.AdminPolicy);
     options.Conventions.AuthorizeFolder("/Registries", CurrentAccess.AdminPolicy);
+    options.Conventions.AuthorizeFolder("/TemplateSources", CurrentAccess.AdminPolicy);
     options.Conventions.AuthorizePage("/Endpoints/Add", CurrentAccess.AdminPolicy);
     options.Conventions.AuthorizePage("/Endpoints/Settings", CurrentAccess.AdminPolicy);
 }).AddMvcOptions(options => options.Filters.Add<AuditFilter>(int.MinValue));

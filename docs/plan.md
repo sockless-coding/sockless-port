@@ -1,6 +1,6 @@
 # Sockless Port: implementation plan
 
-Status: draft, 2026-11-21
+Status: draft, 2026-11-23
 
 A self-hosted container management UI for Docker, Docker Swarm and Podman. It runs as a container and manages containers, stacks (Compose and Swarm), images, volumes and networks on the local engine. On Swarm it also manages services, nodes, secrets and configs. A lightweight agent installed on other hosts lets it manage remote engines too.
 
@@ -307,6 +307,65 @@ Shown only on endpoints with the `Pods` capability. These use Podman's libpod AP
 - **History** (`ResourceHistory`, Core, `Monitoring/`; Settings "Keep resource history": off, 1, 7 (the default), 30 or 90 days): a background service watches every endpoint through the same sampler, as an open page does, so recording keeps a stats stream open to each running container while it's on. Each minute it writes a row per container (by name, so a recreated container continues its line; swarm task names change with each task) and one of the endpoint's totals (`ResourceUsage`, `ResourceTotals`), with averages over the minute's snapshots, peaks and the sample count. Every 5 minutes, finished hours are rolled up into hourly rows (weighted by samples, from the hour after the last one rolled up, so restarts neither skip nor repeat one), minute rows older than 25 hours are deleted, and hourly ones past the setting. Off deletes all of it. Rows cascade with their endpoint, and are in backups with the rest of the database.
 - **Trends** on the Resources page (below the live part, and also while the engine is offline): a period (last hour and 24 hours by the minute, 7, 30 and 90 days by the hour, as far as the setting keeps), charts of the average and peak of CPU and memory and of the average network and disk rates (every 1 or 10 minutes, or 1, 4 or 12 hours; gaps where nothing was recorded), for all containers or one, and a sortable table of each container's average and peak CPU and memory and bytes moved over the period (selecting a name charts it). The page's `History` handler returns it as JSON, with chart labels in the user's time zone (`Format.ChartTime`), and the page reads it again every minute.
 - **Not built:** alerts or thresholds, an overview across endpoints, pod totals, history on the container's own stats page, and libpod's all-containers stats stream (`/libpod/containers/stats`), which would need one connection instead of one per container on Podman.
+
+### Phase 12: App templates
+
+- One-click deploys from template catalogues, with every template becoming an ordinary stack that the user reviews before it runs.
+- **Sources** (admins only): feed URLs, none by default, so the server makes no outbound calls until an admin adds one. Feeds are fetched by the server, kept, and refreshed daily or on request. Formats: Portainer's app templates (v2/v3, the de facto standard) and the linuxserver.io API; then compose-based app stores (CasaOS, Runtipi).
+- **Built-in list** of common apps in the image, so the page works offline and with no feeds.
+- **Deploy:** the template's variables, ports and volumes become a form; the result is a saved stack that opens in the stack's review. Settings that reach into the host are flagged first.
+
+**Status: done (Portainer and linuxserver.io feeds, built-in list).** Notes:
+- **Pages:** `/endpoints/{id}/templates` (sidebar "Templates", operators; a "From a template" button on the stack list) with search, category, source and pages of 48; `/endpoints/{id}/templates/{source}/{key}` for one template; `/template-sources` (admin sidebar "Template sources"); `/templates/{source}/{key}/logo`.
+- **Core** (`Templates/`): `TemplateFeed` reads Portainer v2/v3 (type 1 container, 2 swarm stack, 3 compose stack from `repository`, 4 edge stacks from a direct `stackfile` URL) and the linuxserver.io API (`?include_config=true`: image `lscr.io/linuxserver/{name}:latest`; optional ports, volumes, variables and devices off by default; only `shm_size`, `stop_grace_period` and `sysctls` of its custom settings), the format told apart by content. Keys are slugs of the title; a repeated title gets its kind (`wordpress-compose`), then a number. Repeated variables keep the first; `:ro` written into paths becomes read-only. Checked against the real feeds (Portainer 68, Lissy93 894, linuxserver.io 202 templates): every container template's file passes `docker compose config`.
+- **Built-in list:** 20 apps in Portainer v3 format (`builtin-templates.json`, an embedded resource, no logos, so nothing is downloaded): Uptime Kuma, Vaultwarden, Gitea, Jellyfin, Home Assistant, Pi-hole, AdGuard Home, Grafana, Prometheus, PostgreSQL, MariaDB, Valkey, Nginx, Caddy, Syncthing, FreshRSS, Nextcloud, IT Tools, Dozzle, Whoami. A test runs each through `docker compose config`.
+- **Storage:** a `TemplateSources` table (name, URL, last download and attempt, error, count, format); the feed itself in `/data/templates/feeds/{id}.json`, read again after a restart, and kept when a refresh fails. `TemplateRefresh` checks hourly and downloads feeds older than a day. At most 20 sources. Stacks record their template (`Stacks.Template`, shown as a Template badge).
+- **Files** (`TemplateCompose`): a container template becomes one service (image, command, restart, ports, volumes, environment, labels, network mode `host`/`none`, devices, caps, security options); variables go to `.env` single-quoted and the compose file refers to them as `${NAME}` (names `.env` can't carry are written inline). Every literal value has `$` doubled. Ports: publish or not, and a host port (empty: the engine picks one; with host networking none are published). Volumes: a name (default from the container path; linuxserver.io's `/path/to/…` placeholders become volumes), a host path, or empty for an anonymous one. Stack templates use the downloaded file as it is, with Portainer's `env_file: stack.env` pointed at `.env`. "Preview files" shows both files for the current choices.
+- **Downloads** (`TemplateHttp`): feeds from any http(s) address; stack files (GitHub and GitLab raw files on `HEAD`; other hosts aren't supported) and logos only from public addresses, checked in the connect callback for every connection, redirects included (through a proxy, the proxy decides). Limits: 32 MiB per feed, 1 MiB per stack file, 512 KiB per logo, 30 s. Stack files are kept 15 minutes.
+- **Logos** (`TemplateLogos`) are fetched when first shown, at most four at a time, kept in `/data/templates/logos`, identified by their bytes (PNG, JPEG, GIF, WebP, ICO, SVG), and served with `sandbox` CSP; one that fails isn't tried again for a day. Small `data:` logos are decoded directly.
+- **Risks** (`TemplateRisks`): privileged, host network/PID/IPC/user namespace/UTS, powerful capabilities, unconfined security options, devices, the engine's socket and system folders of the host; shown before saving. Notes (HTML for Portainer) are reduced to text, bold, code, breaks and http(s) links (`TemplateNote`).
+- **Offered:** swarm templates only on swarm managers to swarm operators, templates for another platform not at all, `administrator_only` ones to administrators.
+- **Audit:** `Templates: create stack` (target: stack, template, source), `Template sources: add`, `refresh`, `remove`.
+- **Not built:** CasaOS and Runtipi app stores (repositories of compose files, not single feeds), Coolify's templates, stack files from other git hosts or branches, and building images from a template's repository.
+
+### Phase 13: Notifications and alerts
+
+- Tell people when something needs them, without the UI open.
+- **Channels** (Settings, admins only): webhook (JSON body, optional secret header), ntfy, Gotify, and email (SMTP). Secrets stored with Data Protection, a "Send test" button, and delivery failures shown in the channel's status.
+- **Rules:** what to send to which channel, per endpoint or for all:
+  - a container exits unexpectedly, restarts repeatedly, or turns unhealthy (from engine events the monitor already receives);
+  - an endpoint goes offline or comes back; an agent's version differs from the server's;
+  - new critical or high findings from a vulnerability scan;
+  - updates available after a scheduled update check;
+  - resource thresholds (CPU or memory above a level for some minutes, per container or endpoint totals), from the resource sampler;
+  - a stack job or scheduled task failed.
+- **Noise control:** each alert fires once until it clears, with a quiet period per rule, and a digest option for update and scan results. Helper containers never alert.
+- **History:** sent notifications listed on `/notifications` (admins), kept as long as the audit log.
+
+### Phase 14: Git-backed stacks
+
+- A stack whose compose file and `.env` come from a git repository: URL, branch, path to the compose file, and credentials (token or SSH key, stored with Data Protection).
+- Pulled by the server with a pinned git client run like `ComposeCli` (argument list, clean environment, private `HOME`), into the stack's folder; the editor becomes read-only for files from the repository, while `.env` can stay local.
+- **Redeploy:** manually, on a poll (every 5 minutes to daily), or by a webhook (`POST` to a per-stack URL with a secret; GitHub, GitLab and Gitea signatures checked). Each redeploy records the commit, and the stack page shows it with the diff against the last deployed commit.
+- **Not planned:** building images from the repository (no Buildx, as for stacks today).
+
+### Phase 15: Agent edge mode
+
+- For hosts behind NAT or a firewall: the agent dials out to the server over a WebSocket tunnel, using the same mTLS identity from enrolment.
+- The server gains a tunnel transport in `Sockless.Port.Docker`; everything above it (client, monitor, stacks, exec) is unchanged. Hijacked connections (exec, attach) get their own streams over the tunnel.
+- Enrolment offers direct or edge; the install command for edge names the server's URL. Reconnects with backoff, and the endpoint shows when the tunnel was last up.
+- Also here: renewal of agent certificates before they expire.
+
+### Phase 16: Overview across endpoints
+
+- One page for everything the user can see: each endpoint's state, engine and version, running and stopped containers, unhealthy containers, updates available, critical findings, and CPU and memory against its host, from the same sources as the endpoint dashboards.
+- Rows link to the endpoint's pages; the page refreshes on `endpoints-changed` and engine events. Endpoints the user has no role on aren't shown.
+
+### Phase 17: Scheduled maintenance
+
+- **Scheduled backups** (Settings): daily or weekly, kept to a count, written to a folder in `/data` or a mounted path; optionally encrypted with a passphrase. Failures notify (Phase 13).
+- **Scheduled prunes** per endpoint: dangling or unused images (optionally older than a number of days), unused anonymous volumes (never named volumes unless chosen), unused networks, build cache. Each run is audited with what it removed; helpers are released first, as for manual prunes.
+- **Maintenance page** (admins) listing every schedule, including the existing update checks and scans, with last and next run and their outcome.
 
 ## Risks and notes
 

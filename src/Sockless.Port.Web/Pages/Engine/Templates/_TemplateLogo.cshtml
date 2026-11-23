@@ -1,0 +1,10 @@
+@* A template's logo over a generic icon: if the logo can't be loaded, the icon shows. Model: the template. *@
+@model Sockless.Port.Templates.SourcedTemplate
+<span class="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-raised text-secondary" aria-hidden="true">
+    <icon name="squares-plus" class="h-6 w-6" />
+    @if (Model.Template.Logo is not null)
+    {
+        <img src="@Url.Page("/Templates/Logo", new { sourceId = Model.Source.Id, key = Model.Template.Key })" alt=""
+             class="absolute inset-0 h-full w-full bg-raised object-contain p-1" loading="lazy" decoding="async" width="48" height="48" />
+    }
+</span>

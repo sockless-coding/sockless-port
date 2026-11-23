@@ -1,0 +1,212 @@
+{
+  "version": "3",
+  "templates": [
+    {
+      "id": 1, "type": 1, "title": "Uptime Kuma", "name": "uptime-kuma",
+      "description": "A self-hosted monitoring tool: checks websites, ports and services, and notifies you when they go down.",
+      "categories": ["Monitoring"], "platform": "linux",
+      "image": "louislam/uptime-kuma:latest", "restart_policy": "unless-stopped",
+      "ports": ["3001:3001/tcp"],
+      "volumes": [{ "container": "/app/data" }],
+      "note": "Open port 3001 and create the first account: it becomes the administrator."
+    },
+    {
+      "id": 2, "type": 1, "title": "Vaultwarden", "name": "vaultwarden",
+      "description": "A lightweight server for Bitwarden password manager clients.",
+      "categories": ["Security"], "platform": "linux",
+      "image": "vaultwarden/server:latest", "restart_policy": "unless-stopped",
+      "ports": ["8081:80/tcp"],
+      "volumes": [{ "container": "/data" }],
+      "env": [
+        { "name": "DOMAIN", "label": "Address", "description": "The https:// address clients use to reach it, e.g. https://vault.example.com." },
+        { "name": "SIGNUPS_ALLOWED", "label": "Allow new accounts", "select": [{ "text": "Yes", "value": "true", "default": true }, { "text": "No", "value": "false" }] }
+      ],
+      "note": "Bitwarden's web vault and apps need <b>HTTPS</b>: put it behind a reverse proxy with a certificate. Turn off new accounts once yours exists."
+    },
+    {
+      "id": 3, "type": 1, "title": "Gitea", "name": "gitea",
+      "description": "A painless self-hosted Git service, with issues, pull requests, packages and actions.",
+      "categories": ["Development"], "platform": "linux",
+      "image": "gitea/gitea:latest", "restart_policy": "unless-stopped",
+      "ports": ["3000:3000/tcp", "2222:22/tcp"],
+      "volumes": [{ "container": "/data" }],
+      "env": [
+        { "name": "USER_UID", "label": "User ID", "default": "1000" },
+        { "name": "USER_GID", "label": "Group ID", "default": "1000" }
+      ],
+      "note": "Open port 3000 to finish the setup. SQLite is fine to start with; Git over SSH uses port 2222."
+    },
+    {
+      "id": 4, "type": 1, "title": "Jellyfin", "name": "jellyfin",
+      "description": "A free media server for your films, series, music and photos, with apps for most devices.",
+      "categories": ["Media"], "platform": "linux",
+      "image": "jellyfin/jellyfin:latest", "restart_policy": "unless-stopped",
+      "ports": ["8096:8096/tcp"],
+      "volumes": [{ "container": "/config" }, { "container": "/cache" }, { "container": "/media", "readonly": true }],
+      "note": "Point the media volume at the host folder that holds your library (a path starting with /)."
+    },
+    {
+      "id": 5, "type": 1, "title": "Home Assistant", "name": "homeassistant",
+      "description": "Open-source home automation that puts local control and privacy first.",
+      "categories": ["Home automation"], "platform": "linux",
+      "image": "ghcr.io/home-assistant/home-assistant:stable", "restart_policy": "unless-stopped",
+      "network": "host",
+      "volumes": [{ "container": "/config" }],
+      "env": [{ "name": "TZ", "label": "Time zone", "default": "Etc/UTC", "description": "e.g. Europe/Stockholm" }],
+      "note": "It uses the host's network, so it can find devices on your network. Open port 8123 on the host."
+    },
+    {
+      "id": 6, "type": 1, "title": "Pi-hole", "name": "pihole",
+      "description": "A DNS sinkhole that blocks ads and trackers for every device on your network.",
+      "categories": ["Network"], "platform": "linux",
+      "image": "pihole/pihole:latest", "restart_policy": "unless-stopped",
+      "ports": ["53:53/tcp", "53:53/udp", "8053:80/tcp"],
+      "volumes": [{ "container": "/etc/pihole" }],
+      "env": [
+        { "name": "TZ", "label": "Time zone", "default": "Etc/UTC" },
+        { "name": "FTLCONF_webserver_api_password", "label": "Admin password", "description": "For the web interface on port 8053." }
+      ],
+      "note": "Port 53 must be free on the host: on many Linux systems <code>systemd-resolved</code> holds it."
+    },
+    {
+      "id": 7, "type": 1, "title": "AdGuard Home", "name": "adguardhome",
+      "description": "Network-wide ad and tracker blocking DNS server, with a web interface.",
+      "categories": ["Network"], "platform": "linux",
+      "image": "adguard/adguardhome:latest", "restart_policy": "unless-stopped",
+      "ports": ["53:53/tcp", "53:53/udp", "3000:3000/tcp", "8083:80/tcp"],
+      "volumes": [{ "container": "/opt/adguardhome/work" }, { "container": "/opt/adguardhome/conf" }],
+      "note": "Open port 3000 for the first setup; after that the interface is on port 8083. Port 53 must be free on the host."
+    },
+    {
+      "id": 8, "type": 1, "title": "Grafana", "name": "grafana",
+      "description": "Dashboards and alerts for metrics, logs and traces from Prometheus and many other sources.",
+      "categories": ["Monitoring"], "platform": "linux",
+      "image": "grafana/grafana-oss:latest", "restart_policy": "unless-stopped",
+      "ports": ["3002:3000/tcp"],
+      "volumes": [{ "container": "/var/lib/grafana" }],
+      "note": "Sign in with <b>admin</b> / <b>admin</b> on port 3002, then choose a new password."
+    },
+    {
+      "id": 9, "type": 1, "title": "Prometheus", "name": "prometheus",
+      "description": "A monitoring system and time-series database that scrapes metrics from your services.",
+      "categories": ["Monitoring"], "platform": "linux",
+      "image": "prom/prometheus:latest", "restart_policy": "unless-stopped",
+      "ports": ["9090:9090/tcp"],
+      "volumes": [{ "container": "/prometheus" }],
+      "note": "It starts with a configuration that scrapes only itself. Mount your own <code>prometheus.yml</code> at <code>/etc/prometheus/prometheus.yml</code> by editing the stack."
+    },
+    {
+      "id": 10, "type": 1, "title": "PostgreSQL", "name": "postgres",
+      "description": "The open-source relational database.",
+      "categories": ["Database"], "platform": "linux",
+      "image": "postgres:17", "restart_policy": "unless-stopped",
+      "ports": ["5432:5432/tcp"],
+      "volumes": [{ "container": "/var/lib/postgresql/data" }],
+      "env": [
+        { "name": "POSTGRES_PASSWORD", "label": "Password", "description": "For the database's superuser. Required." },
+        { "name": "POSTGRES_USER", "label": "User name", "default": "postgres" },
+        { "name": "POSTGRES_DB", "label": "Database", "description": "Created on first start; defaults to the user name." }
+      ],
+      "note": "The password is only read when the volume is empty, on the first start."
+    },
+    {
+      "id": 11, "type": 1, "title": "MariaDB", "name": "mariadb",
+      "description": "A community-developed fork of MySQL.",
+      "categories": ["Database"], "platform": "linux",
+      "image": "mariadb:11", "restart_policy": "unless-stopped",
+      "ports": ["3306:3306/tcp"],
+      "volumes": [{ "container": "/var/lib/mysql" }],
+      "env": [
+        { "name": "MARIADB_ROOT_PASSWORD", "label": "Root password", "description": "Required." },
+        { "name": "MARIADB_DATABASE", "label": "Database", "description": "Created on first start." },
+        { "name": "MARIADB_USER", "label": "User name", "description": "Gets every right on that database." },
+        { "name": "MARIADB_PASSWORD", "label": "User's password" }
+      ],
+      "note": "The passwords are only read when the volume is empty, on the first start."
+    },
+    {
+      "id": 12, "type": 1, "title": "Valkey", "name": "valkey",
+      "description": "An open-source key-value store, compatible with Redis.",
+      "categories": ["Database"], "platform": "linux",
+      "image": "valkey/valkey:8", "restart_policy": "unless-stopped",
+      "ports": ["6379:6379/tcp"],
+      "volumes": [{ "container": "/data" }],
+      "note": "It has no password: publish the port only on a trusted network, or not at all for other stacks' use."
+    },
+    {
+      "id": 13, "type": 1, "title": "Nginx", "name": "nginx",
+      "description": "A web server, for static sites and as a reverse proxy.",
+      "categories": ["Web"], "platform": "linux",
+      "image": "nginx:stable", "restart_policy": "unless-stopped",
+      "ports": ["8080:80/tcp"],
+      "volumes": [{ "container": "/usr/share/nginx/html", "readonly": true }],
+      "note": "Put your site in the html volume, or point it at a host folder."
+    },
+    {
+      "id": 14, "type": 1, "title": "Caddy", "name": "caddy",
+      "description": "A web server and reverse proxy that gets HTTPS certificates by itself.",
+      "categories": ["Web"], "platform": "linux",
+      "image": "caddy:2", "restart_policy": "unless-stopped",
+      "ports": ["80:80/tcp", "443:443/tcp", "443:443/udp"],
+      "volumes": [{ "container": "/data" }, { "container": "/config" }],
+      "note": "It serves a welcome page until you mount a <code>Caddyfile</code> at <code>/etc/caddy/Caddyfile</code> by editing the stack."
+    },
+    {
+      "id": 15, "type": 1, "title": "Syncthing", "name": "syncthing",
+      "description": "Continuous file synchronisation between your devices, without a cloud in between.",
+      "categories": ["Files"], "platform": "linux",
+      "image": "syncthing/syncthing:latest", "restart_policy": "unless-stopped", "hostname": "syncthing",
+      "ports": ["8384:8384/tcp", "22000:22000/tcp", "22000:22000/udp", "21027:21027/udp"],
+      "volumes": [{ "container": "/var/syncthing" }],
+      "env": [
+        { "name": "PUID", "label": "User ID", "default": "1000" },
+        { "name": "PGID", "label": "Group ID", "default": "1000" }
+      ],
+      "note": "The interface on port 8384 has no password at first: set one under Actions, Settings, GUI."
+    },
+    {
+      "id": 16, "type": 1, "title": "FreshRSS", "name": "freshrss",
+      "description": "A self-hosted RSS and Atom feed reader, with apps through its API.",
+      "categories": ["Reading"], "platform": "linux",
+      "image": "freshrss/freshrss:latest", "restart_policy": "unless-stopped",
+      "ports": ["8082:80/tcp"],
+      "volumes": [{ "container": "/var/www/FreshRSS/data" }, { "container": "/var/www/FreshRSS/extensions" }],
+      "env": [
+        { "name": "TZ", "label": "Time zone", "default": "Etc/UTC" },
+        { "name": "CRON_MIN", "label": "Refresh at minutes", "default": "1,31", "description": "When feeds are refreshed each hour." }
+      ]
+    },
+    {
+      "id": 17, "type": 1, "title": "Nextcloud", "name": "nextcloud",
+      "description": "Files, calendars, contacts and much more, on your own server.",
+      "categories": ["Files"], "platform": "linux",
+      "image": "nextcloud:latest", "restart_policy": "unless-stopped",
+      "ports": ["8084:80/tcp"],
+      "volumes": [{ "container": "/var/www/html" }],
+      "note": "Open port 8084 to create the administrator. SQLite suits one or two users; choose PostgreSQL or MariaDB for more."
+    },
+    {
+      "id": 18, "type": 1, "title": "IT Tools", "name": "it-tools",
+      "description": "Handy tools for developers in the browser: encoders, converters, generators and more.",
+      "categories": ["Development"], "platform": "linux",
+      "image": "corentinth/it-tools:latest", "restart_policy": "unless-stopped",
+      "ports": ["8085:80/tcp"]
+    },
+    {
+      "id": 19, "type": 1, "title": "Dozzle", "name": "dozzle",
+      "description": "A small web interface for following container logs live.",
+      "categories": ["Monitoring"], "platform": "linux",
+      "image": "amir20/dozzle:latest", "restart_policy": "unless-stopped",
+      "ports": ["8086:8080/tcp"],
+      "volumes": [{ "container": "/var/run/docker.sock", "bind": "/var/run/docker.sock", "readonly": true }],
+      "note": "It reads the engine's socket, which gives it control of the host even when mounted read-only. Don't publish it where others can reach it."
+    },
+    {
+      "id": 20, "type": 1, "title": "Whoami", "name": "whoami",
+      "description": "A tiny web server that prints what it knows about each request. Handy for testing proxies and networks.",
+      "categories": ["Development"], "platform": "linux",
+      "image": "traefik/whoami:latest", "restart_policy": "unless-stopped",
+      "ports": ["8000:80/tcp"]
+    }
+  ]
+}

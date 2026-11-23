@@ -118,6 +118,12 @@ Compose runs inside the Sockless Port container, not on the engine's host, so:
 
 To use another Compose binary, set `Port__Compose` (for example `docker compose`, or a full path).
 
+### Templates
+
+**Templates** in the sidebar (operators) lists ready-made apps. Choosing one asks for its settings, ports and storage, shows the files it makes and points out settings that reach into the host (privileged mode, the engine's socket, the host's network). Saving creates an ordinary stack that isn't deployed yet: it opens in the stack's review, where you check the files and deploy.
+
+About 20 common apps come with Sockless Port and need no internet access. Administrators can add feeds under **Template sources**: Portainer's app template format (version 2 or 3, e.g. Portainer's own list or Lissy93/portainer-templates) and the linuxserver.io API, offered there with one click. Feeds are downloaded when added and again daily, and kept in `/data/templates`. Stack templates' compose files are fetched from GitHub or GitLab when the template is opened. Nothing is downloaded until an administrator adds a feed.
+
 ### Docker Swarm
 
 When the endpoint is a swarm manager, the sidebar gets a Swarm section: the cluster (nodes, managers, resources and join tokens, shown only on request), services (create, edit, scale, restart, update the image, roll back, and logs of every task), nodes (drain, pause, promote, demote, labels, remove), secrets and configs. A worker only shows that it's one: managers know the cluster.

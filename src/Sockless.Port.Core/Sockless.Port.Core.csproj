@@ -13,6 +13,9 @@
     <PackageReference Include="YamlDotNet" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Templates\builtin-templates.json" LogicalName="Sockless.Port.Templates.builtin-templates.json" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="Sockless.Port.Core.Tests" />
     <InternalsVisibleTo Include="Sockless.Port.Web.Tests" />
     <InternalsVisibleTo Include="Sockless.Port.Agent.Tests" />

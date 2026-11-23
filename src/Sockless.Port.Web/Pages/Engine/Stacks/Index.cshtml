@@ -20,6 +20,9 @@
                     </button>
                 </form>
             }
+            <a sp-can="write" asp-page="/Engine/Templates/Index" asp-route-endpointId="@Model.EndpointId" class="btn-soft">
+                <icon name="squares-plus" class="h-4 w-4" /> From a template
+            </a>
             <a sp-can="write" asp-page="/Engine/Stacks/Create" asp-route-endpointId="@Model.EndpointId" class="btn-soft secondary">
                 <icon name="plus" class="h-4 w-4" /> Create stack
             </a>

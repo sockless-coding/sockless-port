@@ -15,7 +15,7 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261123185359_AddResourceHistory";
+    public override string LastMigrationId => "20261123201518_AddAppTemplates";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -572,6 +572,10 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                     .HasMaxLength(63)
                     .HasColumnType("TEXT");
 
+                b.Property<string>("Template")
+                    .HasMaxLength(200)
+                    .HasColumnType("TEXT");
+
                 b.Property<string>("UpdatedAt")
                     .IsRequired()
                     .HasColumnType("TEXT");
@@ -582,6 +586,51 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                     .IsUnique();
 
                 b.ToTable("Stacks");
+            });
+
+        modelBuilder.Entity("Sockless.Port.Templates.TemplateSource", b =>
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("AttemptedAt")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("CreatedAt")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Error")
+                    .HasMaxLength(512)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("FetchedAt")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Format")
+                    .HasMaxLength(16)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
+
+                b.Property<int>("TemplateCount")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("Url")
+                    .IsRequired()
+                    .HasMaxLength(1024)
+                    .HasColumnType("TEXT");
+
+                b.HasKey("Id");
+
+                b.HasIndex("Name")
+                    .IsUnique();
+
+                b.ToTable("TemplateSources");
             });
 
         modelBuilder.Entity("Sockless.Port.Vulnerabilities.AcceptedRisk", b =>

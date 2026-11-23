@@ -34,6 +34,10 @@
             {
                 <span class="badge-stat" title="Deployed elsewhere first, then adopted">Adopted</span>
             }
+            @if (Model.Definition?.Template is { } template)
+            {
+                <span class="badge-stat" title="Made from the template @template">Template</span>
+            }
             @if (Model.IsSelf)
             {
                 <span class="badge-stat" title="Sockless Port runs in this stack">Sockless Port</span>

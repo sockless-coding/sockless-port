@@ -18,7 +18,8 @@
     var returnUrl = Context.Request.Path + Context.Request.QueryString;
     IEnumerable<NavItem> Visible(IEnumerable<NavItem> items) =>
         items.Where(i => (i.Scope == NavScope.Global || topBar.Current is not null) && i.IsAvailable(topBar.Current?.Engine)
-                         && (!i.AdminOnly || access?.IsAdmin == true));
+                         && (!i.AdminOnly || access?.IsAdmin == true)
+                         && (i.Scope == NavScope.Global || access?.Can(topBar.Current!.Id, i.Needs) == true));
     object? RouteId(NavItem item) => item.Scope == NavScope.Endpoint ? topBar.Current?.Id : null;
 }
 <!DOCTYPE html>

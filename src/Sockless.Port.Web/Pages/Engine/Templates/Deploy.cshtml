@@ -1,0 +1,326 @@
+@page "/endpoints/{endpointId:int}/templates/{sourceId:int}/{key}"
+@model Sockless.Port.Web.Pages.Engine.Templates.DeployModel
+@using Sockless.Port.Templates
+@using Sockless.Port.Web.Infrastructure
+@{
+    var template = Model.Template;
+    ViewData["Title"] = template.Title;
+    var container = template.Kind == TemplateKind.Container;
+    var variables = template.Variables.Select((v, i) => (v, i)).Where(x => !x.v.Preset).ToList();
+    var pageErrors = ViewData.ModelState.TryGetValue("", out var entry) ? entry.Errors.Select(e => e.ErrorMessage).ToList() : [];
+    string? ErrorFor(string field) => Model.Errors.TryGetValue(field, out var message) ? message : null;
+    // aria-describedby from the ids that exist; null leaves the attribute out.
+    string? Ids(params string?[] ids) => ids.Any(i => i is not null) ? string.Join(' ', ids.OfType<string>()) : null;
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+        <a asp-page="/Engine/Templates/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Templates</a>
+        <span class="text-line-accent" aria-hidden="true">/</span>
+        <span aria-current="page">@template.Title</span>
+    </nav>
+
+    <div class="mb-6 flex items-start gap-4">
+        <partial name="_TemplateLogo" model="Model.Item" />
+        <div class="min-w-0">
+            <h2 class="page-title">@template.Title</h2>
+            <div class="mt-2 flex flex-wrap items-center gap-1">
+                <span class="badge-stat" title="@TemplateDisplay.KindHint(template.Kind)">@TemplateDisplay.Kind(template.Kind)</span>
+                <span class="badge-stat" title="Source">@Model.Item!.Source.Name</span>
+                @foreach (var category in template.Categories)
+                {
+                    <span class="badge-stat" title="Category">@category</span>
+                }
+            </div>
+            @if (template.Description.Length > 0)
+            {
+                <p class="mt-3 max-w-3xl text-secondary">@template.Description</p>
+            }
+            <dl class="mt-3 grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-[10rem_1fr]">
+                @if (template.Image is not null)
+                {
+                    <dt class="text-secondary">Image</dt>
+                    <dd class="break-all font-mono text-xs">@template.Image</dd>
+                }
+                @if (template.StackFileSource is not null)
+                {
+                    <dt class="text-secondary">Compose file</dt>
+                    <dd class="break-all font-mono text-xs">@template.StackFileSource</dd>
+                }
+                @if (template.Maintainer is not null)
+                {
+                    <dt class="text-secondary">Maintainer</dt>
+                    <dd class="break-all">@template.Maintainer</dd>
+                }
+                @if (template.Link is not null)
+                {
+                    <dt class="text-secondary">Documentation</dt>
+                    <dd class="break-all"><a href="@template.Link" class="text-accent underline" rel="noopener noreferrer" target="_blank">@template.Link</a></dd>
+                }
+            </dl>
+        </div>
+    </div>
+
+    @if (Model.Note.Count > 0)
+    {
+        <div class="callout mb-4">
+            <icon name="information-circle" class="h-5 w-5" />
+            <p>
+                @foreach (var part in Model.Note)
+                {
+                    @switch (part)
+                    {
+                        case NoteText { Strong: true } strong:
+                            <strong class="text-heading">@strong.Text</strong>
+                            break;
+                        case NoteText text:
+                            <text>@text.Text</text>
+                            break;
+                        case NoteCode code:
+                            <code class="font-mono text-xs">@code.Text</code>
+                            break;
+                        case NoteLink link:
+                            <a href="@link.Url" class="text-accent underline" rel="noopener noreferrer nofollow" target="_blank">@link.Text</a>
+                            break;
+                        case NoteBreak:
+                            <br />
+                            break;
+                    }
+                }
+            </p>
+        </div>
+    }
+
+    @if (template.Unavailable is { } unavailable)
+    {
+        <div class="callout danger mb-4" role="alert">
+            <icon name="exclamation-triangle" class="h-5 w-5" />
+            <p>This template can't be used: @unavailable</p>
+        </div>
+    }
+    else
+    {
+        @if (Model.FileError is { } fileError)
+        {
+            <div class="callout danger mb-4" role="alert">
+                <icon name="exclamation-triangle" class="h-5 w-5" />
+                <p>@fileError Try again later, or check the source.</p>
+            </div>
+        }
+        @foreach (var error in pageErrors)
+        {
+            <div class="callout danger mb-4" role="alert">
+                <icon name="exclamation-triangle" class="h-5 w-5" />
+                <p>@error</p>
+            </div>
+        }
+        @if (Model.Risks is { Count: > 0 } risks)
+        {
+            <section class="callout warning mb-4" aria-labelledby="risks-title">
+                <icon name="exclamation-triangle" class="h-5 w-5" />
+                <div class="space-y-2">
+                    <p id="risks-title"><strong class="text-heading">This template reaches into the host.</strong> Deploy it only if you trust it and need what it asks for:</p>
+                    <ul class="list-disc space-y-1 pl-5">
+                        @foreach (var risk in risks)
+                        {
+                            <li><span class="font-mono text-xs">@risk.Service: @risk.Setting</span> — @risk.Why</li>
+                        }
+                    </ul>
+                </div>
+            </section>
+        }
+
+        <form method="post" class="space-y-6" novalidate asp-route-endpointId="@Model.EndpointId" asp-route-sourceId="@Model.SourceId" asp-route-key="@Model.Key">
+            <section class="card space-y-4" aria-labelledby="stack-title">
+                <h3 id="stack-title" class="section-title">Stack</h3>
+                <div class="field max-w-md">
+                    <label asp-for="Form.Name">Name</label>
+                    <input asp-for="Form.Name" class="font-mono" autocomplete="off" spellcheck="false" aria-describedby="name-hint" />
+                    <p class="hint" id="name-hint">
+                        Lower-case letters, digits, - and _.
+                        @(Model.StackKind == Sockless.Port.Stacks.StackKind.Swarm
+                            ? "It's saved as a swarm stack (docker stack deploy)."
+                            : $"It's saved as a Compose stack on {Model.Connection.Name}.")
+                    </p>
+                    <partial name="_FieldError" model='"Form_Name"' />
+                </div>
+            </section>
+
+            @if (variables.Count > 0)
+            {
+                <section class="card space-y-4" aria-labelledby="variables-title">
+                    <div>
+                        <h3 id="variables-title" class="section-title">Settings</h3>
+                        <p class="text-secondary">Saved in the stack's <span class="font-mono">.env</span> file, which you can change later.</p>
+                    </div>
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        @foreach (var (variable, i) in variables)
+                        {
+                            var id = $"variable-{i}";
+                            var field = $"Variables[{variable.Name}]";
+                            var error = ErrorFor(field);
+                            var value = Model.Form.Variables.TryGetValue(variable.Name, out var posted) ? posted : variable.Default;
+                            var hint = variable.Description is not null || variable.Label != variable.Name;
+                            <div class="field">
+                                <label for="@id">@variable.Label</label>
+                                @if (variable.Choices.Count > 0)
+                                {
+                                    <select id="@id" name="Form.@field" aria-invalid="@(error is not null ? "true" : null)"
+                                            aria-describedby="@Ids(hint ? $"{id}-hint" : null, error is not null ? $"{id}-error" : null)">
+                                        @foreach (var choice in variable.Choices)
+                                        {
+                                            <option value="@choice.Value" selected="@(choice.Value == value)">@choice.Text</option>
+                                        }
+                                    </select>
+                                }
+                                else
+                                {
+                                    <input id="@id" name="Form.@field" value="@value" autocomplete="off" spellcheck="false"
+                                           placeholder="@(variable.Optional && variable.Default.Length > 0 ? $"e.g. {variable.Default}" : null)"
+                                           aria-invalid="@(error is not null ? "true" : null)"
+                                           aria-describedby="@Ids(hint ? $"{id}-hint" : null, error is not null ? $"{id}-error" : null)" />
+                                }
+                                @if (hint)
+                                {
+                                    <p class="hint" id="@id-hint">
+                                        @if (variable.Label != variable.Name)
+                                        {
+                                            <span class="font-mono">@variable.Name</span>
+                                            @if (variable.Description is not null) { <text>: </text> }
+                                        }
+                                        @variable.Description
+                                        @if (variable.Optional) { <text> Optional: left out when empty.</text> }
+                                    </p>
+                                }
+                                @if (error is not null)
+                                {
+                                    <p class="error" id="@id-error">@error</p>
+                                }
+                            </div>
+                        }
+                    </div>
+                </section>
+            }
+
+            @if (container && template.Ports.Count > 0)
+            {
+                <section class="card space-y-4" aria-labelledby="ports-title">
+                    <div>
+                        <h3 id="ports-title" class="section-title">Ports</h3>
+                        <p class="text-secondary">
+                            @if (string.Equals(template.Network, "host", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <text>It uses the host's network, so its ports are the host's: these aren't published.</text>
+                            }
+                            else
+                            {
+                                <text>Which of the container's ports to publish on the host. Leave the host port empty and the engine picks a free one.</text>
+                            }
+                        </p>
+                    </div>
+                    <div class="space-y-3">
+                        @for (var i = 0; i < template.Ports.Count; i++)
+                        {
+                            var port = template.Ports[i];
+                            var field = Model.Form.Ports.ElementAtOrDefault(i) ?? new TemplateForm.PortField();
+                            var error = ErrorFor($"Ports[{i}]");
+                            <div class="grid grid-cols-1 items-end gap-3 sm:grid-cols-[14rem_12rem_1fr]">
+                                <label class="flex items-center gap-2 pb-2">
+                                    <input type="checkbox" name="Form.Ports[@i].Publish" value="true" class="accent-accent" checked="@field.Publish" />
+                                    <input type="hidden" name="Form.Ports[@i].Publish" value="false" />
+                                    Publish <span class="font-mono text-xs">@port.ContainerSpec</span>
+                                </label>
+                                <div class="field">
+                                    <label for="port-@i">Host port</label>
+                                    <input id="port-@i" name="Form.Ports[@i].Host" value="@field.Host" class="font-mono" autocomplete="off" inputmode="numeric"
+                                           placeholder="Any free port" aria-invalid="@(error is not null ? "true" : null)" aria-describedby="@(error is not null ? $"port-{i}-error" : null)" />
+                                </div>
+                                <p class="pb-2 text-secondary">@port.Description</p>
+                                @if (error is not null)
+                                {
+                                    <p class="error sm:col-span-3" id="port-@i-error">@error</p>
+                                }
+                            </div>
+                        }
+                    </div>
+                </section>
+            }
+
+            @if (container && template.Volumes.Count > 0)
+            {
+                <section class="card space-y-4" aria-labelledby="volumes-title">
+                    <div>
+                        <h3 id="volumes-title" class="section-title">Storage</h3>
+                        <p class="text-secondary">
+                            A name keeps the data in a volume (the stack's name goes in front: <span class="font-mono">@(Model.Form.Name)_data</span>).
+                            A path starting with / mounts that folder of the host instead. Empty makes an anonymous volume.
+                        </p>
+                    </div>
+                    <div class="space-y-3">
+                        @for (var i = 0; i < template.Volumes.Count; i++)
+                        {
+                            var volume = template.Volumes[i];
+                            var field = Model.Form.Volumes.ElementAtOrDefault(i) ?? new TemplateForm.VolumeField();
+                            var error = ErrorFor($"Volumes[{i}]");
+                            <div class="grid grid-cols-1 items-end gap-3 sm:grid-cols-[14rem_1fr]">
+                                <label class="flex items-center gap-2 pb-2">
+                                    <input type="checkbox" name="Form.Volumes[@i].Include" value="true" class="accent-accent" checked="@field.Include" />
+                                    <input type="hidden" name="Form.Volumes[@i].Include" value="false" />
+                                    <span class="break-all font-mono text-xs">@volume.Container@(volume.ReadOnly ? " (read-only)" : "")</span>
+                                </label>
+                                <div class="field">
+                                    <label for="volume-@i">Volume or host path</label>
+                                    <input id="volume-@i" name="Form.Volumes[@i].Source" value="@field.Source" class="font-mono" autocomplete="off" spellcheck="false"
+                                           aria-invalid="@(error is not null ? "true" : null)"
+                                           aria-describedby="@Ids(volume.Description is not null ? $"volume-{i}-hint" : null, error is not null ? $"volume-{i}-error" : null)" />
+                                    @if (volume.Description is not null)
+                                    {
+                                        <p class="hint" id="volume-@i-hint">@volume.Description</p>
+                                    }
+                                </div>
+                                @if (error is not null)
+                                {
+                                    <p class="error sm:col-span-2" id="volume-@i-error">@error</p>
+                                }
+                            </div>
+                        }
+                    </div>
+                </section>
+            }
+
+            @if (Model.Preview is { } preview)
+            {
+                <details class="card" open="@(Request.Method == "POST")">
+                    <summary class="section-title mb-0 cursor-pointer">Files it makes</summary>
+                    <div class="mt-4 space-y-4">
+                        <p class="text-secondary">
+                            @(container
+                                ? "What these choices make. After saving, you can still change anything in the stack's editor before deploying."
+                                : "The template's compose file as downloaded, and your settings as .env. After saving, you can change both before deploying.")
+                        </p>
+                        <div>
+                            <p class="label-caps mb-1">compose.yaml</p>
+                            <pre class="code-block max-h-[32rem]" tabindex="0" aria-label="compose.yaml">@preview.Compose</pre>
+                        </div>
+                        @if (preview.Env.Length > 0)
+                        {
+                            <div>
+                                <p class="label-caps mb-1">.env</p>
+                                <pre class="code-block max-h-64" tabindex="0" aria-label=".env">@preview.Env</pre>
+                            </div>
+                        }
+                    </div>
+                </details>
+            }
+
+            <div class="flex flex-wrap items-center justify-end gap-2">
+                <button type="submit" class="btn-soft" asp-page-handler="Preview" formnovalidate>
+                    <icon name="eye" class="h-4 w-4" /> Preview files
+                </button>
+                <button type="submit" class="btn-primary" disabled="@(Model.FileError is not null)">
+                    <icon name="arrow-down-on-square" class="h-4 w-4" /> Save and review
+                </button>
+            </div>
+        </form>
+    }
+</div>

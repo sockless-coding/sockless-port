@@ -1,0 +1,143 @@
+@page "/template-sources"
+@model Sockless.Port.Web.Pages.TemplateSources.IndexModel
+@using Sockless.Port.Templates
+@{
+    ViewData["Title"] = "Template sources";
+    static string FormatName(TemplateFeedFormat? format) => format switch
+    {
+        TemplateFeedFormat.Portainer => "Portainer",
+        TemplateFeedFormat.LinuxServer => "linuxserver.io",
+        _ => "",
+    };
+}
+
+<div class="mb-6">
+    <h2 class="page-title">Template sources</h2>
+    <p class="mt-1 max-w-3xl text-secondary">
+        Feeds of app templates, offered on every endpoint's Templates page. Sockless Port downloads them when they're added and again every day.
+        Templates are other people's work: each one becomes a stack whose files are shown before it's deployed, and settings that reach into the host are pointed out.
+    </p>
+</div>
+
+<div class="table-wrap mb-6">
+    <table class="table">
+        <caption class="sr-only">Template sources</caption>
+        <thead>
+            <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Feed</th>
+                <th scope="col" class="num">Templates</th>
+                <th scope="col">Downloaded</th>
+                <th scope="col" class="num"><span class="sr-only">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var source in Model.Sources)
+            {
+                <tr>
+                    <th scope="row">
+                        <span class="font-semibold">@source.Name</span>
+                        @if (source.Error is not null)
+                        {
+                            <span class="mt-1 flex"><span class="badge danger" title="@source.Error">Download failed</span></span>
+                            <span class="mt-1 block text-xs font-normal text-secondary">@source.Error</span>
+                        }
+                    </th>
+                    <td>
+                        @if (source.BuiltIn)
+                        {
+                            <span class="text-secondary">Comes with Sockless Port</span>
+                        }
+                        else
+                        {
+                            <span class="break-all font-mono text-xs">@source.Url</span>
+                            <span class="mt-1 block text-xs text-secondary">@FormatName(source.Format) format</span>
+                        }
+                    </td>
+                    <td class="num">@source.TemplateCount</td>
+                    <td class="whitespace-nowrap text-secondary">
+                        @if (source.FetchedAt is { } fetched)
+                        {
+                            <span title="@Format.Timestamp(fetched)">@Format.Relative(fetched)</span>
+                        }
+                        else if (source.BuiltIn)
+                        {
+                            <span>Not needed</span>
+                        }
+                        else
+                        {
+                            <span>Never</span>
+                        }
+                    </td>
+                    <td class="num">
+                        @if (!source.BuiltIn)
+                        {
+                            <div class="flex justify-end gap-2">
+                                <form method="post" asp-page-handler="Refresh" asp-route-id="@source.Id">
+                                    <button type="submit" class="btn-soft" aria-label="Download @source.Name again">
+                                        <icon name="arrow-path" class="h-4 w-4" /> Refresh
+                                    </button>
+                                </form>
+                                <form method="post" asp-page-handler="Remove" asp-route-id="@source.Id">
+                                    <button type="submit" class="btn-soft danger" aria-label="Remove @source.Name"
+                                            data-confirm="Remove the template source @source.Name? Stacks made from its templates stay as they are.">
+                                        <icon name="trash" class="h-4 w-4" /> Remove
+                                    </button>
+                                </form>
+                            </div>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (Model.Suggestions.Count > 0)
+{
+    <section class="card mb-6" aria-labelledby="suggested-title">
+        <h3 id="suggested-title" class="section-title">Suggested feeds</h3>
+        <p class="mb-4 text-secondary">Free feeds in formats Sockless Port reads. Adding one downloads it from the address shown.</p>
+        <ul class="space-y-3">
+            @foreach (var suggestion in Model.Suggestions)
+            {
+                <li class="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3 first:border-t-0 first:pt-0">
+                    <div class="min-w-0">
+                        <p class="font-semibold text-heading">@suggestion.Name</p>
+                        <p class="text-secondary">@suggestion.Description</p>
+                        <p class="break-all font-mono text-xs text-secondary">@suggestion.Url</p>
+                    </div>
+                    <form method="post" asp-page-handler="Suggested">
+                        <input type="hidden" name="url" value="@suggestion.Url" />
+                        <button type="submit" class="btn-soft secondary" aria-label="Add @suggestion.Name"><icon name="plus" class="h-4 w-4" /> Add</button>
+                    </form>
+                </li>
+            }
+        </ul>
+    </section>
+}
+
+<section class="card" aria-labelledby="add-title">
+    <h3 id="add-title" class="section-title">Add a feed</h3>
+    <form method="post" class="space-y-4" novalidate>
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-[16rem_1fr]">
+            <div class="field">
+                <label asp-for="Input.Name">Name</label>
+                <input asp-for="Input.Name" autocomplete="off" placeholder="Our apps" />
+                <partial name="_FieldError" model='"Input_Name"' />
+            </div>
+            <div class="field">
+                <label asp-for="Input.Url">Feed address</label>
+                <input asp-for="Input.Url" type="url" class="font-mono" autocomplete="off" spellcheck="false" placeholder="https://example.com/templates.json" aria-describedby="url-hint" />
+                <p class="hint" id="url-hint">
+                    A JSON feed in Portainer's app template format (version 2 or 3), or the linuxserver.io API.
+                    Feeds may be on your own network; what they point at (compose files, logos) is only fetched from public addresses.
+                </p>
+                <partial name="_FieldError" model='"Input_Url"' />
+            </div>
+        </div>
+        <div class="flex justify-end">
+            <button type="submit" class="btn-soft secondary"><icon name="plus" class="h-4 w-4" /> Add feed</button>
+        </div>
+    </form>
+</section>

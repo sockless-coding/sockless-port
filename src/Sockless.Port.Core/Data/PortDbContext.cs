@@ -9,6 +9,7 @@ using Sockless.Port.Monitoring;
 using Sockless.Port.Registries;
 using Sockless.Port.Settings;
 using Sockless.Port.Stacks;
+using Sockless.Port.Templates;
 using Sockless.Port.Vulnerabilities;
 
 namespace Sockless.Port.Data;
@@ -38,6 +39,8 @@ public sealed class PortDbContext(DbContextOptions<PortDbContext> options) : Ide
     public DbSet<ResourceUsageEntry> ResourceUsage => Set<ResourceUsageEntry>();
 
     public DbSet<ResourceTotalEntry> ResourceTotals => Set<ResourceTotalEntry>();
+
+    public DbSet<TemplateSource> TemplateSources => Set<TemplateSource>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -180,6 +183,20 @@ public sealed class PortDbContext(DbContextOptions<PortDbContext> options) : Ide
             stack.Property(s => s.CreatedAt).HasConversion(SortableUtc);
             stack.Property(s => s.UpdatedAt).HasConversion(SortableUtc);
             stack.Property(s => s.DeployedAt).HasConversion(SortableUtc);
+            stack.Property(s => s.Template).HasMaxLength(StackDefinition.MaxTemplate);
+        });
+
+        builder.Entity<TemplateSource>(source =>
+        {
+            source.ToTable("TemplateSources");
+            source.Property(s => s.Name).HasMaxLength(TemplateSource.MaxName);
+            source.HasIndex(s => s.Name).IsUnique();
+            source.Property(s => s.Url).HasMaxLength(TemplateSource.MaxUrl);
+            source.Property(s => s.CreatedAt).HasConversion(SortableUtc);
+            source.Property(s => s.FetchedAt).HasConversion(SortableUtc);
+            source.Property(s => s.AttemptedAt).HasConversion(SortableUtc);
+            source.Property(s => s.Error).HasMaxLength(512);
+            source.Property(s => s.Format).HasConversion<string>().HasMaxLength(16);
         });
 
         builder.Entity<ResourceUsageEntry>(usage =>

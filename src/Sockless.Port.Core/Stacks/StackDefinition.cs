@@ -25,6 +25,11 @@ public sealed class StackDefinition
     /// <summary>Taken over from a project deployed outside Sockless Port.</summary>
     public bool Adopted { get; set; }
 
+    public const int MaxTemplate = 200;
+
+    /// <summary>The template it was created from and its source, e.g. "Uptime Kuma (Built-in)"; null when it wasn't.</summary>
+    public string? Template { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
