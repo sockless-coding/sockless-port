@@ -115,6 +115,12 @@ jobs:
               mkdir -p "$(dirname "$SOCK")"
               nohup podman system service --time=0 "unix://$SOCK" > /tmp/podman.log 2>&1 &
               for i in $(seq 1 30); do test -S "$SOCK" && break; sleep 1; done
+              # Rootless bridge networks share one network namespace, torn down (by killing pasta) when
+              # its last container stops. On the runner that kill sometimes fails with "permission denied",
+              # failing whichever test stopped the last container. A container that outlives the tests
+              # keeps the namespace up.
+              podman --url "unix://$SOCK" network create sp-ci-keepalive
+              podman --url "unix://$SOCK" run -d --name sp-ci-keepalive --network sp-ci-keepalive docker.io/library/busybox:1.37 sleep infinity
               echo "SOCKLESS_PORT_TEST_ENGINE=unix://$SOCK" >> "$GITHUB_ENV"
               echo "SOCKLESS_PORT_TEST_EXPECT=podman" >> "$GITHUB_ENV"
               ;;

@@ -397,6 +397,17 @@ public sealed class SelfContainerTests
     }
 
     [Fact]
+    public void Other_containers_mounts_seen_from_the_host_are_not_ours()
+    {
+        // A process on a host with rootful Podman or Docker sees every container's shm and overlay mounts.
+        var other = new string('a', 64);
+        var mounts = $"812 30 0:61 / /var/lib/containers/storage/overlay-containers/{other}/userdata/shm rw - tmpfs shm rw\n" +
+                     $"813 30 0:62 / /var/lib/docker/containers/{other}/mounts/shm rw - tmpfs shm rw\n" +
+                     "814 30 0:63 / /var/lib/containers/storage/overlay/" + new string('b', 64) + "/merged rw - overlay overlay rw";
+        Assert.Empty(SelfContainer.Parse(mounts, "0::/user.slice/user-1001.slice/session-1.scope", "runner-host"));
+    }
+
+    [Fact]
     public void Without_mounts_the_short_hostname_is_used()
     {
         Assert.Equal(["4f1c2a9e8b7d"], SelfContainer.Parse(null, "0::/", "4f1c2a9e8b7d"));
