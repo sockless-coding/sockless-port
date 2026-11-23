@@ -84,6 +84,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<EngineMonitor>();
 
         services.AddSingleton<RegistryCredentials>();
+        services.AddSingleton<Monitoring.ResourceMonitor>();
         services.AddSingleton<ImageJobs>();
         services.AddSingleton<ImageUpdates>();
         services.AddHostedService<ImageUpdateSchedule>();

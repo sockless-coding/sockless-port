@@ -7,6 +7,7 @@ using Sockless.Port.Docker;
 using Sockless.Port.Docker.Streams;
 using Sockless.Port.Engines;
 using Sockless.Port.Images;
+using Sockless.Port.Monitoring;
 using Sockless.Port.Stacks;
 using Sockless.Port.Web.Infrastructure;
 
@@ -20,7 +21,7 @@ namespace Sockless.Port.Web.Hubs;
 /// </summary>
 [Authorize]
 public sealed class EngineHub(EngineConnections connections, TerminalSessions terminals, ImageJobs jobs, StackJobs stackJobs,
-    AccessLoader accessLoader, AuditLog audit) : Hub
+    ResourceMonitor resources, AccessLoader accessLoader, AuditLog audit) : Hub
 {
     public const string Path = "/hubs/engine";
 
@@ -120,6 +121,17 @@ public sealed class EngineHub(EngineConnections connections, TerminalSessions te
             yield return new StatsMessage(s.Read.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
                 Math.Round(s.CpuPercent, 2), s.MemoryUsage, s.MemoryLimit, s.NetworkRx, s.NetworkTx, s.BlockRead, s.BlockWrite, s.Pids);
         }
+    }
+
+    /// <summary>
+    /// Every running container's resource use, about every two seconds, for the endpoint's
+    /// Resources page. Viewers of one endpoint share its stats streams (<see cref="ResourceMonitor"/>).
+    /// </summary>
+    public async IAsyncEnumerable<UsageSnapshot> StreamResourceUsage(int endpointId, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var (connection, _) = await RequireAsync(endpointId, EndpointPermission.View);
+        await foreach (var snapshot in resources.WatchAsync(connection, cancellationToken))
+            yield return snapshot;
     }
 
     // ---------------------------------------------------------------- terminal

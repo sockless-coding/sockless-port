@@ -294,6 +294,16 @@ Shown only on endpoints with the `Pods` capability. These use Podman's libpod AP
   - **Why:** no third-party binary; pure .NET, so the agent could scan on its own host; and OS package databases are small files that the archive API can read from a running container, which would catch packages installed after it started.
   - **Phases:** OSV sync and Debian, Ubuntu and Alpine packages (with per-container scans) first; then npm, Python, Go and .NET; then RPM distros, Java, KEV and EPSS. Keep Trivy until ours gives the same results on real images.
 
+### Phase 11: Resource monitoring
+
+- See what an endpoint's running containers use, all at once: totals against the host and a live table, so the heavy ones stand out.
+
+**Status: done (live view).** Notes:
+- **Page:** `/endpoints/{id}/resources` (sidebar "Resources", and a link from the dashboard's Containers card). Four cards with two-minute charts: CPU as a share of the host (and how many of its CPUs that is), memory against the host's, network and disk I/O per second. Below, every running container with CPU, memory (with its limit, when it has one), network, disk and processes, a bar for its share of the host, sortable by any column and searchable. "Show: Stacks" adds the rows up per Compose or swarm stack, with containers outside a stack together. Rows link to the container's stats page or the stack.
+- **Sampling:** the engine has no call that measures every container, so `ResourceMonitor` (Core, `Monitoring/`) keeps one stats stream open per running container, as `docker stats` does, and lists the running containers every 5 s to start and stop streams. One sampler per endpoint serves every viewer through `EngineHub.StreamResourceUsage` (viewer role), sends a snapshot every 2 s, and stops 15 s after the last viewer leaves, so moving between pages doesn't restart it. At most 200 containers are measured at once. Rates come from the last two readings on the server; counters that go backwards (a restart) read as zero. The host's memory, which engines report as the limit of a container without one, isn't shown as a limit. Helpers are left out.
+- **Engine differences:** a container that can't be measured (Podman without cgroups) shows the engine's message in its row, and is tried again every 30 s. Swarm nodes report only their own containers; the page says so.
+- **Not built:** history beyond the open page (nothing is stored), alerts or thresholds, an overview across endpoints, pod totals, and libpod's all-containers stats stream (`/libpod/containers/stats`), which would need one connection instead of one per container on Podman.
+
 ## Risks and notes
 
 - **Socket access is root on the host.** This is documented clearly. The server and agent run as non-root users in the docker group; a read-only socket mode (via a proxy) is an option for viewer-only setups.

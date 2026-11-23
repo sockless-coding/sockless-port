@@ -38,6 +38,10 @@
                         <span>· <span class="text-warning">@Format.Count(info.ContainersPaused) paused</span></span>
                     }
                 </p>
+                @if (info.ContainersRunning > 0)
+                {
+                    <p class="stat-meta"><a asp-page="/Engine/Resources/Index" asp-route-endpointId="@Model.Connection.Id" class="hover:underline">See what they use</a></p>
+                }
                 @if (overview.Pods is { } pods)
                 {
                     <p class="stat-meta"><a asp-page="/Engine/Pods/Index" asp-route-endpointId="@Model.Connection.Id" class="hover:underline">@(pods == 1 ? "1 pod" : $"{Format.Count(pods)} pods")</a></p>

@@ -29,6 +29,7 @@ public static class Navigation
         new("Dashboard", "/Engine/Index", "home", NavScope.Endpoint, MatchSubPages: false),
         new("Stacks", "/Engine/Stacks/Index", "rectangle-stack", NavScope.Endpoint),
         new("Containers", "/Engine/Containers/Index", "cube", NavScope.Endpoint),
+        new("Resources", "/Engine/Resources/Index", "chart-bar", NavScope.Endpoint),
         new("Pods", "/Engine/Pods/Index", "rectangle-group", NavScope.Endpoint, Requires: EngineCapabilities.Pods),
         new("Images", "/Engine/Images/Index", "square-3-stack-3d", NavScope.Endpoint),
         new("Volumes", "/Engine/Volumes/Index", "circle-stack", NavScope.Endpoint),

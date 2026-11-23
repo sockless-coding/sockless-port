@@ -1,0 +1,142 @@
+@page "/endpoints/{endpointId:int}/resources"
+@model Sockless.Port.Web.Pages.Engine.Resources.IndexModel
+@using Sockless.Port.Docker.Engine
+@using Sockless.Port.Monitoring
+@{
+    ViewData["Title"] = "Resources";
+    var engine = Model.Connection.Engine;
+    // Rows are built in the browser; these are their link patterns, with a placeholder the script replaces.
+    var containerUrl = Url.Page("/Engine/Containers/Stats", new { endpointId = Model.EndpointId, containerId = "__id__" });
+    var stackUrl = Url.Page("/Engine/Stacks/Detail", new { endpointId = Model.EndpointId, stackName = "__id__" });
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <div class="mb-6">
+        <h2 class="page-title">Resources</h2>
+        <p class="mt-1 text-secondary">Live CPU, memory, network and disk use of the running containers on @Model.Connection.Name.</p>
+    </div>
+
+    @if (Model.Client is null || engine is null)
+    {
+        <partial name="_EndpointStateCallout" model="Model.Connection" />
+    }
+    else
+    {
+        @if (RootlessNotes.Stats(engine) is { } statsNote)
+        {
+            <div class="callout warning mb-4">
+                <icon name="exclamation-triangle" class="h-5 w-5" />
+                <p>@statsNote</p>
+            </div>
+        }
+        @if (engine.Has(EngineCapabilities.Swarm))
+        {
+            <div class="callout mb-4">
+                <icon name="information-circle" class="h-5 w-5" />
+                <p>Only this node's containers are measured. Each swarm node reports its own; add a node as an endpoint to see its use.</p>
+            </div>
+        }
+
+        <div data-resources data-endpoint="@Model.EndpointId" data-container-url="@containerUrl" data-stack-url="@stackUrl">
+            <p class="mb-4 text-xs text-secondary" aria-live="polite" data-resources-status>Waiting for the first reading…</p>
+            <div class="callout danger mb-4" role="alert" data-resources-error hidden>
+                <icon name="exclamation-triangle" class="h-5 w-5" />
+                <p data-resources-error-text></p>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <section class="card stat-card" aria-labelledby="total-cpu">
+                    <p id="total-cpu" class="label-caps">CPU</p>
+                    <p class="stat-value" data-total="cpu">—</p>
+                    <p class="stat-meta" data-total="cpu-meta">&nbsp;</p>
+                    <div class="chart"><canvas role="img" aria-label="Total CPU use over the last two minutes" data-chart="cpu"></canvas></div>
+                </section>
+                <section class="card stat-card" aria-labelledby="total-memory">
+                    <p id="total-memory" class="label-caps">Memory</p>
+                    <p class="stat-value" data-total="memory">—</p>
+                    <p class="stat-meta" data-total="memory-meta">&nbsp;</p>
+                    <div class="chart"><canvas role="img" aria-label="Total memory use over the last two minutes" data-chart="memory"></canvas></div>
+                </section>
+                <section class="card stat-card" aria-labelledby="total-network">
+                    <p id="total-network" class="label-caps">Network</p>
+                    <p class="stat-value" data-total="network">—</p>
+                    <p class="stat-meta">Received · sent, per second</p>
+                    <div class="chart"><canvas role="img" aria-label="Total network traffic over the last two minutes" data-chart="network"></canvas></div>
+                </section>
+                <section class="card stat-card" aria-labelledby="total-disk">
+                    <p id="total-disk" class="label-caps">Disk I/O</p>
+                    <p class="stat-value" data-total="disk">—</p>
+                    <p class="stat-meta">Read · written, per second</p>
+                    <div class="chart"><canvas role="img" aria-label="Total disk reads and writes over the last two minutes" data-chart="disk"></canvas></div>
+                </section>
+            </div>
+
+            <section class="mt-6" aria-labelledby="usage-title">
+                <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+                    <h3 id="usage-title" class="section-title mb-0">What's using it</h3>
+                    <form role="search" aria-label="Filter containers" class="flex flex-wrap items-end gap-3" data-resources-filters>
+                        <div class="field min-w-[14rem]">
+                            <label for="usage-q">Search</label>
+                            <input id="usage-q" type="search" placeholder="Container or stack" autocomplete="off" data-resources-search />
+                        </div>
+                        <div class="field">
+                            <label for="usage-group">Show</label>
+                            <select id="usage-group" data-resources-group>
+                                <option value="container">Containers</option>
+                                <option value="stack">Stacks</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="table">
+                        <caption class="sr-only" data-resources-caption>Running containers by resource use. Select a column heading to sort.</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col" aria-sort="none" data-sort-column="name"><button type="button" class="sort-button" data-sort="name" data-name-label>Container</button></th>
+                                <th scope="col" class="num" aria-sort="descending" data-sort-column="cpu"><button type="button" class="sort-button" data-sort="cpu">CPU</button></th>
+                                <th scope="col" class="num" aria-sort="none" data-sort-column="memory"><button type="button" class="sort-button" data-sort="memory">Memory</button></th>
+                                <th scope="col" class="num" aria-sort="none" data-sort-column="network"><button type="button" class="sort-button" data-sort="network">Network</button></th>
+                                <th scope="col" class="num" aria-sort="none" data-sort-column="disk"><button type="button" class="sort-button" data-sort="disk">Disk I/O</button></th>
+                                <th scope="col" class="num" aria-sort="none" data-sort-column="pids"><button type="button" class="sort-button" data-sort="pids">Processes</button></th>
+                            </tr>
+                        </thead>
+                        <tbody data-resources-rows></tbody>
+                    </table>
+                    <div class="empty-state" data-resources-empty hidden>
+                        <icon name="chart-bar" class="h-12 w-12" stroke-width="1.5" />
+                        <p class="text-base text-heading" data-resources-empty-title>No running containers</p>
+                        <p class="text-secondary" data-resources-empty-text>Start a container to see what it uses.</p>
+                    </div>
+                </div>
+                <p class="mt-2 text-xs text-secondary">
+                    CPU: 100% is one full CPU. Memory leaves out the page cache the kernel can reclaim, as <span class="font-mono">docker stats</span> does.
+                    The bars show each row's share of the host. At most @ResourceMonitor.MaxContainers containers are measured at once.
+                </p>
+            </section>
+
+            @* One row, cloned by resources.js; values are set with textContent. *@
+            <template data-row-template>
+                <tr>
+                    <th scope="row">
+                        <a class="font-semibold hover:underline" data-cell="link"></a>
+                        <span class="mt-1 flex flex-wrap gap-1" data-cell="badges"></span>
+                    </th>
+                    <td class="num">
+                        <span class="font-mono" data-cell="cpu"></span>
+                        <progress class="progress usage-bar" max="100" value="0" aria-hidden="true" data-cell="cpu-bar"></progress>
+                    </td>
+                    <td class="num">
+                        <span class="font-mono" data-cell="memory"></span>
+                        <span class="block text-xs text-secondary" data-cell="memory-meta"></span>
+                        <progress class="progress usage-bar" max="100" value="0" aria-hidden="true" data-cell="memory-bar"></progress>
+                    </td>
+                    <td class="num font-mono" data-cell="network"></td>
+                    <td class="num font-mono" data-cell="disk"></td>
+                    <td class="num font-mono" data-cell="pids"></td>
+                </tr>
+            </template>
+        </div>
+    }
+</div>
