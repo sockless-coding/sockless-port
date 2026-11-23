@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Sockless.Port.Access;
 using Sockless.Port.Audit;
 using Sockless.Port.Engines;
+using Sockless.Port.Monitoring;
 using Sockless.Port.Registries;
 using Sockless.Port.Settings;
 using Sockless.Port.Stacks;
@@ -33,6 +34,10 @@ public sealed class PortDbContext(DbContextOptions<PortDbContext> options) : Ide
     public DbSet<AcceptedRisk> AcceptedRisks => Set<AcceptedRisk>();
 
     public DbSet<AcceptedRiskComment> AcceptedRiskComments => Set<AcceptedRiskComment>();
+
+    public DbSet<ResourceUsageEntry> ResourceUsage => Set<ResourceUsageEntry>();
+
+    public DbSet<ResourceTotalEntry> ResourceTotals => Set<ResourceTotalEntry>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -175,6 +180,24 @@ public sealed class PortDbContext(DbContextOptions<PortDbContext> options) : Ide
             stack.Property(s => s.CreatedAt).HasConversion(SortableUtc);
             stack.Property(s => s.UpdatedAt).HasConversion(SortableUtc);
             stack.Property(s => s.DeployedAt).HasConversion(SortableUtc);
+        });
+
+        builder.Entity<ResourceUsageEntry>(usage =>
+        {
+            usage.ToTable("ResourceUsage");
+            usage.Property(u => u.Name).HasMaxLength(256);
+            usage.Property(u => u.Stack).HasMaxLength(256);
+            // Trends read a period of one resolution, for the endpoint or one container in it.
+            usage.HasIndex(u => new { u.EndpointId, u.Seconds, u.Time });
+            usage.HasIndex(u => new { u.EndpointId, u.Seconds, u.Name, u.Time });
+            usage.HasOne<EngineEndpoint>().WithMany().HasForeignKey(u => u.EndpointId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<ResourceTotalEntry>(total =>
+        {
+            total.ToTable("ResourceTotals");
+            total.HasIndex(t => new { t.EndpointId, t.Seconds, t.Time });
+            total.HasOne<EngineEndpoint>().WithMany().HasForeignKey(t => t.EndpointId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 

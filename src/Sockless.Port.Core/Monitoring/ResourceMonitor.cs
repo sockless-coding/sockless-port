@@ -272,9 +272,10 @@ public sealed class ResourceMonitor(TimeProvider timeProvider, ILogger<ResourceM
                 {
                     if (_streams.TryGetValue(id, out var existing))
                     {
-                        if (!existing.ShouldRestart(now))
-                            continue;
-                        existing.Stop();
+                        // Again on the same stream, so the row keeps its readings meanwhile.
+                        if (existing.ShouldRestart(now))
+                            existing.Start(client, Connection.Address, monitor._time, stopping);
+                        continue;
                     }
                     var stream = new ContainerStream(id, summary.DisplayName, ContainerLabels.Stack(summary.Labels));
                     stream.Start(client, Connection.Address, monitor._time, stopping);
@@ -318,6 +319,8 @@ public sealed class ResourceMonitor(TimeProvider timeProvider, ILogger<ResourceM
         public void Start(DockerClient client, DockerAddress address, TimeProvider time, CancellationToken stopping)
         {
             var linked = CancellationTokenSource.CreateLinkedTokenSource(_cancel.Token, stopping);
+            lock (_gate)
+                _ended = false;
             _ = Task.Run(async () =>
             {
                 try
@@ -325,7 +328,7 @@ public sealed class ResourceMonitor(TimeProvider timeProvider, ILogger<ResourceM
                     await foreach (var sample in client.StreamStatsAsync(id, linked.Token))
                     {
                         lock (_gate)
-                            (_previous, _latest) = (_latest, sample);
+                            (_previous, _latest, _error) = (_latest, sample, null);
                     }
                 }
                 catch (Exception ex) when (!linked.IsCancellationRequested && IsEngineFailure(ex))

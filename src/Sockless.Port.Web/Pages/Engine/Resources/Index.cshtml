@@ -13,7 +13,7 @@
 <div data-endpoint-id="@Model.EndpointId">
     <div class="mb-6">
         <h2 class="page-title">Resources</h2>
-        <p class="mt-1 text-secondary">Live CPU, memory, network and disk use of the running containers on @Model.Connection.Name.</p>
+        <p class="mt-1 text-secondary">Live CPU, memory, network and disk use of the running containers on @Model.Connection.Name, and how it has changed over time.</p>
     </div>
 
     @if (Model.Client is null || engine is null)
@@ -139,4 +139,6 @@
             </template>
         </div>
     }
+
+    <partial name="_Trends" model="Model" />
 </div>

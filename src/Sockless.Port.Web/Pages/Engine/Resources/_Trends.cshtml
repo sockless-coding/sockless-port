@@ -1,0 +1,118 @@
+@model Sockless.Port.Web.Pages.Engine.Resources.IndexModel
+@using Sockless.Port.Web.Pages.Engine.Resources
+@{
+    var historyUrl = Url.Page("/Engine/Resources/Index", "History", new { endpointId = Model.EndpointId });
+}
+<section class="mt-8" aria-labelledby="trends-title">
+    @if (!Model.HistoryEnabled)
+    {
+        <h3 id="trends-title" class="section-title">Trends</h3>
+        <div class="callout">
+            <icon name="information-circle" class="h-5 w-5" />
+            <p>
+                Resource history is off, so there are no trends to show.
+                <span sp-can="admin">Turn it on under <a asp-page="/Settings/Index" class="font-semibold hover:underline">Settings</a> (Keep resource history).</span>
+            </p>
+        </div>
+    }
+    else
+    {
+        <div data-trends data-url="@historyUrl">
+            <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <h3 id="trends-title" class="section-title mb-0">Trends</h3>
+                    <p class="mt-1 text-xs text-secondary" aria-live="polite" data-trends-status>Loading the history…</p>
+                </div>
+                <form aria-label="Choose the trend" class="flex flex-wrap items-end gap-3" data-trends-filters>
+                    <div class="field">
+                        <label for="trends-range">Period</label>
+                        <select id="trends-range" data-trends-range>
+                            @foreach (var range in Model.Ranges)
+                            {
+                                <option value="@range" selected="@(range == IndexModel.DefaultRange)">@IndexModel.Label(range)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field min-w-[14rem]">
+                        <label for="trends-name">Show</label>
+                        <select id="trends-name" data-trends-name>
+                            <option value="">All containers</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <section class="card stat-card" aria-labelledby="trend-cpu">
+                    <p id="trend-cpu" class="label-caps">CPU</p>
+                    <p class="stat-value" data-trend="cpu">—</p>
+                    <p class="stat-meta" data-trend="cpu-meta">&nbsp;</p>
+                    <div class="chart"><canvas role="img" aria-label="Average and peak CPU use over the period" data-trend-chart="cpu"></canvas></div>
+                </section>
+                <section class="card stat-card" aria-labelledby="trend-memory">
+                    <p id="trend-memory" class="label-caps">Memory</p>
+                    <p class="stat-value" data-trend="memory">—</p>
+                    <p class="stat-meta" data-trend="memory-meta">&nbsp;</p>
+                    <div class="chart"><canvas role="img" aria-label="Average and peak memory use over the period" data-trend-chart="memory"></canvas></div>
+                </section>
+                <section class="card stat-card" aria-labelledby="trend-network">
+                    <p id="trend-network" class="label-caps">Network</p>
+                    <p class="stat-value" data-trend="network">—</p>
+                    <p class="stat-meta">Received · sent over the period</p>
+                    <div class="chart"><canvas role="img" aria-label="Average network traffic over the period" data-trend-chart="network"></canvas></div>
+                </section>
+                <section class="card stat-card" aria-labelledby="trend-disk">
+                    <p id="trend-disk" class="label-caps">Disk I/O</p>
+                    <p class="stat-value" data-trend="disk">—</p>
+                    <p class="stat-meta">Read · written over the period</p>
+                    <div class="chart"><canvas role="img" aria-label="Average disk reads and writes over the period" data-trend-chart="disk"></canvas></div>
+                </section>
+            </div>
+
+            <h4 class="mb-3 mt-6 text-base font-semibold text-heading">Over this period</h4>
+            <div class="table-wrap">
+                <table class="table" data-trends-table>
+                    <caption class="sr-only">What each container used over the period. Select a column heading to sort, or a name to chart that container.</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col" aria-sort="none" data-sort-column="name"><button type="button" class="sort-button" data-sort="name">Container</button></th>
+                            <th scope="col" class="num" aria-sort="descending" data-sort-column="cpu"><button type="button" class="sort-button" data-sort="cpu">Average CPU</button></th>
+                            <th scope="col" class="num" aria-sort="none" data-sort-column="cpuPeak"><button type="button" class="sort-button" data-sort="cpuPeak">Peak CPU</button></th>
+                            <th scope="col" class="num" aria-sort="none" data-sort-column="memory"><button type="button" class="sort-button" data-sort="memory">Average memory</button></th>
+                            <th scope="col" class="num" aria-sort="none" data-sort-column="memoryPeak"><button type="button" class="sort-button" data-sort="memoryPeak">Peak memory</button></th>
+                            <th scope="col" class="num" aria-sort="none" data-sort-column="network"><button type="button" class="sort-button" data-sort="network">Network</button></th>
+                            <th scope="col" class="num" aria-sort="none" data-sort-column="disk"><button type="button" class="sort-button" data-sort="disk">Disk I/O</button></th>
+                        </tr>
+                    </thead>
+                    <tbody data-trends-rows></tbody>
+                </table>
+                <div class="empty-state" data-trends-empty hidden>
+                    <icon name="chart-bar" class="h-12 w-12" stroke-width="1.5" />
+                    <p class="text-base text-heading">Nothing recorded in this period</p>
+                    <p class="text-secondary">History is recorded while the endpoint is online. The first minutes appear here a minute after recording starts.</p>
+                </div>
+            </div>
+            <p class="mt-2 text-xs text-secondary">
+                The charts show the share of the host; the table, like <span class="font-mono">docker stats</span>, counts 100% as one full CPU.
+                Network and disk are the bytes moved over the period. Containers are followed by name, so a recreated container continues its line.
+                Gaps are times nothing was recorded.
+            </p>
+
+            @* One row, cloned by trends.js; values are set with textContent. *@
+            <template data-trends-row>
+                <tr>
+                    <th scope="row">
+                        <button type="button" class="font-semibold text-accent hover:underline" data-cell="name"></button>
+                        <span class="mt-1 flex flex-wrap gap-1" data-cell="badges"></span>
+                    </th>
+                    <td class="num font-mono" data-cell="cpu"></td>
+                    <td class="num font-mono" data-cell="cpuPeak"></td>
+                    <td class="num font-mono" data-cell="memory"></td>
+                    <td class="num font-mono" data-cell="memoryPeak"></td>
+                    <td class="num font-mono" data-cell="network"></td>
+                    <td class="num font-mono" data-cell="disk"></td>
+                </tr>
+            </template>
+        </div>
+    }
+</section>

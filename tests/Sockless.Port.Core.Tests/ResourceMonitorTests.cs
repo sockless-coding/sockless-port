@@ -12,7 +12,7 @@ namespace Sockless.Port.Core.Tests;
 
 public sealed class ResourceMonitorTests
 {
-    private const long HostMemory = 8_000_000_000;
+    internal const long HostMemory = 8_000_000_000;
 
     private static StatsSample Sample(double seconds, long rx = 0, long tx = 0, long read = 0, long write = 0, long limit = HostMemory) =>
         new(DateTimeOffset.UnixEpoch.AddSeconds(seconds), 12.5, 100_000_000, limit, rx, tx, read, write, 4);
@@ -172,23 +172,23 @@ public sealed class ResourceMonitorTests
         Assert.Empty(snapshots.Current.Containers);
     }
 
-    private static string StatsLine(string read, ulong cpu, long rx) =>
+    internal static string StatsLine(string read, ulong cpu, long rx) =>
         $$$"""{"read":"{{{read}}}","cpu_stats":{"cpu_usage":{"total_usage":{{{cpu + 100_000_000}}}},"system_cpu_usage":2000000000,"online_cpus":4},"precpu_stats":{"cpu_usage":{"total_usage":{{{cpu}}}},"system_cpu_usage":1000000000,"online_cpus":4},"memory_stats":{"usage":104857600,"limit":{{{HostMemory}}},"stats":{"inactive_file":4857600}},"networks":{"eth0":{"rx_bytes":{{{rx}}},"tx_bytes":0}},"pids_stats":{"current":3}}""";
 
-    private static HttpResponseMessage Json(string body) =>
+    internal static HttpResponseMessage Json(string body) =>
         new(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
 
-    private static HttpResponseMessage Lines(params string[] lines) =>
+    internal static HttpResponseMessage Lines(params string[] lines) =>
         new(HttpStatusCode.OK) { Content = new StringContent(string.Join('\n', lines) + "\n", Encoding.UTF8, "application/json") };
 
-    private sealed class FakeEngine(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
+    internal sealed class FakeEngine(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
             Task.FromResult(respond(request));
     }
 
     /// <summary>The system clock, moved forward on request (timers still run in real time).</summary>
-    private sealed class ShiftedTime : TimeProvider
+    internal sealed class ShiftedTime : TimeProvider
     {
         private long _offsetTicks;
 

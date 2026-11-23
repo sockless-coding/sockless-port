@@ -92,6 +92,17 @@ public static class Format
                + (offset == TimeSpan.Zero ? " UTC" : $" UTC{sign}{offset.Duration().ToString(@"hh\:mm", CultureInfo.InvariantCulture)}");
     }
 
+    /// <summary>
+    /// A short time for chart axes, in the user's preferred zone like <see cref="Timestamp"/>:
+    /// <c>18:04</c>, or <c>11-22 18:00</c> with the date.
+    /// </summary>
+    public static string ChartTime(DateTimeOffset value, bool withDate, TimeZoneInfo? zone = null)
+    {
+        zone ??= TimeZones.Current;
+        var local = zone == TimeZoneInfo.Utc ? value.ToUniversalTime() : TimeZoneInfo.ConvertTime(value, zone);
+        return local.ToString(withDate ? "MM-dd HH:mm" : "HH:mm", CultureInfo.InvariantCulture);
+    }
+
     /// <summary>The engine's JSON, indented for the inspect tabs.</summary>
     public static string? Json(string? json) => json is null ? null : JsonNode.Parse(json)?.ToJsonString(IndentedJson);
 }

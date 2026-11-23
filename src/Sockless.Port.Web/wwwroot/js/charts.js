@@ -33,7 +33,9 @@
   const rate = (v) => `${SocklessPort.bytes(v)}/s`;
 
   // suggestedMax keeps an idle chart's axis readable (0 to 1 kB/s, not 0, 1, 1 B/s).
-  function line(canvas, labels, format, suggestedMax) {
+  // xAxis shows the time labels (trends); live charts leave them to the tooltip. Null values are
+  // gaps: nothing was recorded then.
+  function line(canvas, labels, format, suggestedMax, { xAxis = false } = {}) {
     const t = theme();
     return new Chart(canvas, {
       type: 'line',
@@ -59,7 +61,13 @@
         maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         scales: {
-          x: { display: false },
+          x: xAxis
+            ? {
+              border: { display: false },
+              grid: { display: false },
+              ticks: { color: t.text, font: { family: 'Roboto Mono', size: 11 }, maxTicksLimit: 6, maxRotation: 0, autoSkip: true },
+            }
+            : { display: false },
           y: {
             beginAtZero: true,
             suggestedMax,

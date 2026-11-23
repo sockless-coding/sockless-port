@@ -15,7 +15,7 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261122192926_AddVulnerabilityScans";
+    public override string LastMigrationId => "20261123185359_AddResourceHistory";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -366,6 +366,124 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                     .IsUnique();
 
                 b.ToTable("Endpoints");
+            });
+
+        modelBuilder.Entity("Sockless.Port.Monitoring.ResourceTotalEntry", b =>
+            {
+                b.Property<long>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("INTEGER");
+
+                b.Property<double>("BlockRead")
+                    .HasColumnType("REAL");
+
+                b.Property<double>("BlockWrite")
+                    .HasColumnType("REAL");
+
+                b.Property<int>("Containers")
+                    .HasColumnType("INTEGER");
+
+                b.Property<double>("Cpu")
+                    .HasColumnType("REAL");
+
+                b.Property<double>("CpuPeak")
+                    .HasColumnType("REAL");
+
+                b.Property<int>("Cpus")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("EndpointId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<long>("HostMemory")
+                    .HasColumnType("INTEGER");
+
+                b.Property<long>("Memory")
+                    .HasColumnType("INTEGER");
+
+                b.Property<long>("MemoryPeak")
+                    .HasColumnType("INTEGER");
+
+                b.Property<double>("NetworkRx")
+                    .HasColumnType("REAL");
+
+                b.Property<double>("NetworkTx")
+                    .HasColumnType("REAL");
+
+                b.Property<int>("Samples")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("Seconds")
+                    .HasColumnType("INTEGER");
+
+                b.Property<long>("Time")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("Id");
+
+                b.HasIndex("EndpointId", "Seconds", "Time");
+
+                b.ToTable("ResourceTotals");
+            });
+
+        modelBuilder.Entity("Sockless.Port.Monitoring.ResourceUsageEntry", b =>
+            {
+                b.Property<long>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("INTEGER");
+
+                b.Property<double>("BlockRead")
+                    .HasColumnType("REAL");
+
+                b.Property<double>("BlockWrite")
+                    .HasColumnType("REAL");
+
+                b.Property<double>("Cpu")
+                    .HasColumnType("REAL");
+
+                b.Property<double>("CpuPeak")
+                    .HasColumnType("REAL");
+
+                b.Property<int>("EndpointId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<long>("Memory")
+                    .HasColumnType("INTEGER");
+
+                b.Property<long>("MemoryPeak")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("Name")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
+
+                b.Property<double>("NetworkRx")
+                    .HasColumnType("REAL");
+
+                b.Property<double>("NetworkTx")
+                    .HasColumnType("REAL");
+
+                b.Property<int>("Samples")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("Seconds")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("Stack")
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
+
+                b.Property<long>("Time")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("Id");
+
+                b.HasIndex("EndpointId", "Seconds", "Time");
+
+                b.HasIndex("EndpointId", "Seconds", "Name", "Time");
+
+                b.ToTable("ResourceUsage");
             });
 
         modelBuilder.Entity("Sockless.Port.Registries.RegistryCredential", b =>
@@ -724,6 +842,24 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                 b.HasOne("Sockless.Port.Data.PortUser", null)
                     .WithMany()
                     .HasForeignKey("UserId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
+
+        modelBuilder.Entity("Sockless.Port.Monitoring.ResourceTotalEntry", b =>
+            {
+                b.HasOne("Sockless.Port.Engines.EngineEndpoint", null)
+                    .WithMany()
+                    .HasForeignKey("EndpointId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
+
+        modelBuilder.Entity("Sockless.Port.Monitoring.ResourceUsageEntry", b =>
+            {
+                b.HasOne("Sockless.Port.Engines.EngineEndpoint", null)
+                    .WithMany()
+                    .HasForeignKey("EndpointId")
                     .OnDelete(DeleteBehavior.Cascade)
                     .IsRequired();
             });

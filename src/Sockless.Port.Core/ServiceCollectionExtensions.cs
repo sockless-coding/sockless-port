@@ -85,6 +85,8 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<RegistryCredentials>();
         services.AddSingleton<Monitoring.ResourceMonitor>();
+        services.AddSingleton<Monitoring.ResourceHistory>();
+        services.AddHostedService(sp => sp.GetRequiredService<Monitoring.ResourceHistory>());
         services.AddSingleton<ImageJobs>();
         services.AddSingleton<ImageUpdates>();
         services.AddHostedService<ImageUpdateSchedule>();

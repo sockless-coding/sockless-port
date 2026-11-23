@@ -36,6 +36,9 @@ public sealed class IndexModel(PortSettings settings, HttpsCertificates https, I
     public int VulnerabilityScanHours { get; set; }
 
     [BindProperty]
+    public int ResourceHistoryDays { get; set; }
+
+    [BindProperty]
     public IFormFile? Backup { get; set; }
 
     /// <summary>The scanner's version and databases; null with <see cref="ScannerProblem"/> when it can't run.</summary>
@@ -66,7 +69,7 @@ public sealed class IndexModel(PortSettings settings, HttpsCertificates https, I
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
-        var problems = await settings.SaveAsync(new AppSettings(TimeDisplay, SessionTimeoutMinutes, AuditRetentionDays, ImageUpdateCheckHours, VulnerabilityScanHours), cancellationToken);
+        var problems = await settings.SaveAsync(new AppSettings(TimeDisplay, SessionTimeoutMinutes, AuditRetentionDays, ImageUpdateCheckHours, VulnerabilityScanHours, ResourceHistoryDays), cancellationToken);
         if (problems.Count > 0)
         {
             foreach (var problem in problems)
@@ -146,6 +149,7 @@ public sealed class IndexModel(PortSettings settings, HttpsCertificates https, I
             AuditRetentionDays = current.AuditRetentionDays;
             ImageUpdateCheckHours = current.ImageUpdateCheckHours;
             VulnerabilityScanHours = current.VulnerabilityScanHours;
+            ResourceHistoryDays = current.ResourceHistoryDays;
         }
         Https = https.Status();
     }

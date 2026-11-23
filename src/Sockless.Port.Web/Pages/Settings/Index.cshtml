@@ -92,6 +92,19 @@
                     this server, one at a time.
                 </p>
             </div>
+            <div class="field">
+                <label asp-for="ResourceHistoryDays">Keep resource history</label>
+                <select asp-for="ResourceHistoryDays" aria-describedby="history-hint">
+                    @foreach (var days in AppSettings.ResourceHistoryChoices)
+                    {
+                        <option value="@days" selected="@(Model.ResourceHistoryDays == days)">@(days switch { 0 => "Off", 1 => "1 day", _ => $"{days} days" })</option>
+                    }
+                </select>
+                <p class="hint" id="history-hint">
+                    Records what every online endpoint's running containers use, for the trends on each endpoint's Resources page: by the minute for a day, then by the hour.
+                    Recording keeps a stats stream open to each running container. Off deletes the history.
+                </p>
+            </div>
         </div>
         <div class="flex justify-end">
             <button type="submit" class="btn-soft secondary">Save</button>

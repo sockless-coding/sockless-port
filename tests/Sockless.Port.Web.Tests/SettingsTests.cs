@@ -59,6 +59,7 @@ public sealed class SettingsTests : IDisposable
             ["AuditRetentionDays"] = "30",
             ["ImageUpdateCheckHours"] = "24",
             ["VulnerabilityScanHours"] = "168",
+            ["ResourceHistoryDays"] = "30",
         }), TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, bad.StatusCode);
@@ -66,7 +67,7 @@ public sealed class SettingsTests : IDisposable
         Assert.Equal(HttpStatusCode.Redirect, good.StatusCode);
         Assert.Contains("how often to check for image updates", await badInterval.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         Assert.Equal(HttpStatusCode.Redirect, good.StatusCode);
-        Assert.Equal(new AppSettings(TimeDisplay.Utc, 60, 30, 24, 168), factory.Services.GetRequiredService<PortSettings>().Current);
+        Assert.Equal(new AppSettings(TimeDisplay.Utc, 60, 30, 24, 168, 30), factory.Services.GetRequiredService<PortSettings>().Current);
     }
 
     [Fact]

@@ -14,7 +14,9 @@ public enum TimeDisplay
 /// <param name="AuditRetentionDays">Audit entries older than this are deleted.</param>
 /// <param name="ImageUpdateCheckHours">How often every online endpoint's images are compared with their registries; 0 is never.</param>
 /// <param name="VulnerabilityScanHours">How often the images containers use are scanned for known vulnerabilities; 0 is never.</param>
-public sealed record AppSettings(TimeDisplay TimeDisplay, int SessionTimeoutMinutes, int AuditRetentionDays, int ImageUpdateCheckHours = 0, int VulnerabilityScanHours = 0)
+/// <param name="ResourceHistoryDays">How long each endpoint's resource use is kept for trends; 0 records none.</param>
+public sealed record AppSettings(TimeDisplay TimeDisplay, int SessionTimeoutMinutes, int AuditRetentionDays, int ImageUpdateCheckHours = 0, int VulnerabilityScanHours = 0,
+    int ResourceHistoryDays = 7)
 {
     public static AppSettings Default { get; } = new(TimeDisplay.Local, 12 * 60, 365);
 
@@ -23,6 +25,9 @@ public sealed record AppSettings(TimeDisplay TimeDisplay, int SessionTimeoutMinu
 
     /// <summary>The choices for <see cref="VulnerabilityScanHours"/>: never, every day or every week. New findings come from the database, so more often adds little.</summary>
     public static readonly IReadOnlyList<int> VulnerabilityScanChoices = [0, 24, 7 * 24];
+
+    /// <summary>The choices for <see cref="ResourceHistoryDays"/>: off, or a day up to three months.</summary>
+    public static readonly IReadOnlyList<int> ResourceHistoryChoices = [0, 1, 7, 30, 90];
 
     public const int MinSessionTimeout = 5;
     public const int MaxSessionTimeout = 30 * 24 * 60;
@@ -42,6 +47,8 @@ public sealed record AppSettings(TimeDisplay TimeDisplay, int SessionTimeoutMinu
             problems.Add("Choose how often to check for image updates from the list.");
         if (!VulnerabilityScanChoices.Contains(VulnerabilityScanHours))
             problems.Add("Choose how often to scan for vulnerabilities from the list.");
+        if (!ResourceHistoryChoices.Contains(ResourceHistoryDays))
+            problems.Add("Choose how long to keep resource history from the list.");
         return problems;
     }
 }
