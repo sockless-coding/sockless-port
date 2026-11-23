@@ -377,6 +377,86 @@ public sealed class StackAdopterTests
     }
 }
 
+public sealed class PortainerStacksTests
+{
+    private static ComposeProject Project(string configFiles, string? workingDir = null, string? envFiles = null)
+    {
+        var labels = new Dictionary<string, string>
+        {
+            ["com.docker.compose.project"] = "shop",
+            ["com.docker.compose.service"] = "web",
+            ["com.docker.compose.project.config_files"] = configFiles,
+        };
+        if (workingDir is not null)
+            labels["com.docker.compose.project.working_dir"] = workingDir;
+        if (envFiles is not null)
+            labels["com.docker.compose.project.environment_file"] = envFiles;
+        return new ComposeProject("shop", [new ContainerSummary { Id = new string('a', 64), Names = ["/shop-web-1"], Labels = labels }]);
+    }
+
+    [Theory]
+    [InlineData("/data/compose/12/docker-compose.yml", "/data", "/data/compose/12")]
+    [InlineData("/data/compose/12/repo/app/compose.yaml", "/data/", "/data/compose/12")]
+    [InlineData("/srv/portainer/compose/3/docker-compose.yml", "/srv/portainer", "/srv/portainer/compose/3")]
+    [InlineData("/data/compose/12/docker-compose.yml", "/srv", null)]
+    [InlineData("/data/compose/web/docker-compose.yml", "/data", null)]
+    [InlineData("/data/compose/12", "/data", null)]
+    [InlineData("/database/compose/12/docker-compose.yml", "/data", null)]
+    public void A_stack_folder_is_a_numbered_folder_under_the_mount(string path, string dataRoot, string? folder) =>
+        Assert.Equal(folder, PortainerStacks.StackFolder(path, dataRoot));
+
+    [Fact]
+    public void Projects_with_one_compose_file_in_a_numbered_folder_look_like_portainers()
+    {
+        Assert.True(PortainerStacks.LooksDeployedByPortainer(Project("/data/compose/4/docker-compose.yml")));
+        Assert.False(PortainerStacks.LooksDeployedByPortainer(Project("/data/compose/4/docker-compose.yml,/data/compose/4/override.yml")));
+        Assert.False(PortainerStacks.LooksDeployedByPortainer(Project("/home/me/shop/compose.yaml")));
+    }
+
+    [Fact]
+    public void Variables_come_from_recorded_env_files_in_the_folder_then_stack_env_then_dot_env()
+    {
+        var project = Project("/data/compose/4/repo/app/compose.yaml", "/data/compose/4/repo/app", "/data/compose/4/stack.env,/etc/passwd,/data/compose/4/../5/stack.env");
+
+        Assert.Equal(["/data/compose/4/stack.env", "/data/compose/4/stack.env", "/data/compose/4/repo/app/.env"],
+            PortainerStacks.EnvCandidates(project, "/data/compose/4"));
+        Assert.Equal(["/data/compose/4/stack.env", "/data/compose/4/.env"],
+            PortainerStacks.EnvCandidates(Project("/data/compose/4/docker-compose.yml", "/elsewhere"), "/data/compose/4"));
+    }
+
+    [Fact]
+    public void Env_file_references_to_stack_env_point_at_dot_env()
+    {
+        var compose = """
+            services:
+              web:
+                image: nginx
+                env_file: stack.env
+              api:
+                image: api
+                env_file:
+                  - ./stack.env
+                  - "stack.env" # Portainer's
+                  - other.env
+                  - path: 'stack.env'
+                    required: false
+                command: ["cat", "stack.env"]
+                labels:
+                  - stack.env.backup=1
+
+            """.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        var (result, changed) = PortainerStacks.RewriteEnvFile(compose);
+
+        Assert.True(changed);
+        Assert.Contains("    env_file: .env\n", result, StringComparison.Ordinal);
+        Assert.Contains("      - .env\n      - \".env\" # Portainer's\n      - other.env\n      - path: '.env'\n", result, StringComparison.Ordinal);
+        Assert.Contains("command: [\"cat\", \"stack.env\"]", result, StringComparison.Ordinal);
+        Assert.Contains("- stack.env.backup=1", result, StringComparison.Ordinal);
+        Assert.False(PortainerStacks.RewriteEnvFile("services:\n  web:\n    image: nginx\n").Changed);
+    }
+}
+
 public sealed class SelfContainerTests
 {
     private const string Id = "4f1c2a9e8b7d6c5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a19";

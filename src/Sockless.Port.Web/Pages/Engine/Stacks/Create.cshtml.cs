@@ -35,6 +35,12 @@ public sealed class CreateModel(EngineConnections connections, StackStore store,
     /// <summary>Where the adopted file came from; null when it was rebuilt from the containers.</summary>
     public string? AdoptSource { get; private set; }
 
+    /// <summary>Set when the adopted files were read from Portainer's data.</summary>
+    public PortainerFiles? AdoptedFromPortainer { get; private set; }
+
+    /// <summary>Why the project's file couldn't be used, when it was rebuilt.</summary>
+    public string? AdoptNote { get; private set; }
+
     public bool Adopting => !string.IsNullOrEmpty(Adopt);
 
     public StackValidationView? Validation { get; private set; }
@@ -72,8 +78,10 @@ public sealed class CreateModel(EngineConnections connections, StackStore store,
                 Flash.Error(TempData, $"Sockless Port itself runs in {Adopt}, so it can't manage it.");
                 return RedirectToPage("/Engine/Stacks/Detail", new { endpointId = EndpointId, stackName = Adopt });
             }
-            var adopted = await StackAdopter.AdoptAsync(client, project, cancellationToken);
+            var adopted = await StackAdopter.AdoptAsync(client, project, PortainerEngines(client), cancellationToken);
             AdoptSource = adopted.Source;
+            AdoptedFromPortainer = adopted.Portainer;
+            AdoptNote = adopted.Note;
             Input = new StackInput { Name = Adopt, Compose = adopted.Content.Compose, Env = adopted.Content.Env };
         }
         catch (Exception ex) when (EngineFailures.IsFailure(ex, cancellationToken))
@@ -147,6 +155,21 @@ public sealed class CreateModel(EngineConnections connections, StackStore store,
         }
         return RedirectToPage("/Engine/Stacks/Detail", new { endpointId = EndpointId, stackName = name });
     }
+
+    /// <summary>
+    /// Where to look for the Portainer that deployed a project: this endpoint, then the other online
+    /// ones the user operates (Portainer often deploys through its agent, from another host). Reading
+    /// its files shows the stack's variables, so viewing an endpoint isn't enough.
+    /// </summary>
+    private List<PortainerSearch> PortainerEngines(Docker.DockerClient client) =>
+    [
+        new(Connection.Name, client),
+        .. Connections.All
+            .Where(c => c.Id != EndpointId && Access.Can(c.Id, EndpointPermission.Operate))
+            .Select(c => (c.Name, c.Client))
+            .Where(c => c.Client is not null)
+            .Select(c => new PortainerSearch(c.Name, c.Client!)),
+    ];
 
     /// <summary>Adopted stacks are Compose projects; swarm stacks can't be adopted yet.</summary>
     private StackKind ChosenKind => !Adopting && OffersSwarm && Kind == StackKind.Swarm ? StackKind.Swarm : StackKind.Compose;

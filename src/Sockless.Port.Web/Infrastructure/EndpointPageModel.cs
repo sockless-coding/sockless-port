@@ -24,6 +24,9 @@ public abstract class EndpointPageModel(EngineConnections connections) : PageMod
 
     public int EndpointId => Connection.Id;
 
+    /// <summary>Every endpoint's connection; check <see cref="Access"/> before using another endpoint.</summary>
+    protected EngineConnections Connections => connections;
+
     public UserAccess Access { get; private set; } = null!;
 
     /// <summary>What opening the page needs. Forms that only make sense for changing things (create, console) need more.</summary>

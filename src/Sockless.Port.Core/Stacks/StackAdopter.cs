@@ -11,22 +11,48 @@ namespace Sockless.Port.Stacks;
 
 /// <summary>A compose file for a project deployed outside Sockless Port, and where it came from.</summary>
 /// <param name="Source">Its compose file, when Sockless Port can read it; null when the file was rebuilt from the containers.</param>
-public sealed record AdoptedStack(StackContent Content, string? Source);
+public sealed record AdoptedStack(StackContent Content, string? Source)
+{
+    /// <summary>Set when the files were read from Portainer's data (<see cref="Source"/> is then a path in its container).</summary>
+    public PortainerFiles? Portainer { get; init; }
+
+    /// <summary>Why a file that should have been readable wasn't, when it was rebuilt anyway.</summary>
+    public string? Note { get; init; }
+}
 
 /// <summary>
 /// Takes over a Compose project that was deployed some other way. The project's own compose file
 /// is used when Sockless Port can read it (the label names its path). Otherwise a file is rebuilt
 /// from the containers, leaving out what the image already sets; it's a starting point to check,
 /// since containers don't record everything Compose knew (build, depends_on, profiles…).
+/// Projects Portainer deployed are read from Portainer's data instead (<see cref="PortainerStacks"/>).
 /// </summary>
 public static class StackAdopter
 {
     private const long MaxFileBytes = 1024 * 1024;
 
-    public static async Task<AdoptedStack> AdoptAsync(DockerClient client, ComposeProject project, CancellationToken cancellationToken = default)
+    /// <param name="portainer">
+    /// Engines to look for the Portainer that deployed the project on, the project's own first.
+    /// Empty to skip that.
+    /// </param>
+    public static async Task<AdoptedStack> AdoptAsync(DockerClient client, ComposeProject project, IReadOnlyList<PortainerSearch> portainer,
+        CancellationToken cancellationToken = default)
     {
         if (TryReadOriginal(project) is { } original)
             return original;
+
+        string? note = null;
+        try
+        {
+            if (await PortainerStacks.FindAsync(project, portainer, cancellationToken) is { } files)
+                return new AdoptedStack(files.Content, files.ComposePath) { Portainer = files };
+            if (PortainerStacks.LooksDeployedByPortainer(project))
+                note = "It looks like Portainer deployed it, but no Portainer container on an endpoint you operate has its files.";
+        }
+        catch (PortainerAmbiguousException ex)
+        {
+            note = $"{ex.Message} Copy the right one in by hand.";
+        }
 
         var services = new List<ServiceSource>();
         foreach (var service in project.Services)
@@ -44,7 +70,7 @@ public static class StackAdopter
             }
             services.Add(new ServiceSource(service.Name, container, JsonNode.Parse(json) as JsonObject, image));
         }
-        return new AdoptedStack(new StackContent(Rebuild(project.Name, services), ""), null);
+        return new AdoptedStack(new StackContent(Rebuild(project.Name, services), ""), null) { Note = note };
     }
 
     /// <summary>The project's compose file and its folder's <c>.env</c>, if this server can read them.</summary>

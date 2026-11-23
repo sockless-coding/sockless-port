@@ -36,13 +36,31 @@
     {
         <div class="callout mb-4">
             <icon name="information-circle" class="h-5 w-5" />
-            @if (Model.AdoptSource is { } source)
+            @if (Model.AdoptedFromPortainer is { } portainer)
+            {
+                <div class="space-y-2">
+                    <p>
+                        Portainer deployed this project. Its compose file and variables were read from Portainer's data, in the container
+                        <span class="font-mono">@portainer.Container</span> on @portainer.Endpoint: <span class="break-all font-mono text-xs">@portainer.ComposePath</span>.
+                        @if (portainer.RewroteEnvFile)
+                        {
+                            <text>Its <span class="font-mono">env_file: stack.env</span> now reads <span class="font-mono">.env</span>, which holds the same variables here.</text>
+                        }
+                    </p>
+                    <p>Portainer still lists the stack after you adopt it. Don't remove it there: that takes its containers down. Edit and deploy it from here from now on.</p>
+                </div>
+            }
+            else if (Model.AdoptSource is { } source)
             {
                 <p>This is the project's own compose file, read from <span class="break-all font-mono text-xs">@source</span>. Later changes to that file aren't picked up: from now on, edit the stack here.</p>
             }
             else
             {
                 <p>
+                    @if (Model.AdoptNote is { } note)
+                    {
+                        <text>@note</text>
+                    }
                     Sockless Port can't read the project's compose file, so this one was rebuilt from its containers.
                     Check it against the original before deploying: <span class="font-mono">build:</span>, <span class="font-mono">depends_on:</span>,
                     profiles and healthchecks aren't recorded on containers, and settings that come from the image are left out.

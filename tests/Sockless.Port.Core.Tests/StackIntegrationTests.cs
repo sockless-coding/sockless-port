@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Sockless.Port.Containers;
 using Sockless.Port.Docker;
@@ -131,6 +132,75 @@ public sealed class StackIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_project_portainer_deployed_is_adopted_from_portainers_data()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        // A stand-in for Portainer: its data volume at /data, holding stack 7 the way Portainer lays it out.
+        var volume = $"{_name}-portainer";
+        var compose = $"services:\n  app:\n    image: {Image}\n    env_file: stack.env\n    command: [\"sleep\", \"600\"]\n";
+        const string script = "mkdir -p /data/compose/7 && printf '%s' \"$COMPOSE\" > /data/compose/7/docker-compose.yml"
+            + " && printf '%s' \"$STACK_ENV\" > /data/compose/7/stack.env && sleep 600";
+        var portainer = await _client.CreateContainerAsync($"{_name}-portainer", new JsonObject
+        {
+            ["Image"] = Image,
+            ["Cmd"] = new JsonArray("sh", "-c", script),
+            ["Env"] = new JsonArray($"COMPOSE={compose}", "STACK_ENV=GREETING=portainer\n"),
+            ["HostConfig"] = new JsonObject
+            {
+                ["NetworkMode"] = "none",
+                ["Mounts"] = new JsonArray(new JsonObject { ["Type"] = "volume", ["Source"] = volume, ["Target"] = "/data" }),
+            },
+        }, ct);
+        // A container of the project, labelled as Compose labels the ones Portainer deploys.
+        var app = await _client.CreateContainerAsync($"{_name}-app-1", new JsonObject
+        {
+            ["Image"] = Image,
+            ["Cmd"] = new JsonArray("sleep", "600"),
+            ["Labels"] = new JsonObject
+            {
+                [ContainerLabels.ComposeProject] = _name,
+                [ContainerLabels.ComposeService] = "app",
+                ["com.docker.compose.project.config_files"] = "/data/compose/7/docker-compose.yml",
+                ["com.docker.compose.project.working_dir"] = "/data/compose/7",
+            },
+            ["HostConfig"] = new JsonObject { ["NetworkMode"] = "none" },
+        }, ct);
+        try
+        {
+            await _client.StartContainerAsync(portainer.Id, ct);
+            await _client.StartContainerAsync(app.Id, ct);
+            var project = await ProjectAsync();
+            Assert.True(PortainerStacks.LooksDeployedByPortainer(project));
+
+            PortainerFiles? files = null;
+            for (var attempt = 0; attempt < 50 && files?.Content.Env is not { Length: > 0 }; attempt++)
+            {
+                await Task.Delay(100, ct); // the script writes the files just after it starts
+                files = await PortainerStacks.FindAsync(project, [new PortainerSearch("test", _client)], ct);
+            }
+
+            Assert.NotNull(files);
+            Assert.Equal($"{_name}-portainer", files.Container);
+            Assert.Equal("/data/compose/7/docker-compose.yml", files.ComposePath);
+            Assert.True(files.RewroteEnvFile);
+            Assert.Contains("    env_file: .env\n", files.Content.Compose, StringComparison.Ordinal);
+            Assert.Equal("GREETING=portainer\n", files.Content.Env);
+
+            var adopted = await StackAdopter.AdoptAsync(_client, project, [new PortainerSearch("test", _client)], ct);
+            Assert.Equal(files, adopted.Portainer);
+            Assert.Equal(files.Content, adopted.Content);
+            var check = await _harness.Validator.CheckAsync(_name, adopted.Content, "/x", cancellationToken: ct);
+            Assert.True(check.Valid, string.Join('\n', check.Errors.Select(e => e.Message)));
+        }
+        finally
+        {
+            await _client.RemoveContainerAsync(app.Id, force: true, cancellationToken: ct);
+            await _client.RemoveContainerAsync(portainer.Id, force: true, cancellationToken: ct);
+            await _client.RemoveVolumeAsync(volume, force: true, cancellationToken: ct);
+        }
+    }
+
+    [Fact]
     public async Task A_project_deployed_elsewhere_is_managed_by_name_and_can_be_adopted()
     {
         var ct = TestContext.Current.CancellationToken;
@@ -149,7 +219,7 @@ public sealed class StackIntegrationTests : IAsyncLifetime
             Assert.Equal(StackState.Running, (await ProjectAsync()).State);
 
             // This test runs where Compose ran, so the project's own file is readable.
-            var adopted = await StackAdopter.AdoptAsync(_client, await ProjectAsync(), ct);
+            var adopted = await StackAdopter.AdoptAsync(_client, await ProjectAsync(), [], ct);
             Assert.NotNull(adopted.Source);
             Assert.Contains("GREETING=outside", adopted.Content.Env, StringComparison.Ordinal);
 

@@ -58,6 +58,10 @@
                                     @if (row.IsExternal)
                                     {
                                         <span class="badge-stat" title="Deployed outside Sockless Port">External</span>
+                                        @if (!row.IsSwarm && Sockless.Port.Stacks.PortainerStacks.LooksDeployedByPortainer(row.Project))
+                                        {
+                                            <span class="badge-stat" title="Deployed by Portainer: adopting reads its files from Portainer's data">Portainer</span>
+                                        }
                                     }
                                     @if (row.IsSelf)
                                     {
