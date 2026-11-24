@@ -27,6 +27,15 @@
   let syncing = false;
   const refreshTimers = new Map();
 
+  const connection = new signalR.HubConnectionBuilder()
+    .withUrl('/hubs/engine')
+    .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
+    .configureLogging(signalR.LogLevel.Warning)
+    .build();
+
+  let markReady;
+  const ready = new Promise((resolve) => { markReady = resolve; });
+
   async function syncWatch() {
     if (syncing || connection.state !== signalR.HubConnectionState.Connected) return;
     syncing = true;
