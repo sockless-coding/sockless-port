@@ -10,6 +10,8 @@ public static class EngineErrors
     {
         var socket = Find<SocketException>(exception);
         var where = address.ToString();
+        if (Find<Docker.Tunnel.TunnelUnavailableException>(exception) is { } tunnel)
+            return tunnel.Message;
 
         return (exception, socket?.SocketErrorCode) switch
         {

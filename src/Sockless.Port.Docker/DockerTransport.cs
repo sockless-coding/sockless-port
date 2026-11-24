@@ -14,17 +14,28 @@ public static class DockerTransport
     {
         UnixSocketAddress or NamedPipeAddress => (CreateHandler((_, ct) => ConnectRawAsync(address, ct)), new Uri("http://docker/")),
         TcpAddress tcp => (CreateTcpHandler(tcp), new Uri(tcp.ToString().Replace("tcp://", "http://", StringComparison.Ordinal) + "/")),
+        TunnelAddress tunnel => (CreateTunnelHandler(tunnel), new Uri($"{(tunnel.Tls is null ? "http" : "https")}://{tunnel.Host}/")),
     };
 
     /// <summary>An HTTP handler for <paramref name="address"/>, and the base address requests go to.</summary>
     public static (HttpMessageHandler Handler, Uri BaseAddress) CreateHandler(DockerAddress address) => Create(address);
 
     /// <summary>
-    /// A plain byte stream to the engine, for callers that speak HTTP themselves (the agent relays
-    /// hijacked exec and attach connections this way). TLS engines aren't supported here.
+    /// A plain byte stream to the engine, for callers that speak HTTP themselves: the agent relays
+    /// hijacked exec and attach connections this way, and the server bridges the Compose CLI to
+    /// tunnels. With TLS, the handshake (client certificate, CA, pin) is done here.
     /// </summary>
     public static async ValueTask<Stream> ConnectRawAsync(DockerAddress address, CancellationToken cancellationToken)
     {
+        if (address is TcpAddress { Tls: { } tcpTls } secure)
+            return await AuthenticateAsync(await ConnectSocketAsync(new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true },
+                new DnsEndPoint(secure.Host, secure.Port), cancellationToken), secure.Host, tcpTls, cancellationToken);
+        if (address is TunnelAddress tunnel)
+        {
+            var opened = await tunnel.Connector.OpenAsync(cancellationToken);
+            return tunnel.Tls is { } tunnelTls ? await AuthenticateAsync(opened, tunnel.Host, tunnelTls, cancellationToken) : opened;
+        }
+
         switch (address)
         {
             case UnixSocketAddress unix:
@@ -85,35 +96,71 @@ public static class DockerTransport
     private static SocketsHttpHandler CreateTcpHandler(TcpAddress tcp)
     {
         var handler = CreateHandler(connect: null);
-        if (tcp.Tls is not { } tls)
-            return handler;
+        if (tcp.Tls is { } tls)
+            handler.SslOptions = ClientOptions(tls);
+        return handler;
+    }
 
+    /// <summary>Every connection is a new stream through the agent's tunnel; TLS runs over it as over a socket.</summary>
+    private static SocketsHttpHandler CreateTunnelHandler(TunnelAddress tunnel)
+    {
+        var handler = CreateHandler((_, ct) => tunnel.Connector.OpenAsync(ct));
+        if (tunnel.Tls is { } tls)
+            handler.SslOptions = ClientOptions(tls);
+        return handler;
+    }
+
+    /// <summary>
+    /// The client side of a TLS connection with <paramref name="tls"/>: its client certificate, its
+    /// CA instead of the system's, and its pins. The target host is left to the caller.
+    /// </summary>
+    public static SslClientAuthenticationOptions ClientOptions(DockerTls tls)
+    {
+        var options = new SslClientAuthenticationOptions();
         if (tls.ClientCertificatePem is not null)
         {
             if (tls.ClientKeyPem is null)
-                throw new ArgumentException("A client certificate needs its private key.", nameof(tcp));
+                throw new ArgumentException("A client certificate needs its private key.", nameof(tls));
 
             var certificate = LoadCertificateWithKey(tls.ClientCertificatePem, tls.ClientKeyPem);
-            handler.SslOptions.ClientCertificates = [certificate];
+            options.ClientCertificates = [certificate];
             // Always offer it: Windows servers may send an issuer list that leaves a private CA out,
             // and the default selection would then send no certificate at all.
-            handler.SslOptions.LocalCertificateSelectionCallback = (_, _, _, _, _) => certificate;
+            options.LocalCertificateSelectionCallback = (_, _, _, _, _) => certificate;
         }
 
-        var pin = tls.PinnedCertificateSha256;
+        string?[] pins = [tls.PinnedCertificateSha256, tls.PreviousPinnedCertificateSha256];
         if (tls.CaCertificatePem is not null)
         {
             var ca = X509Certificate2.CreateFromPem(tls.CaCertificatePem);
-            handler.SslOptions.RemoteCertificateValidationCallback = (_, certificate, _, errors) =>
-                ValidateAgainstCustomCa(certificate, errors, ca, pin);
+            options.RemoteCertificateValidationCallback = (_, certificate, _, errors) =>
+                ValidateAgainstCustomCa(certificate, errors, ca, pins);
         }
-        else if (pin is not null)
+        else if (tls.PinnedCertificateSha256 is not null)
         {
-            handler.SslOptions.RemoteCertificateValidationCallback = (_, certificate, _, errors) =>
-                errors == SslPolicyErrors.None && certificate is not null && MatchesPin(certificate, pin);
+            options.RemoteCertificateValidationCallback = (_, certificate, _, errors) =>
+                errors == SslPolicyErrors.None && certificate is not null && MatchesPin(certificate, pins);
         }
+        return options;
+    }
 
-        return handler;
+    /// <summary>A TLS client handshake over <paramref name="inner"/> with <paramref name="tls"/>, checking <paramref name="host"/>.</summary>
+    /// <exception cref="System.Security.Authentication.AuthenticationException">The other side isn't the one <paramref name="tls"/> trusts.</exception>
+    public static async Task<SslStream> AuthenticateAsync(Stream inner, string host, DockerTls tls, CancellationToken cancellationToken)
+    {
+        var ssl = new SslStream(inner, leaveInnerStreamOpen: false);
+        try
+        {
+            var options = ClientOptions(tls);
+            options.TargetHost = host;
+            await ssl.AuthenticateAsClientAsync(options, cancellationToken);
+            return ssl;
+        }
+        catch
+        {
+            await ssl.DisposeAsync();
+            throw;
+        }
     }
 
     /// <summary>
@@ -133,12 +180,12 @@ public static class DockerTransport
     /// Trusts only <paramref name="ca"/> for the chain, but still requires the host name to match,
     /// and with <paramref name="pin"/> the exact certificate.
     /// </summary>
-    internal static bool ValidateAgainstCustomCa(X509Certificate? certificate, SslPolicyErrors errors, X509Certificate2 ca, string? pin = null)
+    internal static bool ValidateAgainstCustomCa(X509Certificate? certificate, SslPolicyErrors errors, X509Certificate2 ca, params string?[] pins)
     {
         if (certificate is null || errors.HasFlag(SslPolicyErrors.RemoteCertificateNameMismatch) ||
             errors.HasFlag(SslPolicyErrors.RemoteCertificateNotAvailable))
             return false;
-        if (pin is not null && !MatchesPin(certificate, pin))
+        if (!MatchesPin(certificate, pins))
             return false;
 
         using var chain = new X509Chain();
@@ -148,6 +195,12 @@ public static class DockerTransport
         return chain.Build(certificate as X509Certificate2 ?? X509CertificateLoader.LoadCertificate(certificate.GetRawCertData()));
     }
 
-    private static bool MatchesPin(X509Certificate certificate, string pin) =>
-        string.Equals(Thumbprint(certificate), pin, StringComparison.OrdinalIgnoreCase);
+    /// <summary>True when no pin is set, or the certificate matches one of them.</summary>
+    private static bool MatchesPin(X509Certificate certificate, string?[] pins)
+    {
+        if (pins.All(p => p is null))
+            return true;
+        var thumbprint = Thumbprint(certificate);
+        return pins.Any(p => p is not null && string.Equals(thumbprint, p, StringComparison.OrdinalIgnoreCase));
+    }
 }

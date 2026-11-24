@@ -65,9 +65,9 @@ public sealed partial class InternalCa(IOptions<PortOptions> options, IDataProte
 
     /// <summary>
     /// TLS settings for talking to an enrolled agent: trust only this CA, present the server's
-    /// client certificate, and accept only <paramref name="pin"/>.
+    /// client certificate, and accept only <paramref name="pin"/> (or, during a renewal, <paramref name="previousPin"/>).
     /// </summary>
-    public DockerTls AgentTls(string pin)
+    public DockerTls AgentTls(string pin, string? previousPin = null)
     {
         lock (_gate)
         {
@@ -79,6 +79,7 @@ public sealed partial class InternalCa(IOptions<PortOptions> options, IDataProte
                 ClientCertificatePem = client.CertificatePem,
                 ClientKeyPem = client.KeyPem,
                 PinnedCertificateSha256 = pin,
+                PreviousPinnedCertificateSha256 = previousPin == pin ? null : previousPin,
             };
         }
     }

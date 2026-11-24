@@ -18,6 +18,13 @@ public sealed class AgentIdentity
     /// <summary>Written last, so its presence means the other two are complete.</summary>
     internal const string CaFile = "ca.pem";
 
+    /// <summary>
+    /// A renewal writes the new pair under these names first, then moves them over the old ones.
+    /// A start that finds them finishes the move, so a crash never leaves a key with another's certificate.
+    /// </summary>
+    internal const string RenewKeyFile = "renew.key.pem";
+    internal const string RenewCertificateFile = "renew.cert.pem";
+
     private static readonly Oid ServerAuth = new("1.3.6.1.5.5.7.3.1");
     private static readonly Oid ClientAuth = new("1.3.6.1.5.5.7.3.2");
     private static readonly TimeSpan TrustCacheTime = TimeSpan.FromMinutes(5);
@@ -40,6 +47,7 @@ public sealed class AgentIdentity
         var key = Path.Combine(directory, KeyFile);
         var certificate = Path.Combine(directory, CertificateFile);
         var ca = Path.Combine(directory, CaFile);
+        FinishRenewal();
         if (File.Exists(ca) && File.Exists(certificate) && File.Exists(key))
         {
             _serverCertificate = DockerTransport.LoadCertificateWithKey(File.ReadAllText(certificate), File.ReadAllText(key));
@@ -71,6 +79,22 @@ public sealed class AgentIdentity
     public DateTimeOffset? CertificateNotAfter
     {
         get { lock (_gate) return _ca is null ? null : new DateTimeOffset(_serverCertificate.NotAfter.ToUniversalTime()); }
+    }
+
+    /// <summary>SHA-256 thumbprint of the certificate from enrolment (or its renewal), or null before.</summary>
+    public string? CertificateThumbprint
+    {
+        get { lock (_gate) return _ca is null ? null : DockerTransport.Thumbprint(_serverCertificate); }
+    }
+
+    /// <summary>The endpoint this agent was enrolled for, from its certificate's name; null before enrolment.</summary>
+    public int? EndpointId
+    {
+        get
+        {
+            lock (_gate)
+                return _ca is null ? null : AgentProtocol.EndpointId(_serverCertificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false));
+        }
     }
 
     /// <summary>A new key and a request for it. The key stays here; only the latest request can complete.</summary>
@@ -126,6 +150,90 @@ public sealed class AgentIdentity
             _pendingKey = null;
             key.Dispose();
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Takes a renewed certificate for the pending key (from <see cref="CreateSigningRequest"/>),
+    /// issued by the CA from enrolment, stores it and serves it from then on. Only the server
+    /// asks for this, over mutual TLS.
+    /// </summary>
+    /// <returns>Null on success, otherwise what's wrong.</returns>
+    public string? Renew(string certificatePem, string caCertificatePem)
+    {
+        X509Certificate2 certificate, ca;
+        try
+        {
+            certificate = X509Certificate2.CreateFromPem(certificatePem);
+            ca = X509Certificate2.CreateFromPem(caCertificatePem);
+        }
+        catch (CryptographicException)
+        {
+            return "The certificates aren't valid PEM.";
+        }
+
+        lock (_gate)
+        {
+            if (_ca is null)
+                return "This agent isn't enrolled.";
+            if (!ca.RawDataMemory.Span.SequenceEqual(_ca.RawDataMemory.Span))
+                return "The renewed certificate must come from the CA this agent was enrolled with.";
+            if (_pendingKey is not { } key)
+                return "No certificate request is pending. Start the renewal again.";
+            if (!certificate.PublicKey.ExportSubjectPublicKeyInfo().AsSpan().SequenceEqual(key.ExportSubjectPublicKeyInfo()))
+                return "The certificate isn't for this agent's new key.";
+            if (!Chains(certificate, _ca, ServerAuth))
+                return "The certificate doesn't chain to the enrolment CA, or doesn't allow server authentication.";
+
+            var keyPem = key.ExportPkcs8PrivateKeyPem();
+            WritePrivate(RenewKeyFile, keyPem);
+            WritePrivate(RenewCertificateFile, certificatePem);
+            FinishRenewal();
+
+            _serverCertificate = DockerTransport.LoadCertificateWithKey(certificatePem, keyPem);
+            _pendingKey = null;
+            key.Dispose();
+            return null;
+        }
+    }
+
+    /// <summary>Moves a complete renewed pair over the current one, or drops an incomplete one.</summary>
+    private void FinishRenewal()
+    {
+        var renewKey = Path.Combine(_directory, RenewKeyFile);
+        var renewCertificate = Path.Combine(_directory, RenewCertificateFile);
+        var key = Path.Combine(_directory, KeyFile);
+        if (File.Exists(renewCertificate))
+        {
+            // The new key may already have been moved: then key.pem is it.
+            var keyPath = File.Exists(renewKey) ? renewKey : key;
+            if (File.Exists(keyPath) && Pairs(File.ReadAllText(renewCertificate), File.ReadAllText(keyPath)))
+            {
+                if (keyPath == renewKey)
+                    File.Move(renewKey, key, overwrite: true);
+                File.Move(renewCertificate, Path.Combine(_directory, CertificateFile), overwrite: true);
+            }
+            else
+            {
+                File.Delete(renewCertificate);
+            }
+        }
+        if (File.Exists(renewKey))
+            File.Delete(renewKey);
+
+        static bool Pairs(string certificatePem, string keyPem)
+        {
+            try
+            {
+                using var certificate = X509Certificate2.CreateFromPem(certificatePem);
+                using var key = ECDsa.Create();
+                key.ImportFromPem(keyPem);
+                return certificate.PublicKey.ExportSubjectPublicKeyInfo().AsSpan().SequenceEqual(key.ExportSubjectPublicKeyInfo());
+            }
+            catch (Exception ex) when (ex is CryptographicException or ArgumentException)
+            {
+                return false;
+            }
         }
     }
 

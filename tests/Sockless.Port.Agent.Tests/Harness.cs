@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -106,16 +107,49 @@ internal sealed class AgentHarness : IAsyncDisposable
     public IServiceProvider Services => _app.Services;
 
     /// <param name="port">0 for any free port; the same port again to restart an agent.</param>
-    public static async Task<AgentHarness> StartAsync(DockerAddress engine, AgentToken? token, string? dataPath = null, int port = 0)
+    /// <param name="server">Edge mode: the server address the agent dials.</param>
+    public static async Task<AgentHarness> StartAsync(DockerAddress engine, AgentToken? token, string? dataPath = null, int port = 0, Uri? server = null)
     {
         dataPath ??= Path.Combine(Path.GetTempPath(), "sockless-port-tests", $"agent-{Guid.NewGuid():n}");
-        var options = new AgentOptions { Engine = engine, Token = token, Port = port, DataPath = dataPath };
+        var options = new AgentOptions { Engine = engine, Token = token, Port = port, DataPath = dataPath, Server = server };
         var app = AgentApp.Create(options, ["--Logging:LogLevel:Default=Warning"], IPAddress.Loopback);
         await app.StartAsync(TestContext.Current.CancellationToken);
         return new AgentHarness(app, new Uri(app.Urls.First()).Port, dataPath);
     }
 
     public string Address => $"127.0.0.1:{Port}";
+
+    public AgentIdentity Identity => _app.Services.GetRequiredService<AgentIdentity>();
+
+    public async ValueTask DisposeAsync() => await _app.DisposeAsync();
+}
+
+/// <summary>The server's tunnel endpoint, as the web app maps it, on a loopback port; for edge agents to dial.</summary>
+internal sealed class TunnelHost : IAsyncDisposable
+{
+    private readonly WebApplication _app;
+
+    private TunnelHost(WebApplication app, Uri address)
+    {
+        _app = app;
+        Address = address;
+    }
+
+    /// <summary>The "server address" edge agents are given.</summary>
+    public Uri Address { get; }
+
+    public static async Task<TunnelHost> StartAsync(ServerHarness server)
+    {
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Logging.ClearProviders();
+        builder.WebHost.ConfigureKestrel(k => k.Listen(IPAddress.Loopback, 0));
+        var app = builder.Build();
+        app.UseWebSockets();
+        var tunnels = server.Services.GetRequiredService<Agents.AgentTunnels>();
+        app.Map(Docker.Tunnel.TunnelProtocol.Path, tunnels.HandleAsync);
+        await app.StartAsync(TestContext.Current.CancellationToken);
+        return new TunnelHost(app, new Uri(app.Urls.First()));
+    }
 
     public async ValueTask DisposeAsync() => await _app.DisposeAsync();
 }

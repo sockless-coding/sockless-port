@@ -20,6 +20,12 @@ public static class AgentProtocol
     public const string CompletePath = "/agent/enrol/complete";
     public const string InfoPath = "/agent/info";
 
+    /// <summary>Server → agent, over mutual TLS: make a new key and a request for it.</summary>
+    public const string RenewCsrPath = "/agent/renew/csr";
+
+    /// <summary>Server → agent, over mutual TLS: the new certificate; the agent serves it from then on.</summary>
+    public const string RenewCompletePath = "/agent/renew/complete";
+
     /// <summary>Answers without a client certificate, for the container's health check. Says nothing about the host.</summary>
     public const string HealthPath = "/agent/healthz";
 
@@ -31,6 +37,16 @@ public static class AgentProtocol
 
     /// <summary>Common name of an agent's server certificate.</summary>
     public static string AgentCommonName(int endpointId) => $"sockless-port-agent-{endpointId.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+
+    /// <summary>The endpoint id in a name from <see cref="AgentCommonName"/>, or null.</summary>
+    public static int? EndpointId(string? commonName)
+    {
+        const string prefix = "sockless-port-agent-";
+        return commonName is not null && commonName.StartsWith(prefix, StringComparison.Ordinal)
+               && int.TryParse(commonName.AsSpan(prefix.Length), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var id) && id > 0
+            ? id
+            : null;
+    }
 
     private const string CsrLabel = "sockless-port/agent-csr/v1";
     private const string CompleteLabel = "sockless-port/agent-complete/v1";
@@ -175,6 +191,26 @@ public sealed record AgentInfo
     public DateTimeOffset? EnrolledAt { get; init; }
 
     public DateTimeOffset? CertificateNotAfter { get; init; }
+
+    /// <summary>SHA-256 thumbprint of the certificate the agent serves, so the server knows when a renewal took.</summary>
+    public string? CertificateSha256 { get; init; }
+
+    /// <summary><c>direct</c> (the server connects) or <c>edge</c> (the agent dials the server).</summary>
+    public string? Mode { get; init; }
+}
+
+/// <summary>Agent → server: a request for a fresh key, to renew the agent's certificate.</summary>
+public sealed record AgentRenewCsrResponse
+{
+    public required string CsrPem { get; init; }
+}
+
+/// <summary>Server → agent: the renewed certificate. The CA must be the one from enrolment.</summary>
+public sealed record AgentRenewRequest
+{
+    public required string CertificatePem { get; init; }
+
+    public required string CaCertificatePem { get; init; }
 }
 
 /// <summary>Errors from the agent's own endpoints, shaped like the engine's so clients read both the same way.</summary>
@@ -192,5 +228,7 @@ public sealed record AgentError
 [JsonSerializable(typeof(AgentCsrResponse))]
 [JsonSerializable(typeof(AgentCompleteRequest))]
 [JsonSerializable(typeof(AgentInfo))]
+[JsonSerializable(typeof(AgentRenewCsrResponse))]
+[JsonSerializable(typeof(AgentRenewRequest))]
 [JsonSerializable(typeof(AgentError))]
 public sealed partial class AgentJsonContext : JsonSerializerContext;

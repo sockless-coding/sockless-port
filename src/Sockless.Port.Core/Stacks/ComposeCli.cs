@@ -99,11 +99,13 @@ public sealed class ComposeCli(IOptions<PortOptions> options, RegistryCredential
         CreatePrivateDirectory(runDirectory);
         try
         {
+            // An edge agent is reached through its tunnel, which only this server can open.
+            await using var bridge = EngineBridge.StartIfNeeded(request.Engine, runDirectory);
             var start = StartInfo(tool.FileName, Arguments(tool, request));
             // Without a project folder, Compose must not pick up a compose.yaml from wherever it runs.
             start.WorkingDirectory = request.Source?.Directory ?? request.ProjectDirectory ?? runDirectory;
             start.Environment.Clear();
-            foreach (var (key, value) in await EnvironmentAsync(request.Engine, runDirectory, cancellationToken))
+            foreach (var (key, value) in await EnvironmentAsync(bridge?.Address ?? request.Engine, runDirectory, cancellationToken))
                 start.Environment[key] = value;
             return await ExecuteAsync(start, onLine, cancellationToken);
         }

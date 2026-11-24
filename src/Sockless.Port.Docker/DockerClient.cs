@@ -142,6 +142,28 @@ public sealed partial class DockerClient : IDisposable
                ?? throw new InvalidDataException("The agent returned an empty info response.");
     }
 
+    /// <summary>Asks an agent for a request for a fresh key (<see cref="Agent.AgentProtocol.RenewCsrPath"/>). Agents before renewal existed answer 404.</summary>
+    public async Task<Agent.AgentRenewCsrResponse> RequestAgentRenewalAsync(CancellationToken cancellationToken = default)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(_requestTimeout);
+        using var response = await _http.PostAsync(Agent.AgentProtocol.RenewCsrPath, new StringContent("{}", System.Text.Encoding.UTF8, "application/json"), cts.Token);
+        await EnsureSuccessAsync(response, Agent.AgentProtocol.RenewCsrPath, cts.Token);
+        return await response.Content.ReadFromJsonAsync(Agent.AgentJsonContext.Default.AgentRenewCsrResponse, cts.Token)
+               ?? throw new InvalidDataException("The agent returned an empty renewal request.");
+    }
+
+    /// <summary>Hands an agent its renewed certificate; it serves it from then on and reports itself.</summary>
+    public async Task<Agent.AgentInfo> CompleteAgentRenewalAsync(Agent.AgentRenewRequest request, CancellationToken cancellationToken = default)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(_requestTimeout);
+        using var response = await _http.PostAsJsonAsync(Agent.AgentProtocol.RenewCompletePath, request, Agent.AgentJsonContext.Default.AgentRenewRequest, cts.Token);
+        await EnsureSuccessAsync(response, Agent.AgentProtocol.RenewCompletePath, cts.Token);
+        return await response.Content.ReadFromJsonAsync(Agent.AgentJsonContext.Default.AgentInfo, cts.Token)
+               ?? throw new InvalidDataException("The agent returned an empty info response.");
+    }
+
     // ---------------------------------------------------------------- resources
 
     public async Task<IReadOnlyList<ContainerSummary>> ListContainersAsync(bool all = true, CancellationToken cancellationToken = default) =>

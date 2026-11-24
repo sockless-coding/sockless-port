@@ -16,7 +16,29 @@
         <h3 id="status-title" class="section-title">Status</h3>
         <dl class="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[12rem_1fr]">
             <dt class="text-secondary">Kind</dt>
-            <dd>@(connection.IsLocal ? "Local engine" : "Agent")</dd>
+            <dd>@(connection.IsLocal ? "Local engine" : connection.IsEdge ? "Agent, edge mode: it dials Sockless Port" : "Agent, direct: Sockless Port connects to it")</dd>
+            @if (connection.Edge is { } edge)
+            {
+                <dt class="text-secondary">Tunnel</dt>
+                <dd class="flex flex-wrap items-center gap-2">
+                    @if (edge.ConnectedSince is { } since)
+                    {
+                        <span class="badge success">Up</span>
+                        <span class="text-xs text-secondary">since @Format.Timestamp(since)@(edge.Remote is { } remote ? $", from {remote}" : "")</span>
+                    }
+                    else if (edge.SeenAt is { } seen)
+                    {
+                        <span class="badge warning">Down</span>
+                        <span class="text-xs text-secondary">last up @Format.Timestamp(seen) (@Format.Relative(seen, Model.Now))</span>
+                    }
+                    else
+                    {
+                        <span class="badge info">Never connected</span>
+                    }
+                </dd>
+                <dt class="text-secondary">Dials</dt>
+                <dd class="break-all font-mono text-xs">@edge.ServerUrl</dd>
+            }
             <dt class="text-secondary">State</dt>
             <dd class="flex flex-wrap items-center gap-2">
                 <partial name="_EndpointStateBadge" model="connection.State" />
@@ -93,7 +115,14 @@
             else
             {
                 <p class="mb-4 max-w-3xl text-secondary">
-                    Run this on the agent's host. Sockless Port connects to it as soon as it starts and enrols it; this page updates when it's done.
+                    @if (connection.IsEdge)
+                    {
+                        <text>Run this on the agent's host. The agent dials Sockless Port as soon as it starts and is enrolled through its tunnel; this page updates when it's done.</text>
+                    }
+                    else
+                    {
+                        <text>Run this on the agent's host. Sockless Port connects to it as soon as it starts and enrols it; this page updates when it's done.</text>
+                    }
                     The command works once, until @Format.Timestamp(enrolment.ExpiresAt) (@Format.Until(enrolment.ExpiresAt, Model.Now)).
                 </p>
                 <nav class="tabs mb-4" aria-label="Engine on the agent's host">

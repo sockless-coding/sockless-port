@@ -15,7 +15,7 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261124174247_AddGitStacks";
+    public override string LastMigrationId => "20261124185710_AddAgentEdgeMode";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -329,6 +329,10 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                 b.Property<string>("AgentCertificatePem")
                     .HasColumnType("TEXT");
 
+                b.Property<string>("AgentPreviousThumbprint")
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
+
                 b.Property<string>("AgentThumbprint")
                     .HasMaxLength(64)
                     .HasColumnType("TEXT");
@@ -336,6 +340,9 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                 b.Property<string>("CreatedAt")
                     .IsRequired()
                     .HasColumnType("TEXT");
+
+                b.Property<bool>("Edge")
+                    .HasColumnType("INTEGER");
 
                 b.Property<string>("EnrolledAt")
                     .HasColumnType("TEXT");
@@ -358,6 +365,13 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                     .HasColumnType("TEXT");
 
                 b.Property<string>("ProtectedEnrolmentSecret")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("ServerUrl")
+                    .HasMaxLength(512)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("TunnelSeenAt")
                     .HasColumnType("TEXT");
 
                 b.HasKey("Id");

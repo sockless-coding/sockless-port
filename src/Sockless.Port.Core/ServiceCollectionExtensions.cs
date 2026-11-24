@@ -80,8 +80,11 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IEngineEventSink, NullEngineEventSink>();
         services.AddSingleton<InternalCa>();
         services.AddSingleton<IAgentEnroller, AgentEnrolments>();
+        services.AddSingleton<AgentTunnels>();
         services.AddSingleton<EndpointRegistry>();
         services.AddHostedService<EngineMonitor>();
+        services.AddSingleton<AgentRenewals>();
+        services.AddHostedService(sp => sp.GetRequiredService<AgentRenewals>());
 
         services.AddSingleton<RegistryCredentials>();
         services.AddSingleton<Monitoring.ResourceMonitor>();

@@ -8,6 +8,12 @@ namespace Sockless.Port.Engines;
 /// <param name="Info">From <c>/agent/info</c> while online; null before the first connection.</param>
 public sealed record AgentStatus(string? Thumbprint, DateTimeOffset? CertificateNotAfter, DateTimeOffset? EnrolledAt, AgentInfo? Info = null);
 
+/// <summary>An edge agent's tunnel: the server address it dials, and whether it's up.</summary>
+/// <param name="ConnectedSince">Since when the tunnel is up; null while it's down.</param>
+/// <param name="Remote">Where it last connected from, as this server saw it (a reverse proxy's address, behind one).</param>
+/// <param name="SeenAt">When the tunnel was last up: when it connected, or when it closed.</param>
+public sealed record EdgeStatus(string ServerUrl, DateTimeOffset? ConnectedSince = null, string? Remote = null, DateTimeOffset? SeenAt = null);
+
 /// <summary>An enrolment waiting for its agent.</summary>
 public sealed record PendingEnrolment(AgentToken Token, DateTimeOffset ExpiresAt);
 
@@ -24,6 +30,7 @@ public sealed class EngineConnection
     private DockerAddress _address;
     private AgentStatus? _agent;
     private PendingEnrolment? _enrolment;
+    private EdgeStatus? _edge;
 
     public EngineConnection(int id, string name, DockerAddress address, EndpointKind kind, TimeProvider? time = null)
     {
@@ -43,6 +50,15 @@ public sealed class EngineConnection
     public bool IsLocal => Kind == EndpointKind.Local;
 
     public bool IsAgent => Kind == EndpointKind.Agent;
+
+    /// <summary>An agent that dials this server through a tunnel (edge mode).</summary>
+    public bool IsEdge => Edge is not null;
+
+    /// <summary>For edge agents: the tunnel's state. Null for other endpoints.</summary>
+    public EdgeStatus? Edge
+    {
+        get { lock (_gate) return _edge; }
+    }
 
     public string Name
     {
@@ -105,6 +121,11 @@ public sealed class EngineConnection
             if (_agent is not null)
                 _agent = _agent with { Info = info };
         }
+    }
+
+    internal void SetEdge(EdgeStatus? edge)
+    {
+        lock (_gate) _edge = edge;
     }
 
     internal void SetEnrolment(PendingEnrolment? enrolment)

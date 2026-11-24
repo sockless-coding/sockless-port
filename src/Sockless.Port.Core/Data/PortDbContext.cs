@@ -167,6 +167,9 @@ public sealed class PortDbContext(DbContextOptions<PortDbContext> options) : Ide
             endpoint.Property(e => e.EnrolledAt).HasConversion(SortableUtc);
             endpoint.Property(e => e.EnrolmentTokenId).HasMaxLength(32);
             endpoint.Property(e => e.EnrolmentExpiresAt).HasConversion(SortableUtc);
+            endpoint.Property(e => e.AgentPreviousThumbprint).HasMaxLength(64);
+            endpoint.Property(e => e.ServerUrl).HasMaxLength(512);
+            endpoint.Property(e => e.TunnelSeenAt).HasConversion(SortableUtc);
         });
 
         builder.Entity<RegistryCredential>(registry =>

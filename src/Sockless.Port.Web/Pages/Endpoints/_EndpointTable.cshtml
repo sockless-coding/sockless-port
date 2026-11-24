@@ -30,6 +30,10 @@
                             else
                             {
                                 <span class="badge-stat">Agent@(agentVersion is null ? "" : $" {agentVersion}")</span>
+                                @if (endpoint.IsEdge)
+                                {
+                                    <span class="badge-stat">Edge</span>
+                                }
                                 @if (AgentCommands.IsOutdated(agentVersion))
                                 {
                                     <span class="badge warning">Update available</span>
@@ -37,7 +41,19 @@
                             }
                         </span>
                     </th>
-                    <td class="break-all font-mono text-xs">@endpoint.Address</td>
+                    <td class="break-all text-xs">
+                        @if (endpoint.Edge is { } edge)
+                        {
+                            <span class="block">Dials <span class="font-mono">@edge.ServerUrl</span></span>
+                            <span class="mt-1 block text-secondary">
+                                @(edge.ConnectedSince is not null ? "Tunnel up" : edge.SeenAt is { } seen ? $"Tunnel down, last up {Format.Timestamp(seen)}" : "Tunnel never connected")
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="font-mono">@endpoint.Address</span>
+                        }
+                    </td>
                     <td>
                         @if (endpoint.Engine is { } engine)
                         {

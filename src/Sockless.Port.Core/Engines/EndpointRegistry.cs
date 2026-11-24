@@ -17,8 +17,10 @@ namespace Sockless.Port.Engines;
 public sealed record EndpointInputError(string Field, string Message);
 
 /// <summary>What a user typed to add an agent endpoint.</summary>
-/// <param name="Address">The agent's host, optionally with a port: <c>host</c>, <c>host:9001</c>, <c>[2001:db8::1]:9001</c>.</param>
-public sealed record AgentEndpointInput(string Name, string Address);
+/// <param name="Address">Direct mode: the agent's host, optionally with a port: <c>host</c>, <c>host:9001</c>, <c>[2001:db8::1]:9001</c>.</param>
+/// <param name="Edge">Edge mode: the agent dials this server instead, so <paramref name="Address"/> isn't used.</param>
+/// <param name="ServerUrl">Edge mode: this server's address as the agent reaches it, e.g. <c>https://port.example.com</c>.</param>
+public sealed record AgentEndpointInput(string Name, string Address, bool Edge = false, string? ServerUrl = null);
 
 /// <summary>
 /// Adds, renames, re-enrols and removes endpoints, keeping the stored rows and the live
@@ -28,6 +30,7 @@ public sealed partial class EndpointRegistry(
     IServiceScopeFactory scopes,
     EngineConnections connections,
     InternalCa ca,
+    AgentTunnels tunnels,
     IDataProtectionProvider protection,
     IOptions<PortOptions> options,
     TimeProvider time,
@@ -51,12 +54,14 @@ public sealed partial class EndpointRegistry(
 
     private EngineConnection ToConnection(EngineEndpoint endpoint)
     {
+        if (endpoint is { Kind: EndpointKind.Agent, Edge: true })
+            return ToEdgeConnection(endpoint);
         if (!DockerAddress.TryParse(endpoint.Address, out var address))
             throw new InvalidDataException($"Endpoint '{endpoint.Name}' has an invalid address '{endpoint.Address}'.");
         var connection = new EngineConnection(endpoint.Id, endpoint.Name, address, endpoint.Kind, time);
         if (endpoint.Kind == EndpointKind.Agent && address is TcpAddress tcp)
         {
-            var tls = endpoint.AgentThumbprint is { } pin ? ca.AgentTls(pin) : new DockerTls();
+            var tls = endpoint.AgentThumbprint is { } pin ? ca.AgentTls(pin, endpoint.AgentPreviousThumbprint) : new DockerTls();
             connection.SetAgent(new TcpAddress(tcp.Host, tcp.Port, tls),
                 new AgentStatus(endpoint.AgentThumbprint, endpoint.AgentCertificateNotAfter, endpoint.EnrolledAt));
             connection.SetEnrolment(ReadEnrolment(endpoint));
@@ -65,6 +70,23 @@ public sealed partial class EndpointRegistry(
         }
         return connection;
     }
+
+    /// <summary>An edge agent: reached through its tunnel, under the name its certificate is issued for.</summary>
+    private EngineConnection ToEdgeConnection(EngineEndpoint endpoint)
+    {
+        var tls = endpoint.AgentThumbprint is { } pin ? ca.AgentTls(pin, endpoint.AgentPreviousThumbprint) : new DockerTls();
+        var address = new TunnelAddress(EdgeHost(endpoint.Id), tunnels.Connector(endpoint.Id), tls);
+        var connection = new EngineConnection(endpoint.Id, endpoint.Name, address, EndpointKind.Agent, time);
+        connection.SetEdge(new EdgeStatus(endpoint.ServerUrl ?? "", SeenAt: endpoint.TunnelSeenAt));
+        connection.SetAgent(address, new AgentStatus(endpoint.AgentThumbprint, endpoint.AgentCertificateNotAfter, endpoint.EnrolledAt));
+        connection.SetEnrolment(ReadEnrolment(endpoint));
+        if (endpoint.AgentThumbprint is null && connection.Enrolment is { } pending)
+            connection.SetEnrolling(time.GetUtcNow(), pending.ExpiresAt, problem: null);
+        return connection;
+    }
+
+    /// <summary>The name an edge agent's certificate carries, and the TLS host its connections check.</summary>
+    internal static string EdgeHost(int endpointId) => AgentProtocol.AgentCommonName(endpointId);
 
     private PendingEnrolment? ReadEnrolment(EngineEndpoint endpoint)
     {
@@ -89,7 +111,8 @@ public sealed partial class EndpointRegistry(
         var errors = new List<EndpointInputError>();
         var name = input.Name.Trim();
         CheckName(name, errors);
-        var address = ParseAgentAddress(input.Address, errors);
+        var address = input.Edge ? null : ParseAgentAddress(input.Address, errors);
+        var serverUrl = input.Edge ? ParseServerUrl(input.ServerUrl, errors) : null;
 
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<PortDbContext>();
@@ -101,13 +124,21 @@ public sealed partial class EndpointRegistry(
         var endpoint = new EngineEndpoint
         {
             Name = name,
-            Address = address!.ToString(),
+            // An edge agent's address names it by id, known once it's saved.
+            Address = address?.ToString() ?? "tunnel://pending",
             Kind = EndpointKind.Agent,
+            Edge = input.Edge,
+            ServerUrl = serverUrl,
             CreatedAt = time.GetUtcNow(),
         };
         SetEnrolment(endpoint, token);
         db.Endpoints.Add(endpoint);
         await db.SaveChangesAsync(cancellationToken);
+        if (input.Edge)
+        {
+            endpoint.Address = $"tunnel://{EdgeHost(endpoint.Id)}";
+            await db.SaveChangesAsync(cancellationToken);
+        }
 
         connections.Add(ToConnection(endpoint));
         LogAdded(logger, name, endpoint.Address);
@@ -140,9 +171,10 @@ public sealed partial class EndpointRegistry(
 
     /// <summary>
     /// Starts a new enrolment for an agent endpoint, optionally at a new address. The current
-    /// certificate stops being accepted at once, so only an agent started with the new command
-    /// gets in.
+    /// certificate stops being accepted at once (an edge agent's tunnel is closed), so only an
+    /// agent started with the new command gets in.
     /// </summary>
+    /// <param name="newAddress">Direct mode: the agent's new address. Edge mode: the server's address the agent dials. Empty keeps the current one.</param>
     public async Task<IReadOnlyList<EndpointInputError>> ReenrolAsync(int id, string? newAddress, CancellationToken cancellationToken = default)
     {
         var errors = new List<EndpointInputError>();
@@ -155,7 +187,9 @@ public sealed partial class EndpointRegistry(
 
         if (!string.IsNullOrWhiteSpace(newAddress))
         {
-            if (ParseAgentAddress(newAddress, errors) is { } address)
+            if (endpoint.Edge)
+                endpoint.ServerUrl = ParseServerUrl(newAddress, errors) ?? endpoint.ServerUrl;
+            else if (ParseAgentAddress(newAddress, errors) is { } address)
                 endpoint.Address = address.ToString();
             if (errors.Count > 0)
                 return errors;
@@ -163,6 +197,7 @@ public sealed partial class EndpointRegistry(
 
         endpoint.AgentCertificatePem = null;
         endpoint.AgentThumbprint = null;
+        endpoint.AgentPreviousThumbprint = null;
         endpoint.AgentCertificateNotAfter = null;
         endpoint.EnrolledAt = null;
         SetEnrolment(endpoint, AgentToken.Create());
@@ -173,8 +208,12 @@ public sealed partial class EndpointRegistry(
             var fresh = ToConnection(endpoint);
             connection.SetAgent(fresh.Address, fresh.Agent!);
             connection.SetEnrolment(fresh.Enrolment);
+            if (fresh.Edge is { } edge)
+                connection.SetEdge((connection.Edge ?? edge) with { ServerUrl = edge.ServerUrl });
             connections.Reconnect(connection);
         }
+        if (endpoint.Edge)
+            tunnels.Drop(id, "The endpoint was enrolled again.");
         LogReenrolling(logger, endpoint.Name, endpoint.Address);
         return [];
     }
@@ -193,6 +232,7 @@ public sealed partial class EndpointRegistry(
         db.Endpoints.Remove(endpoint);
         await db.SaveChangesAsync(cancellationToken);
         connections.Remove(id);
+        tunnels.Drop(id, "The endpoint was removed.");
 
         // Stack files, and the checkouts of git-backed stacks.
         foreach (var stacks in (string[])[Path.Combine(options.Value.StacksPath, id.ToString(CultureInfo.InvariantCulture)),
@@ -284,6 +324,24 @@ public sealed partial class EndpointRegistry(
             return null;
         }
         return new TcpAddress(host, port, new DockerTls());
+    }
+
+    /// <summary>The server's address an edge agent dials: absolute http(s), no query; returned without a trailing slash.</summary>
+    internal static string? ParseServerUrl(string? value, List<EndpointInputError> errors)
+    {
+        const string field = "ServerUrl";
+        if (!Uri.TryCreate(value?.Trim(), UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https") || string.IsNullOrEmpty(uri.Host)
+            || uri.Query.Length > 0 || uri.Fragment.Length > 0 || uri.UserInfo.Length > 0)
+        {
+            errors.Add(new(field, "Use the address the agent's host reaches Sockless Port at, e.g. https://port.example.com."));
+            return null;
+        }
+        if (uri.AbsoluteUri.Length > 400)
+        {
+            errors.Add(new(field, "The address is too long."));
+            return null;
+        }
+        return uri.GetLeftPart(UriPartial.Path).TrimEnd('/');
     }
 
     [GeneratedRegex(@"^(?=.{1,253}$)[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$")]

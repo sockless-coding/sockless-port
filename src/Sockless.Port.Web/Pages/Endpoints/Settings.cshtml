@@ -1,5 +1,6 @@
 @page "/endpoints/{endpointId:int}/settings"
 @model Sockless.Port.Web.Pages.Endpoints.SettingsModel
+@using Sockless.Port.Agents
 @{
     ViewData["Title"] = $"{Model.Connection.Name} settings";
     var connection = Model.Connection;
@@ -14,7 +15,14 @@
 <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
     <div>
         <h2 class="page-title break-all">@connection.Name</h2>
-        <p class="mt-1 font-mono text-xs text-secondary">@connection.Address</p>
+        @if (connection.Edge is { } edge)
+        {
+            <p class="mt-1 text-xs text-secondary">Edge agent, dials <span class="font-mono">@edge.ServerUrl</span></p>
+        }
+        else
+        {
+            <p class="mt-1 font-mono text-xs text-secondary">@connection.Address</p>
+        }
     </div>
     <a asp-page="/Engine/Index" asp-route-endpointId="@connection.Id" class="btn-soft"><icon name="home" class="h-4 w-4" /> Dashboard</a>
 </div>
@@ -35,17 +43,43 @@
 
 @if (connection.IsAgent)
 {
+    @if (connection.Agent?.Thumbprint is not null)
+    {
+        <section class="card mt-6" aria-labelledby="certificate-title">
+            <h3 id="certificate-title" class="section-title">Certificate</h3>
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <p class="max-w-3xl text-secondary">
+                    The agent's certificate is renewed automatically while it's online, @AgentRenewals.RenewBefore.Days days before it expires@(Model.RenewsAt is { } renewsAt ? $" (from {Format.Timestamp(renewsAt)})" : "").
+                    Renewing now gives it a new key; the agent keeps working throughout.
+                </p>
+                <form method="post" asp-page-handler="Renew" asp-route-endpointId="@connection.Id" asp-route-variant="@Model.Variant">
+                    <button type="submit" class="btn-soft" disabled="@(connection.Client is null)">
+                        <icon name="arrow-path" class="h-4 w-4" /> Renew now
+                    </button>
+                </form>
+            </div>
+        </section>
+    }
+
     <section class="card mt-6" aria-labelledby="reenrol-title">
         <h3 id="reenrol-title" class="section-title">Enrol again</h3>
         <p class="mb-4 max-w-3xl text-secondary">
-            For an agent that lost its data volume, moved to another address, or should no longer be trusted.
+            @if (connection.IsEdge)
+            {
+                <text>For an agent that lost its data volume, should no longer be trusted, or must dial another address.</text>
+            }
+            else
+            {
+                <text>For an agent that lost its data volume, moved to another address, or should no longer be trusted.</text>
+            }
             The current certificate stops working at once; the endpoint is back when an agent is started with the new command.
         </p>
         <form method="post" asp-page-handler="Reenrol" asp-route-endpointId="@connection.Id" asp-route-variant="@Model.Variant" class="flex flex-wrap items-start gap-3" novalidate>
             <div class="field min-w-[16rem] flex-1">
-                <label asp-for="Address">Agent address</label>
+                <label asp-for="Address">@(connection.IsEdge ? "Sockless Port's address" : "Agent address")</label>
                 <input asp-for="Address" value="@(Model.Address ?? Model.AddressText)" class="font-mono" autocomplete="off" spellcheck="false" />
                 <partial name="_FieldError" model='"Address"' />
+                <partial name="_FieldError" model='"ServerUrl"' />
             </div>
             <button type="submit" class="btn-soft danger mt-6"
                     data-confirm="Enrol @connection.Name again? Its agent's certificate stops working until an agent is started with the new command.">

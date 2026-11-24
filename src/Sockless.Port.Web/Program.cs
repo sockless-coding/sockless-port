@@ -111,6 +111,13 @@ builder.Services.AddRateLimiter(options =>
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0,
         }));
+    options.AddPolicy(AgentTunnelEndpoint.RateLimitPolicy, context =>
+        RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = AgentTunnelEndpoint.PerMinute,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+        }));
     options.OnRejected = SignInLimit.RejectedAsync;
 });
 
@@ -165,6 +172,7 @@ app.MapStaticAssets().AllowAnonymous();
 app.MapRazorPages().WithStaticAssets();
 app.MapHub<EngineHub>(EngineHub.Path);
 app.MapGitHooks();
+app.MapAgentTunnels();
 app.MapHealthChecks("/healthz").AllowAnonymous().DisableHttpMetrics();
 
 await app.RunAsync();

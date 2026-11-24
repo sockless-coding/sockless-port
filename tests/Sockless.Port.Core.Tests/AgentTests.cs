@@ -162,6 +162,73 @@ public sealed class AgentTests : IDisposable
         Assert.All(lines[..^1], l => Assert.EndsWith("\\", l));
     }
 
+    [Theory]
+    [InlineData(AgentInstallVariant.Docker, "docker run -d --name sockless-port-agent")]
+    [InlineData(AgentInstallVariant.PodmanRootful, "sudo podman run -d")]
+    [InlineData(AgentInstallVariant.PodmanRootless, "podman run -d --name sockless-port-agent")]
+    [InlineData(AgentInstallVariant.Swarm, "docker service create --name sockless-port-agent --replicas 1")]
+    public void Edge_install_commands_name_the_server_and_publish_nothing(AgentInstallVariant variant, string expected)
+    {
+        var token = AgentToken.Create();
+        var command = AgentCommands.InstallEdge(variant, token, "https://port.example.com", "example/agent:1.2.3");
+
+        Assert.Contains(expected, command.Text);
+        Assert.Contains("AGENT_SERVER=https://port.example.com", command.Text);
+        Assert.Contains($"AGENT_TOKEN={token.Reveal()}", command.Text);
+        Assert.DoesNotContain("-p ", command.Text);
+        Assert.DoesNotContain("--publish", command.Text);
+        Assert.DoesNotContain("--mode global", command.Text);
+        Assert.EndsWith("example/agent:1.2.3", command.Text);
+        Assert.Contains(command.Notes, n => n.Contains("connects out to https://port.example.com", StringComparison.Ordinal));
+        var lines = command.Text.Split('\n');
+        Assert.All(lines[..^1], l => Assert.EndsWith("\\", l));
+    }
+
+    [Fact]
+    public void Edge_update_commands_keep_the_server_and_drop_the_token()
+    {
+        var docker = AgentCommands.UpdateEdge(AgentInstallVariant.Docker, "https://port.example.com", "example/agent:2.0.0");
+        Assert.Contains("-e AGENT_SERVER=https://port.example.com", docker.Text);
+        Assert.DoesNotContain("AGENT_TOKEN", docker.Text);
+        Assert.DoesNotContain("-p ", docker.Text);
+
+        var swarm = AgentCommands.UpdateEdge(AgentInstallVariant.Swarm, "https://port.example.com", "example/agent:2.0.0");
+        Assert.Equal("docker service update --image example/agent:2.0.0 \\\n  --env-add AGENT_SERVER=https://port.example.com \\\n  sockless-port-agent", swarm.Text);
+    }
+
+    [Theory]
+    [InlineData("https://port.example.com", "https://port.example.com")]
+    [InlineData("https://port.example.com/", "https://port.example.com")]
+    [InlineData("http://10.0.0.5:8080", "http://10.0.0.5:8080")]
+    [InlineData("https://example.com/port/", "https://example.com/port")]
+    public void Server_addresses_for_edge_agents_are_normalised(string text, string expected)
+    {
+        var errors = new List<EndpointInputError>();
+        Assert.Equal(expected, EndpointRegistry.ParseServerUrl(text, errors));
+        Assert.Empty(errors);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("port.example.com")]
+    [InlineData("ftp://port.example.com")]
+    [InlineData("https://port.example.com/?x=1")]
+    [InlineData("https://user:secret@port.example.com")]
+    public void Bad_server_addresses_say_what_to_type(string text)
+    {
+        var errors = new List<EndpointInputError>();
+        Assert.Null(EndpointRegistry.ParseServerUrl(text, errors));
+        Assert.Equal("ServerUrl", Assert.Single(errors).Field);
+    }
+
+    [Theory]
+    [InlineData("https://port.example.com", "https://port.example.com")]
+    [InlineData("https://example.com/a b", "'https://example.com/a b'")]
+    [InlineData("https://example.com/it's", "'https://example.com/it'\\''s'")]
+    [InlineData("https://example.com/$HOME", "'https://example.com/$HOME'")]
+    public void Values_in_commands_are_one_shell_word(string value, string expected) =>
+        Assert.Equal(expected, AgentCommands.ShellQuote(value));
+
     [Fact]
     public void Update_commands_keep_the_identity_and_drop_the_token()
     {

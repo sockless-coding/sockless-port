@@ -21,6 +21,12 @@ public sealed class DockerTls
     /// </summary>
     public string? PinnedCertificateSha256 { get; init; }
 
+    /// <summary>
+    /// A second thumbprint accepted besides <see cref="PinnedCertificateSha256"/>: the certificate an
+    /// agent served before a renewal, until the server knows it switched to the new one.
+    /// </summary>
+    public string? PreviousPinnedCertificateSha256 { get; init; }
+
     public override string ToString() =>
         $"DockerTls(CustomCa: {CaCertificatePem is not null}, ClientCertificate: {ClientCertificatePem is not null}, Pinned: {PinnedCertificateSha256 is not null})";
 }

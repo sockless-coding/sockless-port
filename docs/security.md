@@ -12,6 +12,20 @@ Whoever can use the Docker or Podman socket can start a privileged container tha
 - For people who only need to look, a read-only socket proxy (for example one that allows only `GET`) in front of a separate endpoint is a second line of defence. Viewer is enforced by Sockless Port; a proxy is enforced outside it.
 - The agent relays its local socket to the server over mutual TLS and accepts only the server's certificate. Its port should still be reachable only from the server.
 
+## Agents in edge mode
+
+An edge agent dials the server (`/agent/tunnel`, a WebSocket) instead of listening for it, for hosts behind NAT or a firewall. The address is open without a session, like the git webhooks, so the tunnel itself is trusted for nothing:
+
+- **Every connection inside the tunnel is the same mutual TLS as in direct mode**, end to end between the server and the agent, with the same certificates and pins. A reverse proxy, a plain-HTTP UI or anyone in between sees only TLS records. The agent accepts any certificate on the outer connection for that reason (so self-signed UI certificates and TLS-terminating proxies work); what authenticates is inside.
+- **An enrolled agent's tunnel is only used after it proves itself**: the server first runs a TLS handshake through it against the agent's pinned certificate, so someone who dials as an endpoint can't take its place; the real agent's tunnel stays.
+- **Before enrolment** the agent dials with its token's public id, which is only in the install command. The enrolment then runs through the tunnel exactly as in direct mode: both sides prove they hold the token's secret, which never travels.
+- The agent listens only on loopback in edge mode (for its health check and the tunnel's streams). Tunnel attempts are rate-limited per client address (120 a minute, generous because agents behind a proxy share its address).
+- The server's address the agent dials should be HTTPS where it crosses networks you don't trust, as for the UI: the tunnel is safe either way, but the UI's own sign-in isn't.
+
+## Agent certificates
+
+Agent certificates last five years and are renewed while the agent is online, 60 days before they expire (or at once from the endpoint's settings): the agent makes a new key and request over the existing mutual TLS, and the CA signs it. Until the agent is known to serve the new certificate the server accepts both, so a renewal whose answer is lost can't lock the agent out. The agent writes the new key and certificate next to the old ones and moves them into place, finishing an interrupted move at its next start. Agents older than this version can't renew; update them, or enrol them again.
+
 ## Users and roles
 
 Every page needs a signed-in user. **Administrators** manage users, endpoints, registries and settings, read the audit log, and have every role on every endpoint. Everyone else has a role per endpoint, set on the user's page:

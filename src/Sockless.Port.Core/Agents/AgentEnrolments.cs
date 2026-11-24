@@ -10,15 +10,16 @@ using Microsoft.Extensions.Logging;
 using Sockless.Port.Data;
 using Sockless.Port.Docker;
 using Sockless.Port.Docker.Agent;
+using Sockless.Port.Docker.Tunnel;
 using Sockless.Port.Engines;
 
 namespace Sockless.Port.Agents;
 
 /// <summary>
-/// Enrols agents in direct mode: the server connects to the agent, which waits with the token from
-/// its install command. The agent proves it holds the token over its certificate request, the
-/// server signs the request and proves it holds the token over the certificates. From then on
-/// both sides use mutual TLS, and the server pins the agent's certificate.
+/// Enrols agents: the server connects to the agent (directly, or through the tunnel an edge agent
+/// dialled), which waits with the token from its install command. The agent proves it holds the
+/// token over its certificate request, the server signs the request and proves it holds the token
+/// over the certificates. From then on both sides use mutual TLS, and the server pins the agent's certificate.
 /// </summary>
 public sealed partial class AgentEnrolments(
     IServiceScopeFactory scopes,
@@ -33,13 +34,33 @@ public sealed partial class AgentEnrolments(
 
     public async Task<EnrolmentResult> EnrolAsync(EngineConnection connection, CancellationToken cancellationToken)
     {
-        if (connection.Enrolment is not { } pending || connection.Address is not TcpAddress address)
+        if (connection.Enrolment is not { } pending)
             return new EnrolmentFailed("Nothing to enrol.");
 
-        var where = $"{address.Host}:{address.Port.ToString(CultureInfo.InvariantCulture)}";
-        using var http = new HttpClient(HandlerFactory(), disposeHandler: true)
+        string host, where;
+        Uri baseAddress;
+        HttpMessageHandler handler;
+        switch (connection.Address)
         {
-            BaseAddress = new Uri($"https://{(address.Host.Contains(':', StringComparison.Ordinal) ? $"[{address.Host}]" : address.Host)}:{address.Port.ToString(CultureInfo.InvariantCulture)}/"),
+            case TcpAddress tcp:
+                host = tcp.Host;
+                where = $"{tcp.Host}:{tcp.Port.ToString(CultureInfo.InvariantCulture)}";
+                baseAddress = new Uri($"https://{(tcp.Host.Contains(':', StringComparison.Ordinal) ? $"[{tcp.Host}]" : tcp.Host)}:{tcp.Port.ToString(CultureInfo.InvariantCulture)}/");
+                handler = HandlerFactory();
+                break;
+            case TunnelAddress tunnel:
+                host = tunnel.Host;
+                where = "the end of the tunnel";
+                baseAddress = new Uri($"https://{tunnel.Host}/");
+                handler = CreateTunnelHandler(tunnel);
+                break;
+            default:
+                return new EnrolmentFailed("Nothing to enrol.");
+        }
+
+        using var http = new HttpClient(handler, disposeHandler: true)
+        {
+            BaseAddress = baseAddress,
             Timeout = RequestTimeout,
         };
 
@@ -63,13 +84,13 @@ public sealed partial class AgentEnrolments(
             IssuedCertificate issued;
             try
             {
-                issued = ca.SignAgent(csr.CsrPem, connection.Id, address.Host);
+                issued = ca.SignAgent(csr.CsrPem, connection.Id, host);
             }
             catch (CertificateRequestException ex)
             {
                 return new EnrolmentFailed(ex.Message);
             }
-            if (!await StoreCertificateAsync(connection, address, issued, cancellationToken))
+            if (!await StoreCertificateAsync(connection, issued, cancellationToken))
                 return new EnrolmentFailed("The endpoint was removed.");
 
             // 3. Hand it over.
@@ -115,7 +136,7 @@ public sealed partial class AgentEnrolments(
             connection.SetAgent(connection.Address, agent with { EnrolledAt = endpoint.EnrolledAt });
     }
 
-    private async Task<bool> StoreCertificateAsync(EngineConnection connection, TcpAddress address, IssuedCertificate issued, CancellationToken cancellationToken)
+    private async Task<bool> StoreCertificateAsync(EngineConnection connection, IssuedCertificate issued, CancellationToken cancellationToken)
     {
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<PortDbContext>();
@@ -124,12 +145,20 @@ public sealed partial class AgentEnrolments(
         endpoint.AgentCertificatePem = issued.CertificatePem;
         endpoint.AgentThumbprint = issued.Thumbprint;
         endpoint.AgentCertificateNotAfter = issued.NotAfter;
+        endpoint.AgentPreviousThumbprint = null;
         await db.SaveChangesAsync(cancellationToken);
 
-        connection.SetAgent(new TcpAddress(address.Host, address.Port, ca.AgentTls(issued.Thumbprint)),
-            new AgentStatus(issued.Thumbprint, issued.NotAfter, null));
+        connection.SetAgent(WithTls(connection.Address, ca.AgentTls(issued.Thumbprint)), new AgentStatus(issued.Thumbprint, issued.NotAfter, null));
         return true;
     }
+
+    /// <summary>The agent's address with other TLS settings: a new certificate's pin.</summary>
+    internal static DockerAddress WithTls(DockerAddress address, DockerTls tls) => address switch
+    {
+        TcpAddress tcp => tcp with { Tls = tls },
+        TunnelAddress tunnel => tunnel with { Tls = tls },
+        _ => throw new InvalidOperationException($"An agent can't be at {address}."),
+    };
 
     /// <summary>The agent's refusal as a result, or null when it accepted.</summary>
     private static async Task<EnrolmentResult?> AgentRefusalAsync(HttpResponseMessage response, string where, CancellationToken cancellationToken)
@@ -162,6 +191,8 @@ public sealed partial class AgentEnrolments(
         {
             switch (e)
             {
+                case TunnelUnavailableException tunnel:
+                    return tunnel.Message;
                 case SocketException { SocketErrorCode: SocketError.ConnectionRefused }:
                     return $"No agent answers at {where} yet. Run the command on that host; this page updates when the agent is enrolled.";
                 case SocketException { SocketErrorCode: SocketError.HostNotFound or SocketError.NoData or SocketError.TryAgain }:
@@ -182,6 +213,14 @@ public sealed partial class AgentEnrolments(
         while (exception.InnerException is not null)
             exception = exception.InnerException;
         return exception;
+    }
+
+    /// <summary>As <see cref="CreateHandler"/>, through the edge agent's tunnel.</summary>
+    private static SocketsHttpHandler CreateTunnelHandler(TunnelAddress tunnel)
+    {
+        var handler = CreateHandler();
+        handler.ConnectCallback = (_, ct) => tunnel.Connector.OpenAsync(ct);
+        return handler;
     }
 
     private static SocketsHttpHandler CreateHandler() => new()

@@ -5,7 +5,7 @@ public enum EndpointKind
     /// <summary>The engine on the host Sockless Port runs on, found automatically.</summary>
     Local,
 
-    /// <summary>A Sockless Port agent on another host, reached over mutual TLS.</summary>
+    /// <summary>A Sockless Port agent on another host, reached over mutual TLS: directly, or through the tunnel it dials (<see cref="EngineEndpoint.Edge"/>).</summary>
     Agent,
 }
 
@@ -48,4 +48,24 @@ public sealed class EngineEndpoint
     public string? ProtectedEnrolmentSecret { get; set; }
 
     public DateTimeOffset? EnrolmentExpiresAt { get; set; }
+
+    /// <summary>
+    /// The certificate the agent served before its last renewal, still accepted until the agent
+    /// is known to serve the new one (a renewal whose answer was lost mustn't lock it out).
+    /// </summary>
+    public string? AgentPreviousThumbprint { get; set; }
+
+    // ---------------------------------------------------------------- edge mode
+
+    /// <summary>
+    /// Edge mode: the agent dials the server through a tunnel, instead of the server connecting to
+    /// it. <see cref="Address"/> is then <c>tunnel://sockless-port-agent-{id}</c>, the name in its certificate.
+    /// </summary>
+    public bool Edge { get; set; }
+
+    /// <summary>Edge mode: the server's address the agent dials, as the install and update commands give it.</summary>
+    public string? ServerUrl { get; set; }
+
+    /// <summary>Edge mode: when the tunnel was last up (when it connected, or when it closed).</summary>
+    public DateTimeOffset? TunnelSeenAt { get; set; }
 }

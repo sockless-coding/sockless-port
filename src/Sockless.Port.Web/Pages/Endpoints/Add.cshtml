@@ -14,25 +14,53 @@
     <h2 class="page-title">Add agent</h2>
     <p class="mt-1 max-w-3xl text-secondary">
         The agent runs as a container on the other host and passes the engine's API to Sockless Port over mutual TLS.
-        Sockless Port connects to it, so the agent's port must be reachable from here; the agent never connects back.
+        Either Sockless Port connects to it, or, for hosts behind NAT or a firewall, the agent connects out to Sockless Port.
     </p>
 </div>
 
+<nav aria-label="How Sockless Port and the agent connect" class="tabs mb-6">
+    <a asp-page="/Endpoints/Add" asp-route-name="@Model.Name" asp-route-address="@Model.Address" class="tab" aria-current="@(Model.Edge ? null : "page")">Direct</a>
+    <a asp-page="/Endpoints/Add" asp-route-mode="edge" asp-route-name="@Model.Name" class="tab" aria-current="@(Model.Edge ? "page" : null)">Edge</a>
+</nav>
+
 <section class="card max-w-3xl" aria-labelledby="add-title">
     <h3 id="add-title" class="section-title">Endpoint</h3>
-    <form method="post" class="space-y-4" novalidate>
+    @if (Model.Edge)
+    {
+        <p class="mb-4 text-secondary">
+            The agent dials Sockless Port and keeps a tunnel open, so nothing needs to reach the agent's host: no published port, no firewall rule.
+            Sockless Port reaches the engine only while the tunnel is up.
+        </p>
+    }
+    else
+    {
+        <p class="mb-4 text-secondary">Sockless Port connects to the agent, so the agent's port must be reachable from here; the agent never connects back.</p>
+    }
+    <form method="post" asp-route-mode="@(Model.Edge ? "edge" : null)" class="space-y-4" novalidate>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div class="field">
                 <label asp-for="Name">Name</label>
                 <input asp-for="Name" maxlength="64" placeholder="web-1" autocomplete="off" spellcheck="false" />
                 <partial name="_FieldError" model='"Name"' />
             </div>
-            <div class="field">
-                <label asp-for="Address">Agent address</label>
-                <input asp-for="Address" class="font-mono" placeholder="web-1.example.com" autocomplete="off" spellcheck="false" aria-describedby="address-hint" />
-                <p class="hint" id="address-hint">The host's name or IP address as Sockless Port reaches it, with <span class="font-mono">:port</span> if it isn't 9001. The agent's certificate is issued for this name.</p>
-                <partial name="_FieldError" model='"Address"' />
-            </div>
+            @if (Model.Edge)
+            {
+                <div class="field">
+                    <label asp-for="ServerUrl">Sockless Port's address</label>
+                    <input asp-for="ServerUrl" type="url" class="font-mono" placeholder="https://port.example.com" autocomplete="off" spellcheck="false" aria-describedby="server-hint" />
+                    <p class="hint" id="server-hint">How the agent's host reaches this server, as in a browser there. A reverse proxy in between must pass WebSockets.</p>
+                    <partial name="_FieldError" model='"ServerUrl"' />
+                </div>
+            }
+            else
+            {
+                <div class="field">
+                    <label asp-for="Address">Agent address</label>
+                    <input asp-for="Address" class="font-mono" placeholder="web-1.example.com" autocomplete="off" spellcheck="false" aria-describedby="address-hint" />
+                    <p class="hint" id="address-hint">The host's name or IP address as Sockless Port reaches it, with <span class="font-mono">:port</span> if it isn't 9001. The agent's certificate is issued for this name.</p>
+                    <partial name="_FieldError" model='"Address"' />
+                </div>
+            }
         </div>
         <div class="flex justify-end gap-2">
             <a asp-page="/Endpoints/Index" class="btn-soft">Cancel</a>

@@ -104,6 +104,71 @@ public sealed partial class AgentPagesTests : IDisposable
         Assert.NotNull(_factory.LocalEndpoint);
     }
 
+    [Fact]
+    public async Task Adding_an_edge_agent_shows_a_command_that_dials_the_server()
+    {
+        var browser = await _factory.CreateSignedInBrowserAsync();
+        var form = await browser.GetStringAsync("/endpoints/add?mode=edge", Ct);
+        // Prefilled with the address the page was opened at.
+        Assert.Contains("value=\"http://localhost\"", form);
+
+        var token = await PortFactory.GetAntiforgeryTokenAsync(browser, "/endpoints/add?mode=edge");
+        var response = await browser.PostAsync("/endpoints/add?mode=edge",
+            PortFactory.Form(token, new() { ["Name"] = "edge-1", ["ServerUrl"] = "https://port.example.com/" }), Ct);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var id = int.Parse(SettingsPath().Match(response.Headers.Location!.OriginalString).Groups[1].Value);
+        var connection = _factory.Services.GetRequiredService<EngineConnections>().Get(id)!;
+        Assert.True(connection.IsEdge);
+
+        var html = await browser.GetStringAsync($"/endpoints/{id}/settings", Ct);
+        Assert.Contains("AGENT_SERVER=https://port.example.com", html);
+        Assert.Contains($"AGENT_TOKEN={connection.Enrolment!.Token.Reveal()}", html);
+        Assert.DoesNotContain("-p ", html);
+        Assert.Contains("Never connected", html);
+        Assert.Contains("Sockless Port&#x27;s address", html);
+
+        var list = await browser.GetStringAsync("/endpoints", Ct);
+        Assert.Contains("Tunnel never connected", list);
+    }
+
+    [Fact]
+    public async Task The_edge_form_needs_a_server_address()
+    {
+        var browser = await _factory.CreateSignedInBrowserAsync();
+        var token = await PortFactory.GetAntiforgeryTokenAsync(browser, "/endpoints/add?mode=edge");
+
+        var response = await browser.PostAsync("/endpoints/add?mode=edge", PortFactory.Form(token, new() { ["Name"] = "edge-1", ["ServerUrl"] = "port.example.com" }), Ct);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("e.g. https://port.example.com.", await response.Content.ReadAsStringAsync(Ct));
+        Assert.Single(_factory.Services.GetRequiredService<EngineConnections>().All);
+    }
+
+    [Fact]
+    public async Task The_tunnel_address_is_open_to_agents_only()
+    {
+        // No session needed (once set up), but a plain request isn't a tunnel.
+        await _factory.CreateSignedInBrowserAsync();
+        var anonymous = _factory.CreateBrowser();
+        var response = await anonymous.GetAsync("/agent/tunnel?endpoint=1", Ct);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("edge mode", await response.Content.ReadAsStringAsync(Ct));
+    }
+
+    [Fact]
+    public async Task Renewing_needs_the_agent_online()
+    {
+        var (browser, id) = await AddAgentAsync();
+        var settings = $"/endpoints/{id}/settings";
+        var token = await PortFactory.GetAntiforgeryTokenAsync(browser, settings);
+
+        var response = await browser.PostAsync($"{settings}?handler=Renew", PortFactory.Form(token, []), Ct);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Contains("Only an enrolled agent", await browser.GetStringAsync(settings, Ct));
+    }
+
     [GeneratedRegex(@"/endpoints/(\d+)/settings")]
     private static partial Regex SettingsPath();
 }

@@ -84,3 +84,21 @@ public sealed record TcpAddress(string Host, int Port, DockerTls? Tls = null) : 
     public override string ToString() =>
         $"{(Tls is null ? "tcp" : "https")}://{(Host.Contains(':', StringComparison.Ordinal) ? $"[{Host}]" : Host)}:{Port.ToString(CultureInfo.InvariantCulture)}";
 }
+
+/// <summary>Opens byte streams to an agent that dialled out to this server (edge mode).</summary>
+public interface ITunnelConnector
+{
+    /// <exception cref="Tunnel.TunnelUnavailableException">The agent's tunnel isn't up.</exception>
+    ValueTask<Stream> OpenAsync(CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// An agent in edge mode, reached through the tunnel it dialled to the server. Each connection is a
+/// new stream from <paramref name="Connector"/>, with TLS on top as for a <see cref="TcpAddress"/>.
+/// Not parsed from text: the server builds it for the endpoint.
+/// </summary>
+/// <param name="Host">The name the agent's certificate carries, checked like a host name.</param>
+public sealed record TunnelAddress(string Host, ITunnelConnector Connector, DockerTls? Tls = null) : DockerAddress
+{
+    public override string ToString() => $"tunnel://{Host}";
+}

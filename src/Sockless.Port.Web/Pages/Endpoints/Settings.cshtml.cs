@@ -9,7 +9,8 @@ using Sockless.Port.Web.Infrastructure;
 namespace Sockless.Port.Web.Pages.Endpoints;
 
 /// <summary>An endpoint's settings: name, the agent's install command and certificate, re-enrolment and removal.</summary>
-public sealed class SettingsModel(EngineConnections connections, EndpointRegistry registry, IOptions<PortOptions> options, TimeProvider time) : PageModel
+public sealed class SettingsModel(EngineConnections connections, EndpointRegistry registry, AgentRenewals renewals, IOptions<PortOptions> options, TimeProvider time)
+    : PageModel
 {
     public EngineConnection Connection { get; private set; } = null!;
 
@@ -20,7 +21,7 @@ public sealed class SettingsModel(EngineConnections connections, EndpointRegistr
     [BindProperty]
     public string Name { get; set; } = "";
 
-    /// <summary>The address for a new enrolment; empty keeps the current one.</summary>
+    /// <summary>The address for a new enrolment (an edge agent: the server's address it dials); empty keeps the current one.</summary>
     [BindProperty]
     public string? Address { get; set; }
 
@@ -31,17 +32,25 @@ public sealed class SettingsModel(EngineConnections connections, EndpointRegistr
     public TcpAddress? AgentAddress => Connection.Address as TcpAddress;
 
     /// <summary>The install command while the enrolment can still be used.</summary>
-    public AgentCommand? InstallCommand =>
-        Connection.Enrolment is { } enrolment && enrolment.ExpiresAt > Now && AgentAddress is { } address
-            ? AgentCommands.Install(Variant, enrolment.Token, address.Port, Image)
-            : null;
+    public AgentCommand? InstallCommand => Connection.Enrolment is { } enrolment && enrolment.ExpiresAt > Now
+        ? Connection.Edge is { } edge ? AgentCommands.InstallEdge(Variant, enrolment.Token, edge.ServerUrl, Image)
+        : AgentAddress is { } address ? AgentCommands.Install(Variant, enrolment.Token, address.Port, Image)
+        : null
+        : null;
 
-    public AgentCommand? UpdateCommand => AgentAddress is { } address ? AgentCommands.Update(Variant, address.Port, Image) : null;
+    public AgentCommand? UpdateCommand =>
+        Connection.Edge is { } edge ? AgentCommands.UpdateEdge(Variant, edge.ServerUrl, Image)
+        : AgentAddress is { } address ? AgentCommands.Update(Variant, address.Port, Image)
+        : null;
 
-    /// <summary>The address as typed into the form: host, plus the port when it isn't the default.</summary>
-    public string AddressText => AgentAddress is { } a
-        ? (a.Host.Contains(':', StringComparison.Ordinal) ? $"[{a.Host}]" : a.Host) + (a.Port == Docker.Agent.AgentProtocol.DefaultPort ? "" : $":{a.Port}")
-        : "";
+    /// <summary>The address as typed into the form: host, plus the port when it isn't the default; for an edge agent, the server's address.</summary>
+    public string AddressText => Connection.Edge is { } edge ? edge.ServerUrl
+        : AgentAddress is { } a
+            ? (a.Host.Contains(':', StringComparison.Ordinal) ? $"[{a.Host}]" : a.Host) + (a.Port == Docker.Agent.AgentProtocol.DefaultPort ? "" : $":{a.Port}")
+            : "";
+
+    /// <summary>When the hourly check renews the agent's certificate.</summary>
+    public DateTimeOffset? RenewsAt => Connection.Agent?.CertificateNotAfter is { } notAfter ? notAfter - AgentRenewals.RenewBefore : null;
 
     public IActionResult OnGet(int endpointId)
     {
@@ -85,6 +94,22 @@ public sealed class SettingsModel(EngineConnections connections, EndpointRegistr
             return Page();
         }
         Flash.Success(TempData, $"Created a new install command for {Connection.Name}. The previous certificate no longer works.");
+        return RedirectToPage(new { endpointId, variant = Variant });
+    }
+
+    public async Task<IActionResult> OnPostRenewAsync(int endpointId, CancellationToken cancellationToken)
+    {
+        if (!Load(endpointId))
+            return NotFound();
+        if (!Connection.IsAgent)
+            return BadRequest();
+        AuditTrail.Action(HttpContext, "Endpoints: renew agent certificate");
+        if (await renewals.RenewAsync(endpointId, cancellationToken) is { } error)
+            Flash.Error(TempData, error);
+        else
+            Flash.Success(TempData, Connection.Agent?.CertificateNotAfter is { } notAfter
+                ? $"Renewed the certificate of {Connection.Name}'s agent. It's valid until {Format.Timestamp(notAfter)}."
+                : $"Renewed the certificate of {Connection.Name}'s agent.");
         return RedirectToPage(new { endpointId, variant = Variant });
     }
 

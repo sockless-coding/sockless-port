@@ -15,8 +15,9 @@ public static class SignInLimit
     public static async ValueTask RejectedAsync(OnRejectedContext context, CancellationToken cancellationToken)
     {
         var http = context.HttpContext;
-        // Webhooks (GitHooks) share the rejection: a bare 429, not audited, so a flood can't fill the log.
-        if (http.Request.Path.StartsWithSegments("/hooks", StringComparison.OrdinalIgnoreCase))
+        // Webhooks (GitHooks) and agent tunnels share the rejection: a bare 429, not audited, so a flood can't fill the log.
+        if (http.Request.Path.StartsWithSegments("/hooks", StringComparison.OrdinalIgnoreCase)
+            || http.Request.Path.StartsWithSegments(Docker.Tunnel.TunnelProtocol.Path, StringComparison.OrdinalIgnoreCase))
         {
             http.Response.StatusCode = StatusCodes.Status429TooManyRequests;
             http.Response.Headers.RetryAfter = "60";

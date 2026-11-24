@@ -32,6 +32,11 @@ public static partial class AgentApp
         builder.Services.AddSingleton(options);
         builder.Services.AddSingleton(identity);
         builder.Services.AddSingleton<EngineRelay>();
+        if (options.Server is not null)
+        {
+            builder.Services.AddSingleton<TunnelClient>();
+            builder.Services.AddHostedService(sp => sp.GetRequiredService<TunnelClient>());
+        }
 
         builder.WebHost.UseKestrelHttpsConfiguration();
         builder.WebHost.ConfigureKestrel(kestrel =>
@@ -55,6 +60,8 @@ public static partial class AgentApp
                 endpoint.Use(next => connection => hijack.InvokeAsync(connection, next));
             }
 
+            // In edge mode nothing connects from outside: the tunnel's streams arrive on loopback.
+            listen ??= options.Server is null ? null : IPAddress.Loopback;
             if (listen is null)
                 kestrel.ListenAnyIP(options.Port, Configure);
             else
@@ -135,13 +142,37 @@ public static partial class AgentApp
 
         app.MapGet(AgentProtocol.InfoPath, () => Results.Json(Info(identity, options, startedAt), AgentJsonContext.Default.AgentInfo));
 
+        // Renewal: only the enrolled server gets here (the gate above), so no token proofs are needed.
+        app.MapPost(AgentProtocol.RenewCsrPath, () =>
+            Results.Json(new AgentRenewCsrResponse { CsrPem = identity.CreateSigningRequest() }, AgentJsonContext.Default.AgentRenewCsrResponse));
+
+        app.MapPost(AgentProtocol.RenewCompletePath, async (HttpContext context) =>
+        {
+            if (await ReadAsync(context, AgentJsonContext.Default.AgentRenewRequest) is not { } request)
+                return;
+            if (identity.Renew(request.CertificatePem, request.CaCertificatePem) is { } error)
+            {
+                await ErrorAsync(context, StatusCodes.Status400BadRequest, error);
+                return;
+            }
+            LogRenewed(logger, identity.CertificateNotAfter);
+            await context.Response.WriteAsJsonAsync(Info(identity, options, startedAt), AgentJsonContext.Default.AgentInfo);
+        });
+
         // Everything else is the Engine API.
         var relay = app.Services.GetRequiredService<EngineRelay>();
         app.MapFallback(relay.RelayAsync);
 
         app.Lifetime.ApplicationStarted.Register(() =>
         {
-            if (identity.IsEnrolled)
+            if (options.Server is { } server)
+            {
+                if (identity.IsEnrolled)
+                    LogEdgeServing(logger, server.GetLeftPart(UriPartial.Path), options.Engine.ToString());
+                else if (options.Token is { } edgeToken)
+                    LogEdgeWaiting(logger, server.GetLeftPart(UriPartial.Path), edgeToken.Id);
+            }
+            else if (identity.IsEnrolled)
                 LogServing(logger, options.Port, options.Engine.ToString());
             else if (options.Token is { } token)
                 LogWaiting(logger, options.Port, token.Id);
@@ -160,6 +191,8 @@ public static partial class AgentApp
         StartedAt = startedAt,
         EnrolledAt = identity.EnrolledAt,
         CertificateNotAfter = identity.CertificateNotAfter,
+        CertificateSha256 = identity.CertificateThumbprint,
+        Mode = options.Server is null ? "direct" : "edge",
     };
 
     private static (int Status, string Message)? EnrolmentProblem(AgentIdentity identity, AgentOptions options, string tokenId)
@@ -204,6 +237,15 @@ public static partial class AgentApp
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Serving on port {Port}, relaying {Engine}")]
     private static partial void LogServing(ILogger logger, int port, string engine);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Edge mode: dialling {Server} for Sockless Port to enrol this agent (enrolment {TokenId})")]
+    private static partial void LogEdgeWaiting(ILogger logger, string server, string tokenId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Edge mode: dialling {Server}, relaying {Engine}")]
+    private static partial void LogEdgeServing(ILogger logger, string server, string engine);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Renewed the agent's certificate, valid until {NotAfter}")]
+    private static partial void LogRenewed(ILogger logger, DateTimeOffset? notAfter);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Refused an enrolment with a wrong proof from {Remote}")]
     private static partial void LogBadProof(ILogger logger, string? remote);

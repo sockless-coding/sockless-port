@@ -75,10 +75,12 @@ public sealed partial class DockerCli(IOptions<PortOptions> options, RegistryCre
         ComposeCli.CreatePrivateDirectory(runDirectory);
         try
         {
+            // An edge agent is reached through its tunnel, which only this server can open.
+            await using var bridge = EngineBridge.StartIfNeeded(request.Engine, runDirectory);
             var start = ComposeCli.StartInfo(tool.FileName, request.Arguments);
             start.WorkingDirectory = request.WorkingDirectory ?? runDirectory;
             start.Environment.Clear();
-            foreach (var (key, value) in await EnvironmentAsync(request, runDirectory, cancellationToken))
+            foreach (var (key, value) in await EnvironmentAsync(bridge is null ? request : request with { Engine = bridge.Address }, runDirectory, cancellationToken))
                 start.Environment[key] = value;
             return await ComposeCli.ExecuteAsync(start, onLine, cancellationToken);
         }

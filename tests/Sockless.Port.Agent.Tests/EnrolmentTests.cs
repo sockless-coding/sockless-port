@@ -161,7 +161,7 @@ public sealed class EnrolmentTests
     }
 
     /// <summary>Starts an agent with a new endpoint's token and waits until the server has it online.</summary>
-    private static async Task<(int Id, AgentHarness Agent)> EnrolAsync(ServerHarness server, FakeEngine engine)
+    internal static async Task<(int Id, AgentHarness Agent)> EnrolAsync(ServerHarness server, FakeEngine engine)
     {
         var (id, errors) = await server.Registry.AddAgentAsync(new AgentEndpointInput("remote", "127.0.0.1:1"), Ct);
         Assert.Empty(errors);
