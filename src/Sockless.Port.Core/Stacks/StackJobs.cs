@@ -65,6 +65,11 @@ public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore s
     public async Task<StackJob> StartAsync(EngineConnection connection, string stackName, StackOperation operation, StackJobOptions? options = null)
     {
         options ??= new StackJobOptions();
+        // Refused before the checks below go to the database and the engine: a job that ends
+        // meanwhile (a deploy with nothing to change) would otherwise let this one through.
+        // Checked again under the lock, where two starts can't both pass.
+        if (IsBusy(connection.Id, stackName))
+            throw new StackJobRejectedException($"Something is already running on {stackName}. Wait for it to finish.");
         var fetchOnly = operation == StackOperation.Fetch;
         var client = connection.Client;
         if (client is null && !fetchOnly)
