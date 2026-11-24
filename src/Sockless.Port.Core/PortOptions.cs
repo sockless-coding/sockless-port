@@ -39,6 +39,12 @@ public sealed class PortOptions
     public string? DockerCli { get; set; }
 
     /// <summary>
+    /// The git client, for stacks whose files come from a repository: <c>git</c> or a full path.
+    /// When empty, <c>git</c> on the search path. The image bundles it, with <c>ssh</c>.
+    /// </summary>
+    public string? Git { get; set; }
+
+    /// <summary>
     /// The agent image the install commands use. When empty, the image matching this server's
     /// version (<c>ghcr.io/sockless-coding/sockless-port-agent:{version}</c>).
     /// </summary>
@@ -62,6 +68,9 @@ public sealed class PortOptions
 
     /// <summary>Stack files: <c>stacks/{endpointId}/{name}/compose.yaml</c> and <c>.env</c>.</summary>
     public string StacksPath => Path.Combine(DataPath, "stacks");
+
+    /// <summary>Checkouts of git-backed stacks: <c>git/{endpointId}/{name}</c>. Not backed up: they're fetched again.</summary>
+    public string GitPath => Path.Combine(DataPath, "git");
 
     /// <summary>Uploaded build contexts while they're built: on the data volume, since they can be large. Emptied on start.</summary>
     public string TempPath => Path.Combine(DataPath, "tmp");

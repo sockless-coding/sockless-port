@@ -53,6 +53,13 @@ LABEL org.opencontainers.image.title="Sockless Port" \
       org.opencontainers.image.source="https://github.com/sockless-coding/sockless-port" \
       org.opencontainers.image.licenses="MIT"
 
+# Git-backed stacks are fetched with git (Port:Git defaults to git), over https or ssh. Unlike the
+# binaries above these come from the base image's distribution, so its security updates arrive with
+# each rebuild; git's own version is logged at start. No recommends: no perl, no pager, no GUI.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git openssh-client \
+    && rm -rf /var/lib/apt/lists/*
+
 # The base image's non-root "app" user (UID 1654) owns the data volume. Access to the
 # Docker/Podman socket comes from adding the socket's group at run time (compose: group_add).
 RUN mkdir -p /data && chown app:app /data

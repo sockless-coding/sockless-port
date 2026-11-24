@@ -1,0 +1,128 @@
+@* A git-backed stack's source: repository, branch, files, sign-in and checks. Model: the form's Git input, rendered with for="Git".
+   ViewData["GenerateKeyUrl"]: the handler that puts a new deploy key on the form. Without scripts both sign-in sections show. *@
+@model Sockless.Port.Web.Infrastructure.GitInput
+@using Sockless.Port.Stacks
+@{
+    var generateUrl = ViewData["GenerateKeyUrl"] as string;
+    var editing = Model.Existing is not null;
+}
+<section class="card space-y-4" aria-labelledby="git-source-title" data-git-auth>
+    <h3 id="git-source-title" class="section-title">Repository</h3>
+    <div class="field">
+        <label asp-for="Url">Address</label>
+        <input asp-for="Url" class="font-mono" autocomplete="off" spellcheck="false" aria-describedby="git-url-hint"
+               placeholder="https://github.com/owner/repo.git" />
+        <p class="hint" id="git-url-hint">https:// for public repositories and tokens; ssh:// or git@host:owner/repo.git for SSH keys.</p>
+        <partial name="_FieldError" model='"Git_Url"' />
+    </div>
+    <div class="grid gap-4 md:grid-cols-2">
+        <div class="field">
+            <label asp-for="Branch">Branch</label>
+            <input asp-for="Branch" class="font-mono" autocomplete="off" spellcheck="false" placeholder="main" />
+            <partial name="_FieldError" model='"Git_Branch"' />
+        </div>
+        <div class="field">
+            <label asp-for="ComposePath">Compose file</label>
+            <input asp-for="ComposePath" class="font-mono" autocomplete="off" spellcheck="false" aria-describedby="git-compose-hint" placeholder="compose.yaml" />
+            <p class="hint" id="git-compose-hint">Its path from the repository's root. Compose runs in its folder.</p>
+            <partial name="_FieldError" model='"Git_ComposePath"' />
+        </div>
+    </div>
+    <div class="field">
+        <label asp-for="EnvPath">.env in the repository <span class="text-secondary">(optional)</span></label>
+        <input asp-for="EnvPath" class="font-mono" autocomplete="off" spellcheck="false" aria-describedby="git-env-hint" placeholder="Leave empty to keep .env here" />
+        <p class="hint" id="git-env-hint">
+            Empty: the stack's <span class="font-mono">.env</span> is kept in Sockless Port and edited here, which suits secrets.
+            A path: it's taken from the repository at every fetch.
+        </p>
+        <partial name="_FieldError" model='"Git_EnvPath"' />
+    </div>
+
+    <fieldset class="space-y-2">
+        <legend class="label-caps mb-1">Sign in</legend>
+        @foreach (var (value, label, note) in new[]
+        {
+            (GitAuth.None, "Nothing", "a public repository"),
+            (GitAuth.Token, "An access token", "over https, read access to the contents is enough"),
+            (GitAuth.SshKey, "An SSH key", "a deploy key, read-only"),
+        })
+        {
+            <label class="flex items-start gap-2">
+                <input type="radio" name="Git.Auth" value="@value" class="mt-1 accent-accent" checked="@(Model.Auth == value)" data-git-auth-choice />
+                <span>@label <span class="text-secondary">(@note)</span></span>
+            </label>
+        }
+        <partial name="_FieldError" model='"Git_Auth"' />
+    </fieldset>
+
+    <div class="space-y-4 border-l-2 border-line pl-4" data-git-auth-for="Token">
+        <div class="grid gap-4 md:grid-cols-2">
+            <div class="field">
+                <label asp-for="Username">User name <span class="text-secondary">(optional)</span></label>
+                <input asp-for="Username" autocomplete="off" spellcheck="false" aria-describedby="git-user-hint" placeholder="@GitRemote.DefaultTokenUser" />
+                <p class="hint" id="git-user-hint">Most hosts accept any name with a token. Bitbucket wants x-token-auth.</p>
+                <partial name="_FieldError" model='"Git_Username"' />
+            </div>
+            <div class="field">
+                <label asp-for="Token">Access token</label>
+                <input id="Git_Token" name="Git.Token" type="password" autocomplete="new-password" aria-describedby="git-token-hint" />
+                <p class="hint" id="git-token-hint">
+                    @(editing && Model.HasSecret && Model.Existing!.Auth == GitAuth.Token ? "Saved; enter a new one to change it." : "Stored encrypted, and never shown again.")
+                </p>
+                <partial name="_FieldError" model='"Git_Token"' />
+            </div>
+        </div>
+    </div>
+
+    <div class="space-y-3 border-l-2 border-line pl-4" data-git-auth-for="SshKey">
+        @if (Model.PublicKey is { } publicKey)
+        {
+            <div class="space-y-2">
+                <p>Add this public key to the repository as a deploy key (read-only is enough), then save. Until it's saved, the key is only on this form, for an hour.</p>
+                <pre class="code-block whitespace-pre-wrap break-all" id="git-public-key">@publicKey</pre>
+                <input type="hidden" name="Git.GeneratedKey" value="@Model.GeneratedKey" />
+            </div>
+        }
+        else
+        {
+            @if (editing && Model.Existing!.Auth == GitAuth.SshKey && Model.Existing.PublicKey is { } storedPublic)
+            {
+                <div class="space-y-2">
+                    <p>The repository needs this public key as a deploy key:</p>
+                    <pre class="code-block whitespace-pre-wrap break-all">@storedPublic</pre>
+                </div>
+            }
+            <div class="field">
+                <label asp-for="PrivateKey">Private key</label>
+                @* Never rendered back: a key posted with a mistake elsewhere is pasted again. *@
+                <textarea id="Git_PrivateKey" name="Git.PrivateKey" class="code-input font-mono text-xs" rows="5" spellcheck="false" autocomplete="off"
+                          aria-describedby="git-key-hint" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+                <p class="hint" id="git-key-hint">
+                    @(editing && Model.HasSecret && Model.Existing!.Auth == GitAuth.SshKey ? "Saved; paste a new one to change it." : "Without a passphrase. Stored encrypted, and never shown again.")
+                    Or let Sockless Port make one: it shows the public key to add to the repository.
+                </p>
+                <partial name="_FieldError" model='"Git_PrivateKey"' />
+            </div>
+            @if (generateUrl is not null)
+            {
+                <button type="submit" class="btn-soft" formaction="@generateUrl" formnovalidate>
+                    <icon name="key" class="h-4 w-4" /> Generate a key
+                </button>
+            }
+        }
+        <p class="text-xs text-secondary">The server's host key is trusted the first time it connects, and must match after.</p>
+    </div>
+
+    <div class="field max-w-md">
+        <label asp-for="PollMinutes">Check for new commits</label>
+        <select asp-for="PollMinutes" aria-describedby="git-poll-hint">
+            <option value="0" selected="@(Model.PollMinutes == 0)">Never (fetch by hand or by webhook)</option>
+            @foreach (var minutes in GitStackTriggers.PollChoices)
+            {
+                <option value="@minutes" selected="@(Model.PollMinutes == minutes)">@Sockless.Port.Web.Infrastructure.StackDisplay.Poll(minutes)</option>
+            }
+        </select>
+        <p class="hint" id="git-poll-hint">A new commit is fetched and deployed, while the stack is deployed and only when its files changed.</p>
+        <partial name="_FieldError" model='"Git_PollMinutes"' />
+    </div>
+</section>

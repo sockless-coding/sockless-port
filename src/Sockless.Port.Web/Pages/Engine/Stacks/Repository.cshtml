@@ -1,0 +1,138 @@
+@page "/endpoints/{endpointId:int}/stacks/{stackName}/repository"
+@model Sockless.Port.Web.Pages.Engine.Stacks.RepositoryModel
+@using Sockless.Port.Stacks
+@{
+    ViewData["Title"] = $"{Model.StackName} repository";
+    var repository = Model.Repository;
+    var pageUrl = (string handler) => Url.Page("/Engine/Stacks/Repository", handler, new { endpointId = Model.EndpointId, stackName = Model.StackName });
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <partial name="_StackHeader" model="Model" />
+
+    @if (repository is null)
+    {
+        <div class="callout mb-4">
+            <icon name="information-circle" class="h-5 w-5" />
+            <p>
+                @Model.StackName's files are edited here. Connect it to a git repository to take them from a branch instead:
+                the compose file (and the .env, if you name one) is fetched from the repository, replacing what's saved here, and can't be edited here any more.
+            </p>
+        </div>
+    }
+
+    <form method="post" class="space-y-6" novalidate action="@pageUrl("Save")">
+        @if (ViewData.ModelState.TryGetValue("", out var formErrors) && formErrors.Errors.Count > 0)
+        {
+            <div class="callout danger" role="alert">
+                <icon name="exclamation-triangle" class="h-5 w-5" />
+                <p>@formErrors.Errors[0].ErrorMessage</p>
+            </div>
+        }
+        @{
+            ViewData["GenerateKeyUrl"] = pageUrl("GenerateKey");
+        }
+        <partial name="_GitFields" for="Git" />
+        <div class="flex flex-wrap items-center justify-end gap-2">
+            <button type="submit" class="btn-primary" disabled="@Model.IsBusy">
+                <icon name="arrow-down-tray" class="h-4 w-4" /> @(repository is null ? "Connect and fetch" : "Save and fetch")
+            </button>
+        </div>
+        @if (Model.IsBusy)
+        {
+            <p class="text-right text-xs text-secondary">Something is running on this stack. Save once it has finished.</p>
+        }
+    </form>
+
+    @if (repository is not null)
+    {
+        <section class="card mt-6 space-y-4" aria-labelledby="webhook-title">
+            <h3 id="webhook-title" class="section-title mb-0">Webhook</h3>
+            <p class="text-secondary">
+                The repository's host calls this address after a push, and the stack fetches and redeploys: only while it's deployed, only for pushes to
+                <span class="font-mono">@repository.Branch</span>, and only when its files changed. Set it up as a push webhook with content type
+                <span class="font-mono">application/json</span> and the secret: GitHub, Gitea and Forgejo sign the body with it, GitLab sends it as its token.
+                The address must be reachable from the host.
+            </p>
+            @if (Model.WebhookUrl is { } hookUrl)
+            {
+                <dl class="details">
+                    <dt>Address</dt>
+                    <dd class="break-all font-mono text-xs">@hookUrl</dd>
+                    <dt>Secret</dt>
+                    <dd>
+                        @if (Model.WebhookSecret is { } secret)
+                        {
+                            <span class="break-all font-mono text-xs">@secret</span>
+                        }
+                        else
+                        {
+                            <form method="post" action="@pageUrl("ShowWebhookSecret")">
+                                <button type="submit" class="btn-soft"><icon name="eye" class="h-4 w-4" /> Show the secret</button>
+                            </form>
+                        }
+                    </dd>
+                </dl>
+                <p class="text-xs text-secondary">
+                    Other callers (a CI job, curl) can send the secret in an <span class="font-mono">X-Gitlab-Token</span> header, with or without a body.
+                </p>
+                <div class="flex flex-wrap gap-2">
+                    <form method="post" action="@pageUrl("Webhook")">
+                        <button type="submit" class="btn-soft danger" data-confirm="Replace the webhook of @Model.StackName? Its address and secret change, and the old ones stop working.">
+                            <icon name="arrow-path" class="h-4 w-4" /> Replace address and secret
+                        </button>
+                    </form>
+                    <form method="post" action="@pageUrl("WebhookOff")">
+                        <button type="submit" class="btn-soft danger" data-confirm="Turn off the webhook of @Model.StackName? Calls to its address fail from now on.">
+                            Turn off
+                        </button>
+                    </form>
+                </div>
+            }
+            else
+            {
+                <form method="post" action="@pageUrl("Webhook")">
+                    <button type="submit" class="btn-soft"><icon name="link" class="h-4 w-4" /> Turn on the webhook</button>
+                </form>
+            }
+        </section>
+
+        @if (GitSource.IsSsh(repository.Url))
+        {
+            <section class="card mt-6 space-y-4" aria-labelledby="host-keys-title">
+                <h3 id="host-keys-title" class="section-title mb-0">Host keys</h3>
+                @if (Model.HostKeys.Count == 0)
+                {
+                    <p class="text-secondary">None yet: the next connection trusts the keys the server presents, and keeps them.</p>
+                }
+                else
+                {
+                    <p class="text-secondary">Learnt at the first connection. Fetches fail when the server presents another key. Compare them with what the host publishes.</p>
+                    <ul class="space-y-1">
+                        @foreach (var key in Model.HostKeys)
+                        {
+                            <li class="break-all font-mono text-xs">@key.Host @key.Type @key.Fingerprint</li>
+                        }
+                    </ul>
+                    <form method="post" action="@pageUrl("ForgetHostKeys")">
+                        <button type="submit" class="btn-soft danger"
+                                data-confirm="Forget the host keys of @(GitSource.Host(repository.Url))? The next fetch trusts whatever key the server presents. Only do this when the server's key changed on purpose.">
+                            Forget the host keys
+                        </button>
+                    </form>
+                }
+            </section>
+        }
+
+        <section class="card mt-6 space-y-3" aria-labelledby="disconnect-title">
+            <h3 id="disconnect-title" class="section-title mb-0">Stop using the repository</h3>
+            <p class="text-secondary">The stack keeps the files it last fetched, and they become editable here. Nothing is deployed or taken down.</p>
+            <form method="post" action="@pageUrl("Disconnect")">
+                <button type="submit" class="btn-soft danger" disabled="@Model.IsBusy"
+                        data-confirm="Disconnect @Model.StackName from its repository? Its files stay as last fetched, and polling and the webhook stop.">
+                    Disconnect
+                </button>
+            </form>
+        </section>
+    }
+</div>

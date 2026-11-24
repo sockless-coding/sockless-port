@@ -25,6 +25,7 @@ builder.Services.AddSingleton<IEngineEventSink, SignalREngineEventSink>();
 builder.Services.AddPortCore(builder.Configuration);
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<TerminalSessions>();
+builder.Services.AddSingleton<GitForms>();
 builder.AddHttpsListener();
 
 var authentication = builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme);
@@ -103,6 +104,13 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0,
         })
         : RateLimitPartition.GetNoLimiter("read"));
+    options.AddPolicy(GitHooks.RateLimitPolicy, context =>
+        RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = GitHooks.PerMinute,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+        }));
     options.OnRejected = SignInLimit.RejectedAsync;
 });
 
@@ -156,6 +164,7 @@ app.UseAuthorization();
 app.MapStaticAssets().AllowAnonymous();
 app.MapRazorPages().WithStaticAssets();
 app.MapHub<EngineHub>(EngineHub.Path);
+app.MapGitHooks();
 app.MapHealthChecks("/healthz").AllowAnonymous().DisableHttpMetrics();
 
 await app.RunAsync();

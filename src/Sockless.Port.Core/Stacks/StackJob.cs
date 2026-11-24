@@ -19,6 +19,12 @@ public enum StackOperation
 
     /// <summary>Optionally down, then forget the stack and delete its files.</summary>
     Remove,
+
+    /// <summary>A git-backed stack: fetch its branch and take the files from the newest commit. Nothing is deployed.</summary>
+    Fetch,
+
+    /// <summary>A git-backed stack: fetch, then deploy (automatic syncs only deploy a deployed stack whose files changed).</summary>
+    Sync,
 }
 
 /// <summary>Where a stack job is. Switch on it exhaustively.</summary>

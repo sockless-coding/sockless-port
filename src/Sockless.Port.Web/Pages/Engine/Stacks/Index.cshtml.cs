@@ -13,7 +13,8 @@ namespace Sockless.Port.Web.Pages.Engine.Stacks;
 /// <param name="Swarm">A swarm stack's services.</param>
 /// <param name="Job">The running job, or the last one still kept.</param>
 /// <param name="Updates">Containers (Compose) or services (swarm) the last update check found a newer image for.</param>
-public sealed record StackRow(string Name, StackDefinition? Definition, StackKind Kind, ComposeProject Project, SwarmStack Swarm, StackJob? Job, int Updates = 0)
+public sealed record StackRow(string Name, StackDefinition? Definition, StackKind Kind, ComposeProject Project, SwarmStack Swarm, StackJob? Job, int Updates = 0,
+    StackRepository? Repository = null)
 {
     public bool IsExternal => Definition is null;
 
@@ -101,6 +102,7 @@ public sealed class IndexModel(EngineConnections connections, StackStore store, 
     private async Task LoadRowsAsync(CancellationToken cancellationToken)
     {
         var definitions = await store.ListAsync(EndpointId, cancellationToken);
+        var repositories = await store.RepositoriesAsync(EndpointId, cancellationToken);
         IReadOnlyDictionary<string, ComposeProject> projects = new Dictionary<string, ComposeProject>();
         IReadOnlyDictionary<string, SwarmStack> swarmStacks = new Dictionary<string, SwarmStack>();
         if (Client is { } client)
@@ -127,7 +129,7 @@ public sealed class IndexModel(EngineConnections connections, StackStore store, 
         StackRow Row(string name, StackDefinition? definition, StackKind kind) => new(name, definition, kind,
             projects.GetValueOrDefault(name) ?? ComposeProject.Empty(name),
             kind == StackKind.Swarm ? swarmStacks.GetValueOrDefault(name) ?? SwarmStack.Empty(name) : SwarmStack.Empty(name),
-            jobs.Latest(EndpointId, name), Updates(name, kind));
+            jobs.Latest(EndpointId, name), Updates(name, kind), definition is null ? null : repositories.GetValueOrDefault(definition.Id));
         int Updates(string name, StackKind kind) => kind == StackKind.Swarm
             ? swarmStacks.GetValueOrDefault(name)?.Services.Count(s => updates.ForService(EndpointId, s) is UpdateAvailable) ?? 0
             : projects.GetValueOrDefault(name)?.Containers.Count(c => updates.ForContainer(EndpointId, c) is UpdateAvailable) ?? 0;

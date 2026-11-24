@@ -102,7 +102,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<Swarm.SwarmServices>();
         services.AddSingleton<StackStore>();
         services.AddSingleton<StackValidator>();
+        services.AddSingleton<GitCli>();
+        services.AddSingleton<StackGit>();
         services.AddSingleton<StackJobs>();
+        services.AddSingleton<GitStackTriggers>();
+        services.AddHostedService(sp => sp.GetRequiredService<GitStackTriggers>());
 
         services.AddSingleton<Templates.TemplateHttp>();
         services.AddSingleton<Templates.TemplateCatalog>();

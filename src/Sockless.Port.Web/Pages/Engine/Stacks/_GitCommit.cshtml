@@ -1,0 +1,14 @@
+@* A commit's short hash, linked to the repository's page for it when the host has one. Model: (repository address, commit). *@
+@model (string Url, string Sha)
+@{
+    var link = Sockless.Port.Stacks.GitSource.CommitLink(Model.Url, Model.Sha);
+    var label = Sockless.Port.Stacks.GitSource.Short(Model.Sha);
+}
+@if (link is not null)
+{
+    <a href="@link" class="font-mono hover:underline" rel="noreferrer" target="_blank" title="@Model.Sha">@label</a>
+}
+else
+{
+    <span class="font-mono" title="@Model.Sha">@label</span>
+}

@@ -118,6 +118,16 @@ Compose runs inside the Sockless Port container, not on the engine's host, so:
 
 To use another Compose binary, set `Port__Compose` (for example `docker compose`, or a full path).
 
+#### Stacks from a git repository
+
+A stack's compose file can come from a branch of a git repository: choose **From a git repository** when creating one, or connect an existing stack under its **Repository** tab. Give the address (`https://…`, `ssh://…` or `git@host:owner/repo.git`), the branch, and the compose file's path in it. The `.env` is kept in Sockless Port and edited there (best for secrets) unless you name one in the repository too. Private repositories need an access token over https, or an SSH key; Sockless Port can generate a key and show the public half to add as a read-only deploy key. Tokens and keys are stored encrypted.
+
+The server fetches the branch with the image's bundled `git` into `/data/git/<endpoint>/<name>/`, and Compose runs in that checkout, so `env_file:` and other files next to the compose file are found. Files from the repository are read-only in the editor; change them in the repository, then **Fetch**. A fetch never deploys: **Review and deploy** shows the commits since the last deploy and the changes to the files. Each deploy records its commit, shown on the stack's page.
+
+To redeploy by itself when the branch moves, the stack can check it every 5 minutes to daily, or turn on a **webhook** (the Repository tab shows its address and secret) and add it to the repository as a push webhook with content type `application/json`. GitHub, Gitea, Forgejo and GitLab are recognised; other callers can send the secret in an `X-Gitlab-Token` header. Automatic redeploys only happen while the stack is deployed, and only when its files changed. Images aren't built from the repository: `build:` isn't available, as for other stacks.
+
+To use another git binary, set `Port__Git`.
+
 ### Templates
 
 **Templates** in the sidebar (operators) lists ready-made apps. Choosing one asks for its settings, ports and storage, shows the files it makes and points out settings that reach into the host (privileged mode, the engine's socket, the host's network). Saving creates an ordinary stack that isn't deployed yet: it opens in the stack's review, where you check the files and deploy.
@@ -212,7 +222,7 @@ Access to the engine socket is equivalent to root on the host. Keep Sockless Por
 
 ## Develop
 
-Needs the .NET 11 SDK. Node is not needed: the build downloads the Tailwind standalone CLI, and the CodeMirror bundle is checked in (rebuild it from `build/codemirror/` when bumping it). Stacks need `docker-compose` or the `docker compose` plugin on the PATH, and swarm stacks the `docker` CLI.
+Needs the .NET 11 SDK. Node is not needed: the build downloads the Tailwind standalone CLI, and the CodeMirror bundle is checked in (rebuild it from `build/codemirror/` when bumping it). Stacks need `docker-compose` or the `docker compose` plugin on the PATH, swarm stacks the `docker` CLI, and stacks from a repository `git` (2.31 or later) and `ssh`.
 
 ```sh
 dotnet build

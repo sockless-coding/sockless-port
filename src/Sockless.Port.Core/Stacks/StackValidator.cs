@@ -48,7 +48,7 @@ public sealed partial class StackValidator(ComposeCli compose, DockerCli docker,
     /// <param name="rootless">The engine runs rootless, so ports below 1024 can't be published.</param>
     /// <exception cref="ComposeUnavailableException">Compose isn't installed.</exception>
     public async Task<ComposeCheck> CheckAsync(string projectName, StackContent content, string deployDirectory, StackKind kind = StackKind.Compose,
-        bool rootless = false, CancellationToken cancellationToken = default)
+        bool rootless = false, CancellationToken cancellationToken = default, StackSource? source = null)
     {
         var swarm = kind == StackKind.Swarm;
         if (string.IsNullOrWhiteSpace(content.Compose))
@@ -62,17 +62,17 @@ public sealed partial class StackValidator(ComposeCli compose, DockerCli docker,
             await new StackFiles(directory).WriteAsync(0, "check", content, cancellationToken);
             var project = new StackFiles(directory).Directory(0, "check");
             var result = await compose.RunAsync(
-                new ComposeRequest(projectName, ["config", "--format", "json"], ProjectDirectory: project), cancellationToken: cancellationToken);
+                new ComposeRequest(projectName, ["config", "--format", "json"], ProjectDirectory: project, Source: source), cancellationToken: cancellationToken);
 
             var stdout = result.Stdout.Split('\n').Select(l => l.TrimEnd('\r')).ToHashSet(StringComparer.Ordinal);
             var messages = result.Output
                 .Where(l => !stdout.Contains(l) && !string.IsNullOrWhiteSpace(l))
-                .Select(l => Clean(l, project))
+                .Select(l => Clean(l, project, source))
                 .ToList();
 
             if (!result.Succeeded)
             {
-                var errors = (messages.Count > 0 ? messages : result.Output.Select(l => Clean(l, project)).Where(l => l.Length > 0))
+                var errors = (messages.Count > 0 ? messages : result.Output.Select(l => Clean(l, project, source)).Where(l => l.Length > 0))
                     .Select(m => new ComposeProblem(m, LineOf(m)))
                     .ToList();
                 if (errors.Count == 0)
@@ -96,11 +96,11 @@ public sealed partial class StackValidator(ComposeCli compose, DockerCli docker,
             }
 
             var services = model?["services"] as JsonObject;
-            warnings.AddRange(Analyse(services, project, deployDirectory, rootless && !swarm));
+            warnings.AddRange(Analyse(services, source?.Directory ?? project, source?.Directory ?? deployDirectory, rootless && !swarm));
             if (swarm)
             {
                 warnings.AddRange(AnalyseSwarm(services, content));
-                if (await CheckSwarmAsync(project, content, cancellationToken) is { } swarmCheck)
+                if (await CheckSwarmAsync(project, content, source, cancellationToken) is { } swarmCheck)
                 {
                     if (swarmCheck.Errors.Count > 0)
                         return new ComposeCheck(swarmCheck.Errors, warnings, []);
@@ -176,20 +176,22 @@ public sealed partial class StackValidator(ComposeCli compose, DockerCli docker,
     }
 
     /// <summary><c>docker stack config</c>: null when it ran and found nothing wrong.</summary>
-    private async Task<ComposeCheck?> CheckSwarmAsync(string project, StackContent content, CancellationToken cancellationToken)
+    private async Task<ComposeCheck?> CheckSwarmAsync(string project, StackContent content, StackSource? source, CancellationToken cancellationToken)
     {
         var (tool, problem) = await docker.StatusAsync(cancellationToken);
         if (tool is null)
             return new ComposeCheck([], [$"Swarm's own checks were skipped: {problem}"], []);
 
+        // docker stack resolves relative paths against the compose file's folder: a git stack's checkout.
+        var file = source?.ComposeFile ?? Path.Combine(project, StackFiles.ComposeFile);
         var result = await docker.RunAsync(new DockerCliRequest(
-            ["stack", "config", "--compose-file", Path.Combine(project, StackFiles.ComposeFile)], WorkingDirectory: project, Variables: StackEnv.Parse(content.Env)),
+            ["stack", "config", "--compose-file", file], WorkingDirectory: source?.Directory ?? project, Variables: StackEnv.Parse(content.Env)),
             cancellationToken: cancellationToken);
         if (result.Succeeded)
             return null;
         var stdout = result.Stdout.Split('\n').Select(l => l.TrimEnd('\r')).ToHashSet(StringComparer.Ordinal);
         var errors = result.Output.Where(l => !string.IsNullOrWhiteSpace(l) && !stdout.Contains(l))
-            .Select(l => Clean(l, project))
+            .Select(l => Clean(l, project, source))
             .Select(m => new ComposeProblem($"Swarm: {m}", LineOf(m)))
             .ToList();
         if (errors.Count == 0)
@@ -208,12 +210,20 @@ public sealed partial class StackValidator(ComposeCli compose, DockerCli docker,
                || string.Equals(full.TrimEnd(Path.DirectorySeparatorChar), root.TrimEnd(Path.DirectorySeparatorChar), StringComparison.Ordinal);
     }
 
-    /// <summary>Messages name the temporary file; people know it as compose.yaml.</summary>
-    internal static string Clean(string message, string project)
+    /// <summary>Messages name the temporary file (or a git stack's checkout); people know it as compose.yaml.</summary>
+    internal static string Clean(string message, string project, StackSource? source = null)
     {
         message = message.Trim();
-        foreach (var form in (string[])[Path.Combine(project, StackFiles.ComposeFile), Path.Combine(project, StackFiles.EnvFile), project])
-            message = message.Replace(form, form == project ? "." : Path.GetFileName(form), StringComparison.OrdinalIgnoreCase);
+        List<(string Path, string Name)> forms =
+        [
+            (Path.Combine(project, StackFiles.ComposeFile), StackFiles.ComposeFile),
+            (Path.Combine(project, StackFiles.EnvFile), StackFiles.EnvFile),
+            (project, "."),
+        ];
+        if (source is not null)
+            forms.InsertRange(0, [(source.ComposeFile, Path.GetFileName(source.ComposeFile)), (source.Directory, ".")]);
+        foreach (var (form, name) in forms)
+            message = message.Replace(form, name, StringComparison.OrdinalIgnoreCase);
         return message;
     }
 

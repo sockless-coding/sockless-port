@@ -55,6 +55,14 @@
                                    class="font-mono font-semibold hover:underline">@row.Name</a>
                                 <span class="mt-1 flex flex-wrap gap-1">
                                     <span class="badge-stat" title="Kind">@(row.IsSwarm ? "Swarm" : "Compose")</span>
+                                    @if (row.Repository is { } repository)
+                                    {
+                                        <span class="badge-stat" title="From @repository.Url, branch @repository.Branch">Git</span>
+                                        @if (repository.LastError is not null)
+                                        {
+                                            <span class="badge danger" title="@repository.LastError">Git failing</span>
+                                        }
+                                    }
                                     @if (row.IsExternal)
                                     {
                                         <span class="badge-stat" title="Deployed outside Sockless Port">External</span>

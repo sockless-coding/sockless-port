@@ -194,15 +194,18 @@ public sealed partial class EndpointRegistry(
         await db.SaveChangesAsync(cancellationToken);
         connections.Remove(id);
 
-        var stacks = Path.Combine(options.Value.StacksPath, id.ToString(CultureInfo.InvariantCulture));
-        try
+        // Stack files, and the checkouts of git-backed stacks.
+        foreach (var stacks in (string[])[Path.Combine(options.Value.StacksPath, id.ToString(CultureInfo.InvariantCulture)),
+                     Path.Combine(options.Value.GitPath, id.ToString(CultureInfo.InvariantCulture))])
         {
-            if (Directory.Exists(stacks))
-                Directory.Delete(stacks, recursive: true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            LogStacksLeft(logger, ex, stacks);
+            try
+            {
+                Stacks.StackStore.DeleteTree(stacks);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                LogStacksLeft(logger, ex, stacks);
+            }
         }
         LogRemoved(logger, endpoint.Name);
         return endpoint.Name;

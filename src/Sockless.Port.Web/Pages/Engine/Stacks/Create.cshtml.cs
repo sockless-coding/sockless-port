@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using Sockless.Port.Access;
 using Sockless.Port.Engines;
 using Sockless.Port.Stacks;
@@ -7,11 +8,27 @@ using Sockless.Port.Web.Infrastructure;
 namespace Sockless.Port.Web.Pages.Engine.Stacks;
 
 /// <summary>
-/// A new stack from a compose file, or (with <c>?adopt=name</c>) a project deployed outside
-/// Sockless Port, prefilled from its compose file or its containers.
+/// A new stack from a compose file, from a git repository (<c>?source=git</c>: fetched and checked
+/// before it's saved), or (with <c>?adopt=name</c>) a project deployed outside Sockless Port,
+/// prefilled from its compose file or its containers.
 /// </summary>
-public sealed class CreateModel(EngineConnections connections, StackStore store, StackJobs jobs, StackValidator validator) : EndpointPageModel(connections)
+public sealed class CreateModel(EngineConnections connections, StackStore store, StackJobs jobs, StackValidator validator, StackGit git, GitForms gitForms,
+    IOptions<PortOptions> options) : EndpointPageModel(connections)
 {
+    public const string GitSourceKey = "git";
+
+    /// <summary><c>git</c> for a stack whose files come from a repository.</summary>
+    [BindProperty(SupportsGet = true)]
+    public string? Source { get; set; }
+
+    public bool FromGit => Source == GitSourceKey && !Adopting;
+
+    [BindProperty]
+    public GitInput Git { get; set; } = new();
+
+    /// <summary>Why the repository couldn't be fetched or used.</summary>
+    public string? GitError { get; private set; }
+
     protected override EndpointPermission ReadPermission => EndpointPermission.Operate;
 
     /// <summary>A swarm stack deploys services across the swarm.</summary>
@@ -91,6 +108,18 @@ public sealed class CreateModel(EngineConnections connections, StackStore store,
         return Page();
     }
 
+    /// <summary>Puts a new deploy key on the form, to add to the repository before saving.</summary>
+    [NoAudit]
+    public IActionResult OnPostGenerateKey()
+    {
+        if (!FromGit)
+            return BadRequest();
+        var name = StackNames.Problem(Input.Name?.Trim()) is null ? Input.Name!.Trim() : "stack";
+        gitForms.Generate(Git, $"sockless-port {name}@{Connection.Name}");
+        ModelState.Clear();
+        return Page();
+    }
+
     /// <summary>Checks the files with docker compose config: the result alone for htmx, the whole form otherwise.</summary>
     public async Task<IActionResult> OnPostValidateAsync(CancellationToken cancellationToken)
     {
@@ -110,6 +139,9 @@ public sealed class CreateModel(EngineConnections connections, StackStore store,
             ModelState.AddModelError("Input.Name", $"There's already a stack named {name}. Open it to edit its files.");
         else if (!Adopting && Client is { } client && await RunsOutsideAsync(client, name, cancellationToken) is { } outside)
             ModelState.AddModelError("Input.Name", outside);
+
+        if (FromGit)
+            return await CreateFromGitAsync(name, kind, deploy, cancellationToken);
 
         var content = Input.Content;
         if (string.IsNullOrWhiteSpace(content.Compose))
@@ -136,6 +168,68 @@ public sealed class CreateModel(EngineConnections connections, StackStore store,
             return Page();
         }
 
+        return await CreatedAsync(name, deploy, Adopting
+            ? $"Adopted {name}. Its containers keep running; deploy it from here when you change it."
+            : $"Saved {name}. It isn't deployed yet.");
+    }
+
+    /// <summary>
+    /// Fetches the repository into a folder of its own, checks its compose file with Compose (in
+    /// the checkout, so files next to it are found), and only then saves the stack, whose checkout
+    /// the folder becomes. Nothing is kept when any of it fails.
+    /// </summary>
+    private async Task<IActionResult> CreateFromGitAsync(string name, StackKind kind, bool deploy, CancellationToken cancellationToken)
+    {
+        var settings = gitForms.Validate(Git, ModelState, existing: null);
+        if (!ModelState.IsValid || settings is null)
+            return Page();
+
+        var staged = Path.Combine(options.Value.TempPath, $"git-stage-{Guid.NewGuid():n}");
+        try
+        {
+            GitFetchResult fetched;
+            try
+            {
+                var remote = new GitRemote(settings.Url, settings.Auth, settings.Username, settings.Secret);
+                fetched = await git.FetchAsync(new GitCheckoutRequest(remote, settings.Branch, settings.ComposePath, settings.EnvPath), staged, null, null, cancellationToken);
+            }
+            catch (Exception ex) when (ex is GitException or ComposeUnavailableException)
+            {
+                GitError = ex.Message;
+                return Page();
+            }
+
+            var content = StackContent.Normalize(fetched.Compose, fetched.Env ?? Input.Env);
+            var file = Path.GetFullPath(Path.Combine(staged, settings.ComposePath));
+            Validation = await StackForms.ValidateAsync(validator, store, Connection, name, content, kind, cancellationToken,
+                new StackSource(Path.GetDirectoryName(file)!, file));
+            if (Validation.Check is { Valid: false })
+                GitError = $"Compose rejected {settings.ComposePath} at {fetched.Commit.Short}. Fix the problems listed below in the repository, then try again.";
+            else if (Validation.Check is null && deploy)
+                GitError = "The files can't be checked or deployed without Compose. Create the stack without deploying for now.";
+            if (GitError is not null)
+                return Page();
+
+            try
+            {
+                await store.CreateFromGitAsync(EndpointId, name, kind, settings, fetched, staged, Input.Env, cancellationToken);
+            }
+            catch (StackRejectedException ex)
+            {
+                ModelState.AddModelError("Input.Name", ex.Message);
+                return Page();
+            }
+            AuditTrail.Action(HttpContext, "Stacks: create from git");
+            return await CreatedAsync(name, deploy, $"Fetched {fetched.Commit.Short} ({fetched.Commit.Subject}) and saved {name}. It isn't deployed yet.");
+        }
+        finally
+        {
+            StackStore.DeleteTree(staged);
+        }
+    }
+
+    private async Task<IActionResult> CreatedAsync(string name, bool deploy, string saved)
+    {
         if (deploy)
         {
             try
@@ -149,9 +243,7 @@ public sealed class CreateModel(EngineConnections connections, StackStore store,
         }
         else
         {
-            Flash.Success(TempData, Adopting
-                ? $"Adopted {name}. Its containers keep running; deploy it from here when you change it."
-                : $"Saved {name}. It isn't deployed yet.");
+            Flash.Success(TempData, saved);
         }
         return RedirectToPage("/Engine/Stacks/Detail", new { endpointId = EndpointId, stackName = name });
     }

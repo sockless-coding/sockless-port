@@ -36,9 +36,43 @@
                         <p>@Model.Notice</p>
                     </div>
                 }
+                @if (Model.Repository is { } repository)
+                {
+                    <div class="space-y-2">
+                        <p>
+                            Deploying <span class="font-mono">@repository.Branch</span> at
+                            @if (repository.FetchedCommit is { } fetched)
+                            {
+                                <partial name="_GitCommit" model="(repository.Url, fetched)" /> <span>@repository.FetchedSubject</span>
+                            }
+                            @if (repository.DeployedCommit is { } deployedCommit && deployedCommit != repository.FetchedCommit)
+                            {
+                                <span class="text-secondary">(deployed now: <partial name="_GitCommit" model="(repository.Url, deployedCommit)" />)</span>
+                            }
+                        </p>
+                        @if (Model.ReviewCommits is { Count: > 0 } commits)
+                        {
+                            <p class="label-caps">Commits since the deploy</p>
+                            <ul class="space-y-1">
+                                @foreach (var commit in commits)
+                                {
+                                    <li class="flex flex-wrap items-baseline gap-2">
+                                        <partial name="_GitCommit" model="(repository.Url, commit.Sha)" />
+                                        <span class="min-w-0 break-words">@commit.Subject</span>
+                                        <span class="text-xs text-secondary" title="@Format.Timestamp(commit.At)">@commit.Author, @Format.Relative(commit.At)</span>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                        else if (repository.DeployedCommit is not null && repository.DeployedCommit != repository.FetchedCommit && Model.ReviewCommits is null)
+                        {
+                            <p class="text-xs text-secondary">The commits in between can't be listed: the deployed commit is no longer in the branch's history (a force push?).</p>
+                        }
+                    </div>
+                }
                 @if (!review.FirstDeploy)
                 {
-                    <partial name="_StackDiff" model='("compose.yaml", review.Compose)' />
+                    <partial name="_StackDiff" model='(Model.Repository?.ComposePath ?? "compose.yaml", review.Compose)' />
                     <partial name="_StackDiff" model='(".env", review.Env)' />
                 }
                 <input type="hidden" name="Reviewed" value="@Model.Reviewed" />
@@ -71,7 +105,10 @@
             <button type="submit" class="btn-soft" formaction="@validateUrl" hx-post="@validateUrl" hx-target="#stack-validation" hx-swap="outerHTML">
                 <icon name="document-check" class="h-4 w-4" /> Validate
             </button>
-            <button type="submit" class="btn-soft" asp-page-handler="Save">Save without deploying</button>
+            @if (!Model.Input.EnvReadOnly)
+            {
+                <button type="submit" class="btn-soft" asp-page-handler="Save">@(Model.IsGit ? "Save .env without deploying" : "Save without deploying")</button>
+            }
             <button type="submit" class="btn-primary" asp-page-handler="Review">
                 <icon name="rocket-launch" class="h-4 w-4" /> Review and deploy
             </button>

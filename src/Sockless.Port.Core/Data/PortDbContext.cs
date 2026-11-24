@@ -23,6 +23,8 @@ public sealed class PortDbContext(DbContextOptions<PortDbContext> options) : Ide
 
     public DbSet<StackDefinition> Stacks => Set<StackDefinition>();
 
+    public DbSet<StackRepository> StackRepositories => Set<StackRepository>();
+
     public DbSet<EndpointGrant> EndpointGrants => Set<EndpointGrant>();
 
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
@@ -191,6 +193,32 @@ public sealed class PortDbContext(DbContextOptions<PortDbContext> options) : Ide
             stack.Property(s => s.UpdatedAt).HasConversion(SortableUtc);
             stack.Property(s => s.DeployedAt).HasConversion(SortableUtc);
             stack.Property(s => s.Template).HasMaxLength(StackDefinition.MaxTemplate);
+        });
+
+        builder.Entity<StackRepository>(repository =>
+        {
+            repository.ToTable("StackRepositories");
+            repository.HasIndex(r => r.StackId).IsUnique();
+            repository.HasOne<StackDefinition>().WithOne().HasForeignKey<StackRepository>(r => r.StackId).OnDelete(DeleteBehavior.Cascade);
+            repository.Property(r => r.Url).HasMaxLength(StackRepository.MaxUrl);
+            repository.Property(r => r.Branch).HasMaxLength(StackRepository.MaxBranch);
+            repository.Property(r => r.ComposePath).HasMaxLength(StackRepository.MaxPath);
+            repository.Property(r => r.EnvPath).HasMaxLength(StackRepository.MaxPath);
+            repository.Property(r => r.Auth).HasConversion<string>().HasMaxLength(16);
+            repository.Property(r => r.Username).HasMaxLength(StackRepository.MaxUsername);
+            repository.Property(r => r.PublicKey).HasMaxLength(1000);
+            repository.Property(r => r.WebhookId).HasMaxLength(64);
+            // Webhook calls find their stack by it.
+            repository.HasIndex(r => r.WebhookId).IsUnique();
+            repository.Property(r => r.FetchedCommit).HasMaxLength(64);
+            repository.Property(r => r.FetchedSubject).HasMaxLength(StackRepository.MaxSubject);
+            repository.Property(r => r.FetchedCommitAt).HasConversion(SortableUtc);
+            repository.Property(r => r.FetchedAt).HasConversion(SortableUtc);
+            repository.Property(r => r.DeployedCommit).HasMaxLength(64);
+            repository.Property(r => r.DeployedSubject).HasMaxLength(StackRepository.MaxSubject);
+            repository.Property(r => r.CheckedAt).HasConversion(SortableUtc);
+            repository.Property(r => r.LastError).HasMaxLength(2000);
+            repository.Ignore(r => r.HasWebhook);
         });
 
         builder.Entity<NotificationChannel>(channel =>

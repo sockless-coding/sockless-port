@@ -137,9 +137,10 @@ public sealed partial class PortFactory : WebApplicationFactory<Program>
         SqliteConnection.ClearAllPools();
         try
         {
-            Directory.Delete(_dataPath, recursive: true);
+            // Git's object files are read-only, which Windows won't delete otherwise.
+            Stacks.StackStore.DeleteTree(_dataPath);
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // Best effort: a lingering file handle on Windows must not fail the test run.
         }

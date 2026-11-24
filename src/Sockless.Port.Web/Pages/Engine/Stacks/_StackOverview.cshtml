@@ -234,6 +234,124 @@
                 }
             </section>
 
+            @if (Model.Repository is { } repository)
+            {
+                <section class="card space-y-4" aria-labelledby="repository-title">
+                    <div class="flex flex-wrap items-baseline justify-between gap-2">
+                        <h3 id="repository-title" class="section-title mb-0">Repository</h3>
+                        <a sp-can="write" asp-page="/Engine/Stacks/Repository" asp-route-endpointId="@Model.EndpointId" asp-route-stackName="@Model.StackName"
+                           class="text-xs hover:underline">Repository settings</a>
+                    </div>
+                    @if (repository.LastError is { } gitError)
+                    {
+                        <div class="callout danger" role="alert">
+                            <icon name="exclamation-triangle" class="h-5 w-5" />
+                            <p>
+                                The last check of the repository failed@(repository.CheckedAt is { } failedAt ? $" {Format.Relative(failedAt)}" : ""): @gitError
+                            </p>
+                        </div>
+                    }
+                    @if (Model.GitProblem is { } gitProblem)
+                    {
+                        <div class="callout warning" role="alert">
+                            <icon name="exclamation-triangle" class="h-5 w-5" />
+                            <p>The repository can't be fetched from here: @gitProblem</p>
+                        </div>
+                    }
+                    @if (Model.PendingSync is { } pending)
+                    {
+                        <div class="callout">
+                            <icon name="clock" class="h-5 w-5" />
+                            <p>
+                                A redeploy asked for by the @pending.By @Format.Relative(pending.RequestedAt) is waiting to start@(pending.LastRejection is { } why ? $": {why}" : ".")
+                                It's dropped if it can't start within an hour.
+                            </p>
+                        </div>
+                    }
+                    <dl class="details">
+                        <dt>Address</dt>
+                        <dd class="break-all font-mono text-xs">@repository.Url</dd>
+                        <dt>Branch</dt>
+                        <dd class="font-mono">@repository.Branch</dd>
+                        <dt>Compose file</dt>
+                        <dd class="break-all font-mono text-xs">@repository.ComposePath</dd>
+                        <dt>.env</dt>
+                        <dd>
+                            @if (repository.EnvPath is { } envPath)
+                            {
+                                <span class="break-all font-mono text-xs">@envPath</span>
+                            }
+                            else
+                            {
+                                <text>Kept here, edited in the editor</text>
+                            }
+                        </dd>
+                        <dt>Fetched</dt>
+                        <dd>
+                            @if (repository.FetchedCommit is { } fetched)
+                            {
+                                <partial name="_GitCommit" model="(repository.Url, fetched)" />
+                                <span>@repository.FetchedSubject</span>
+                                @if (repository.FetchedAt is { } fetchedAt)
+                                {
+                                    <span class="text-xs text-secondary" title="@Format.Timestamp(fetchedAt)">· fetched @Format.Relative(fetchedAt)</span>
+                                }
+                            }
+                            else
+                            {
+                                <text>Not yet</text>
+                            }
+                        </dd>
+                        <dt>Deployed</dt>
+                        <dd>
+                            @if (repository.DeployedCommit is { } deployedCommit)
+                            {
+                                <partial name="_GitCommit" model="(repository.Url, deployedCommit)" />
+                                <span>@repository.DeployedSubject</span>
+                                @if (deployedCommit == repository.FetchedCommit)
+                                {
+                                    <span class="text-xs text-secondary">· the fetched commit</span>
+                                }
+                            }
+                            else
+                            {
+                                <text>Not from the repository yet</text>
+                            }
+                        </dd>
+                        <dt>Checks</dt>
+                        <dd>
+                            @StackDisplay.Poll(repository.PollMinutes)
+                            @if (repository.PollMinutes is not null && repository.CheckedAt is { } checkedAt)
+                            {
+                                <span class="text-xs text-secondary" title="@Format.Timestamp(checkedAt)">· last @Format.Relative(checkedAt)</span>
+                            }
+                        </dd>
+                        <dt>Webhook</dt>
+                        <dd>@(repository.HasWebhook ? "On" : "Off")</dd>
+                    </dl>
+                    @if (Model.NewCommits is { Count: > 0 } commits)
+                    {
+                        <div class="space-y-2">
+                            <p class="label-caps">Fetched since the deploy</p>
+                            <ul class="space-y-1">
+                                @foreach (var commit in commits)
+                                {
+                                    <li class="flex flex-wrap items-baseline gap-2">
+                                        <partial name="_GitCommit" model="(repository.Url, commit.Sha)" />
+                                        <span class="min-w-0 break-words">@commit.Subject</span>
+                                        <span class="text-xs text-secondary" title="@Format.Timestamp(commit.At)">@commit.Author, @Format.Relative(commit.At)</span>
+                                    </li>
+                                }
+                            </ul>
+                            @if (commits.Count == DetailModel.MaxCommits)
+                            {
+                                <p class="text-xs text-secondary">Only the newest @DetailModel.MaxCommits are listed.</p>
+                            }
+                        </div>
+                    }
+                </section>
+            }
+
             @if (definition is not null)
             {
                 <section class="card" aria-labelledby="files-title">

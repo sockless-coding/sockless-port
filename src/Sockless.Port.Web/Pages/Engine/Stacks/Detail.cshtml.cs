@@ -8,15 +8,29 @@ using Sockless.Port.Web.Infrastructure;
 namespace Sockless.Port.Web.Pages.Engine.Stacks;
 
 /// <summary>A stack's services and containers, its last job, and the handlers for its actions.</summary>
-public sealed class DetailModel(EngineConnections connections, StackStore store, StackJobs jobs, ComposeCli compose, DockerCli docker, ImageUpdates updates)
+public sealed class DetailModel(EngineConnections connections, StackStore store, StackJobs jobs, ComposeCli compose, DockerCli docker, ImageUpdates updates,
+    StackGit git, GitStackTriggers triggers)
     : StackPageModel(connections, store, jobs)
 {
-    /// <summary>The stack's tabs: route suffix → (page, label). The editor exists only for managed stacks.</summary>
+    /// <summary>The stack's tabs: route suffix → (page, label). The editor and repository exist only for managed stacks.</summary>
     public static readonly IReadOnlyList<(string Tab, string Page, string Label)> Tabs =
     [
         ("", "/Engine/Stacks/Detail", "Overview"),
         ("editor", "/Engine/Stacks/Editor", "Editor"),
+        ("repository", "/Engine/Stacks/Repository", "Repository"),
     ];
+
+    /// <summary>The most commits listed between the deployed and the fetched one.</summary>
+    public const int MaxCommits = 20;
+
+    /// <summary>Why a git-backed stack can't fetch: git is missing.</summary>
+    public string? GitProblem { get; private set; }
+
+    /// <summary>The commits fetched since the deploy, newest first; null when there's no telling (or nothing was deployed).</summary>
+    public IReadOnlyList<GitCommit>? NewCommits { get; private set; }
+
+    /// <summary>A redeploy a webhook or poll asked for, waiting for the stack.</summary>
+    public PendingSync? PendingSync { get; private set; }
 
     /// <summary>The saved files differ from what was last deployed.</summary>
     public bool HasUndeployedChanges { get; private set; }
@@ -105,6 +119,13 @@ public sealed class DetailModel(EngineConnections connections, StackStore store,
         ToolProblem = !IsSwarm ? (await compose.StatusAsync(cancellationToken)).Problem
             : !CanReachSwarm ? $"{StackName} is a swarm stack, and {Connection.Name} isn't a swarm manager."
             : (await docker.StatusAsync(cancellationToken)).Problem;
+        if (Repository is { } repository)
+        {
+            GitProblem = (await git.Cli.StatusAsync(cancellationToken)).Problem;
+            PendingSync = triggers.Pending(repository.StackId);
+            if (repository.FetchedCommit is { } fetched && repository.DeployedCommit is { } deployedCommit && fetched != deployedCommit)
+                NewCommits = await git.CommitsAsync(Store.CheckoutDirectory(EndpointId, StackName), deployedCommit, fetched, MaxCommits, cancellationToken);
+        }
         if (Definition is null || Definition.DeployedAt is null)
             return;
         var saved = await Store.Files.ReadAsync(EndpointId, StackName, cancellationToken);

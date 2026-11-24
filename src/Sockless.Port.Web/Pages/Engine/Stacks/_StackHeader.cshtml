@@ -13,6 +13,8 @@
     var swarm = Model.IsSwarm;
     // Checking asks the registries through the engine: no Compose needed, but swarm stacks need a manager.
     var canCheck = detail is not null && Model.CanCheckUpdates && deployed && !Model.IsGone && (!swarm || Model.CanReachSwarm);
+    // Fetching needs only git, not the engine.
+    var canFetch = detail is not null && Model.IsGit && detail.GitProblem is null;
 }
 
 <nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
@@ -34,6 +36,10 @@
             {
                 <span class="badge-stat" title="Deployed elsewhere first, then adopted">Adopted</span>
             }
+            @if (Model.Repository is { } repository)
+            {
+                <span class="badge-stat" title="From @repository.Url, branch @repository.Branch">Git</span>
+            }
             @if (Model.Definition?.Template is { } template)
             {
                 <span class="badge-stat" title="Made from the template @template">Template</span>
@@ -45,9 +51,18 @@
         </div>
     </div>
 
-    @if (canAct || canCheck)
+    @if (canAct || canCheck || canFetch)
     {
         <div sp-can="write" class="flex flex-wrap items-center gap-2">
+            @if (canFetch)
+            {
+                <form sp-can="write" method="post" action="@runUrl">
+                    <input type="hidden" name="operation" value="fetch" />
+                    <button type="submit" class="btn-soft" disabled="@busy" title="Fetch @Model.Repository!.Branch and take the files from its newest commit. Nothing is deployed.">
+                        <icon name="arrow-down-tray" class="h-4 w-4" /> Fetch
+                    </button>
+                </form>
+            }
             @if (canCheck)
             {
                 <form sp-can="write" method="post" action="@Url.Page("/Engine/Stacks/Detail", "CheckUpdates", new { endpointId = Model.EndpointId, stackName = name })">
@@ -182,7 +197,7 @@
 @if (Model.IsManaged)
 {
     <nav aria-label="Stack" class="tabs mb-6">
-        @foreach (var (key, tabPage, label) in DetailModel.Tabs.Where(t => t.Tab != "editor" || Model.CanWrite))
+        @foreach (var (key, tabPage, label) in DetailModel.Tabs.Where(t => t.Tab is not ("editor" or "repository") || Model.CanWrite))
         {
             <a asp-page="@tabPage" asp-route-endpointId="@Model.EndpointId" asp-route-stackName="@name"
                class="tab" aria-current="@(key == tab ? "page" : null)">@label</a>

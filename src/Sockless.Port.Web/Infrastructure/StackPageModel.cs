@@ -29,6 +29,11 @@ public abstract class StackPageModel(EngineConnections connections, StackStore s
     /// <summary>Set when Sockless Port manages the stack.</summary>
     public StackDefinition? Definition { get; private set; }
 
+    /// <summary>Set when the stack's files come from a git repository.</summary>
+    public StackRepository? Repository { get; private set; }
+
+    public bool IsGit => Repository is not null;
+
     /// <summary>Compose, or swarm: from the definition, else from what's on the engine.</summary>
     public StackKind Kind { get; private set; }
 
@@ -76,6 +81,7 @@ public abstract class StackPageModel(EngineConnections connections, StackStore s
             return NotFound();
 
         Definition = await store.GetAsync(EndpointId, StackName, cancellationToken);
+        Repository = Definition is null ? null : await store.GetRepositoryAsync(Definition.Id, cancellationToken);
         Kind = Definition?.Kind ?? StackKind.Compose;
         Project = ComposeProject.Empty(StackName);
         Swarm = SwarmStack.Empty(StackName);
@@ -141,6 +147,15 @@ public abstract class StackPageModel(EngineConnections connections, StackStore s
         }, cancellationToken);
         return SwarmInventory.IncludesSelf(tasks);
     }
+
+    /// <summary>
+    /// A git-backed stack's compose file in its checkout, for validation; null for other stacks, and
+    /// while the checkout is missing (after a restore: the next deploy or fetch makes it again),
+    /// when the copy in the stack's folder is checked instead.
+    /// </summary>
+    protected StackSource? Source => Repository is { } repository && store.Source(EndpointId, StackName, repository) is { } source && Directory.Exists(source.Directory)
+        ? source
+        : null;
 
     /// <summary>Starts a job, flashing why when it can't. Returns whether it started.</summary>
     protected async Task<bool> TryStartAsync(StackOperation operation, StackJobOptions? options = null)

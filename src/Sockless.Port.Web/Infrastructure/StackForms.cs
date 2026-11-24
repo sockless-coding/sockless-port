@@ -17,6 +17,16 @@ public sealed class StackInput
     public string? Env { get; set; }
 
     public StackContent Content => StackContent.Normalize(Compose, Env);
+
+    /// <summary>Where a git-backed stack's files come from, said above them; null for other stacks.</summary>
+    [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever]
+    public StackRepository? Repository { get; set; }
+
+    /// <summary>The compose file comes from the repository, so it's shown but not edited here.</summary>
+    public bool ComposeReadOnly => Repository is not null;
+
+    /// <summary>The <c>.env</c> comes from the repository too.</summary>
+    public bool EnvReadOnly => Repository?.EnvPath is not null;
 }
 
 /// <summary>A validation result for <c>_StackValidation</c>.</summary>
@@ -54,13 +64,14 @@ public sealed record StackReview(IReadOnlyList<DiffHunk> Compose, IReadOnlyList<
 public static class StackForms
 {
     /// <summary>Validates the files the way they'd be deployed on <paramref name="connection"/>.</summary>
+    /// <param name="source">A git-backed stack's checkout, where relative paths in the file resolve.</param>
     public static async Task<StackValidationView> ValidateAsync(StackValidator validator, StackStore store, EngineConnection connection, string name, StackContent content,
-        StackKind kind, CancellationToken cancellationToken)
+        StackKind kind, CancellationToken cancellationToken, StackSource? source = null)
     {
         try
         {
             var rootless = connection.Engine?.Has(EngineCapabilities.Rootless) == true;
-            var check = await validator.CheckAsync(name, content, store.Files.Directory(connection.Id, name), kind, rootless, cancellationToken);
+            var check = await validator.CheckAsync(name, content, store.Files.Directory(connection.Id, name), kind, rootless, cancellationToken, source);
             return new StackValidationView(check, null);
         }
         catch (ComposeUnavailableException ex)

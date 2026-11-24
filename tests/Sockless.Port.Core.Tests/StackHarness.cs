@@ -33,6 +33,10 @@ public sealed class StackHarness : IAsyncDisposable
 
     public StackJobs Jobs { get; private set; } = null!;
 
+    public GitCli Git { get; private set; } = null!;
+
+    public StackGit StackGit { get; private set; } = null!;
+
     public static async Task<StackHarness> CreateAsync()
     {
         var harness = new StackHarness();
@@ -61,11 +65,14 @@ public sealed class StackHarness : IAsyncDisposable
         var scopes = _services.GetRequiredService<IServiceScopeFactory>();
         Registries = new RegistryCredentials(scopes, new EphemeralDataProtectionProvider(), TimeProvider.System, NullLogger<RegistryCredentials>.Instance);
         Compose = new ComposeCli(options, Registries, TimeProvider.System, NullLogger<ComposeCli>.Instance);
-        Store = new StackStore(scopes, options, TimeProvider.System);
+        Store = new StackStore(scopes, options, TimeProvider.System, new EphemeralDataProtectionProvider());
         Docker = new DockerCli(options, Registries, TimeProvider.System, NullLogger<DockerCli>.Instance);
         Validator = new StackValidator(Compose, Docker, options, NullLogger<StackValidator>.Instance);
+        // Tests fetch from local repositories, which the server itself never may.
+        Git = new GitCli(options, TimeProvider.System, NullLogger<GitCli>.Instance) { AllowedProtocols = "file" };
+        StackGit = new StackGit(Git, NullLogger<StackGit>.Instance);
         Jobs = new StackJobs(Compose, Docker, Store, new Swarm.SwarmServices(Registries, NullLogger<Swarm.SwarmServices>.Instance),
-            TimeProvider.System, NullLogger<StackJobs>.Instance);
+            StackGit, TimeProvider.System, NullLogger<StackJobs>.Instance);
     }
 
     /// <summary>Skips the test when Compose isn't installed here.</summary>
@@ -90,9 +97,10 @@ public sealed class StackHarness : IAsyncDisposable
         SqliteConnection.ClearAllPools();
         try
         {
-            Directory.Delete(DataPath, recursive: true);
+            // Git's object files are read-only, which Windows won't delete otherwise.
+            StackStore.DeleteTree(DataPath);
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
         }
     }

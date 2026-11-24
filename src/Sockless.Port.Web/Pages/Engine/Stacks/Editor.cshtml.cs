@@ -9,8 +9,10 @@ namespace Sockless.Port.Web.Pages.Engine.Stacks;
 /// <summary>
 /// Edits a managed stack's files. Deploying goes through a review: the changes against what was
 /// last deployed, and Compose's validation. A deploy only goes ahead for the files that were reviewed.
+/// A git-backed stack's files from the repository are shown read-only (only a local <c>.env</c>
+/// is edited here), and the review also lists the commits since the deploy.
 /// </summary>
-public sealed class EditorModel(EngineConnections connections, StackStore store, StackJobs jobs, StackValidator validator)
+public sealed class EditorModel(EngineConnections connections, StackStore store, StackJobs jobs, StackValidator validator, StackGit git)
     : StackPageModel(connections, store, jobs)
 {
     /// <summary>The files (and their .env) can hold secrets: only those who may change the stack see them.</summary>
@@ -26,6 +28,9 @@ public sealed class EditorModel(EngineConnections connections, StackStore store,
     /// <summary>Set once the changes were reviewed.</summary>
     public StackReview? Review { get; private set; }
 
+    /// <summary>For a git-backed stack under review: the commits fetched since the deploy, newest first; null when there's no telling.</summary>
+    public IReadOnlyList<GitCommit>? ReviewCommits { get; private set; }
+
     public StackValidationView? Validation { get; private set; }
 
     /// <summary>Why the review is shown again instead of deploying.</summary>
@@ -37,7 +42,7 @@ public sealed class EditorModel(EngineConnections connections, StackStore store,
         if (!IsManaged)
             return RedirectToDetail();
         var saved = await Store.Files.ReadAsync(EndpointId, StackName, cancellationToken) ?? StackContent.Empty;
-        Input = new StackInput { Name = StackName, Compose = saved.Compose, Env = saved.Env };
+        Show(saved);
         if (review)
             await ReviewAsync(saved, cancellationToken);
         return Page();
@@ -48,15 +53,19 @@ public sealed class EditorModel(EngineConnections connections, StackStore store,
     {
         if (!IsManaged)
             return RedirectToDetail();
-        Validation = await StackForms.ValidateAsync(validator, Store, Connection, StackName, Input.Content, Kind, cancellationToken);
-        return Request.Headers.ContainsKey("HX-Request") ? Partial("_StackValidation", Validation) : Page();
+        var content = await PostedAsync(cancellationToken);
+        Validation = await StackForms.ValidateAsync(validator, Store, Connection, StackName, content, Kind, cancellationToken, Source);
+        if (Request.Headers.ContainsKey("HX-Request"))
+            return Partial("_StackValidation", Validation);
+        Show(content);
+        return Page();
     }
 
     public async Task<IActionResult> OnPostSaveAsync(CancellationToken cancellationToken)
     {
         if (!IsManaged)
             return RedirectToDetail();
-        var content = Input.Content;
+        var content = await PostedAsync(cancellationToken);
         if (!await CheckAsync(content, cancellationToken))
             return Page();
         await Store.SaveAsync(EndpointId, StackName, content, cancellationToken);
@@ -70,7 +79,7 @@ public sealed class EditorModel(EngineConnections connections, StackStore store,
     {
         if (!IsManaged)
             return RedirectToDetail();
-        await ReviewAsync(Input.Content, cancellationToken);
+        await ReviewAsync(await PostedAsync(cancellationToken), cancellationToken);
         return Page();
     }
 
@@ -79,10 +88,12 @@ public sealed class EditorModel(EngineConnections connections, StackStore store,
     {
         if (!IsManaged)
             return RedirectToDetail();
-        var content = Input.Content;
+        var content = await PostedAsync(cancellationToken);
         if (Reviewed != StackReview.Hash(content))
         {
-            Notice = "The files changed after the review. Check the changes again before deploying.";
+            Notice = IsGit
+                ? "The files changed after the review (a fetch, or the .env). Check the changes again before deploying."
+                : "The files changed after the review. Check the changes again before deploying.";
             await ReviewAsync(content, cancellationToken);
             return Page();
         }
@@ -109,18 +120,38 @@ public sealed class EditorModel(EngineConnections connections, StackStore store,
 
     private RedirectToPageResult RedirectToDetail() => RedirectToPage("/Engine/Stacks/Detail", new { endpointId = EndpointId, stackName = StackName });
 
+    /// <summary>
+    /// What was posted. For a git-backed stack, the files from the repository are what was fetched,
+    /// whatever the browser sent: only a local <c>.env</c> comes from the form.
+    /// </summary>
+    private async Task<StackContent> PostedAsync(CancellationToken cancellationToken)
+    {
+        if (Repository is not { } repository)
+            return Input.Content;
+        var saved = await Store.Files.ReadAsync(EndpointId, StackName, cancellationToken) ?? StackContent.Empty;
+        return StackContent.Normalize(saved.Compose, repository.EnvPath is null ? Input.Env : saved.Env);
+    }
+
+    private void Show(StackContent content) =>
+        Input = new StackInput { Name = StackName, Compose = content.Compose, Env = content.Env, Repository = Repository };
+
     /// <summary>Validates; on failure the problems are on the page and the caller shows it again.</summary>
     private async Task<bool> CheckAsync(StackContent content, CancellationToken cancellationToken)
     {
+        Show(content);
         if (string.IsNullOrWhiteSpace(content.Compose))
         {
-            ModelState.AddModelError("Input.Compose", "The compose file is empty. Remove the stack instead if it's no longer needed.");
+            ModelState.AddModelError("Input.Compose", IsGit
+                ? "The compose file from the repository is empty. Fetch again, or fix it in the repository."
+                : "The compose file is empty. Remove the stack instead if it's no longer needed.");
             return false;
         }
-        Validation = await StackForms.ValidateAsync(validator, Store, Connection, StackName, content, Kind, cancellationToken);
+        Validation = await StackForms.ValidateAsync(validator, Store, Connection, StackName, content, Kind, cancellationToken, Source);
         if (Validation.Check is { Valid: false })
         {
-            ModelState.AddModelError("Input.Compose", "Compose rejected the file. Fix the problems listed above it.");
+            ModelState.AddModelError("Input.Compose", IsGit
+                ? "Compose rejected the file. Fix the problems listed above it in the repository, then fetch."
+                : "Compose rejected the file. Fix the problems listed above it.");
             return false;
         }
         return true;
@@ -128,12 +159,13 @@ public sealed class EditorModel(EngineConnections connections, StackStore store,
 
     private async Task ReviewAsync(StackContent content, CancellationToken cancellationToken)
     {
-        Input = new StackInput { Name = StackName, Compose = content.Compose, Env = content.Env };
         if (!await CheckAsync(content, cancellationToken))
             return;
         var deployed = await Store.Files.ReadDeployedAsync(EndpointId, StackName, cancellationToken);
         Review = StackReview.Between(deployed, content);
         Reviewed = StackReview.Hash(content);
         ModelState.Remove(nameof(Reviewed));
+        if (Repository is { FetchedCommit: { } fetched, DeployedCommit: { } deployedCommit } && deployedCommit != fetched)
+            ReviewCommits = await git.CommitsAsync(Store.CheckoutDirectory(EndpointId, StackName), deployedCommit, fetched, DetailModel.MaxCommits, cancellationToken);
     }
 }

@@ -23,7 +23,10 @@ public sealed class ComposeUnavailableException(string message) : Exception(mess
 /// <summary>One Compose command against a project.</summary>
 /// <param name="Engine">The engine to talk to; null for commands that don't need one (<c>config</c>).</param>
 /// <param name="ProjectDirectory">The folder holding <c>compose.yaml</c> and <c>.env</c>; null to act on the project by name only.</param>
-public sealed record ComposeRequest(string ProjectName, IReadOnlyList<string> Arguments, DockerAddress? Engine = null, string? ProjectDirectory = null);
+/// <param name="Source">For a git-backed stack: the compose file in its checkout, used instead of the copy in <paramref name="ProjectDirectory"/>
+/// (which still gives the <c>.env</c>), so relative paths resolve in the checkout.</param>
+public sealed record ComposeRequest(string ProjectName, IReadOnlyList<string> Arguments, DockerAddress? Engine = null, string? ProjectDirectory = null,
+    StackSource? Source = null);
 
 /// <param name="Output">Everything Compose printed (stdout and stderr, as it came), one entry per line.</param>
 /// <param name="Stdout">Standard output alone, for commands whose output is data (<c>config --format json</c>).</param>
@@ -98,7 +101,7 @@ public sealed class ComposeCli(IOptions<PortOptions> options, RegistryCredential
         {
             var start = StartInfo(tool.FileName, Arguments(tool, request));
             // Without a project folder, Compose must not pick up a compose.yaml from wherever it runs.
-            start.WorkingDirectory = request.ProjectDirectory ?? runDirectory;
+            start.WorkingDirectory = request.Source?.Directory ?? request.ProjectDirectory ?? runDirectory;
             start.Environment.Clear();
             foreach (var (key, value) in await EnvironmentAsync(request.Engine, runDirectory, cancellationToken))
                 start.Environment[key] = value;
@@ -117,7 +120,8 @@ public sealed class ComposeCli(IOptions<PortOptions> options, RegistryCredential
         List<string> arguments = [.. tool.Arguments, "--ansi", "never", "--progress", "plain", "--project-name", request.ProjectName];
         if (request.ProjectDirectory is { } directory)
         {
-            arguments.AddRange(["--project-directory", directory, "--file", Path.Combine(directory, StackFiles.ComposeFile)]);
+            arguments.AddRange(["--project-directory", request.Source?.Directory ?? directory,
+                "--file", request.Source?.ComposeFile ?? Path.Combine(directory, StackFiles.ComposeFile)]);
             var env = Path.Combine(directory, StackFiles.EnvFile);
             if (File.Exists(env))
                 arguments.AddRange(["--env-file", env]);

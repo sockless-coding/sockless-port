@@ -15,7 +15,7 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261123204651_AddNotifications";
+    public override string LastMigrationId => "20261124174247_AddGitStacks";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -754,6 +754,103 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                 b.ToTable("Stacks");
             });
 
+        modelBuilder.Entity("Sockless.Port.Stacks.StackRepository", b =>
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("Auth")
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Branch")
+                    .IsRequired()
+                    .HasMaxLength(200)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("CheckedAt")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("ComposePath")
+                    .IsRequired()
+                    .HasMaxLength(300)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("DeployedCommit")
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("DeployedSubject")
+                    .HasMaxLength(200)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("EnvPath")
+                    .HasMaxLength(300)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("FetchedAt")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("FetchedCommit")
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("FetchedCommitAt")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("FetchedSubject")
+                    .HasMaxLength(200)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("KnownHosts")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("LastError")
+                    .HasMaxLength(2000)
+                    .HasColumnType("TEXT");
+
+                b.Property<int?>("PollMinutes")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("ProtectedSecret")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("ProtectedWebhookSecret")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("PublicKey")
+                    .HasMaxLength(1000)
+                    .HasColumnType("TEXT");
+
+                b.Property<int>("StackId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("Url")
+                    .IsRequired()
+                    .HasMaxLength(500)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Username")
+                    .HasMaxLength(200)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("WebhookId")
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
+
+                b.HasKey("Id");
+
+                b.HasIndex("StackId")
+                    .IsUnique();
+
+                b.HasIndex("WebhookId")
+                    .IsUnique();
+
+                b.ToTable("StackRepositories");
+            });
+
         modelBuilder.Entity("Sockless.Port.Templates.TemplateSource", b =>
             {
                 b.Property<int>("Id")
@@ -1098,6 +1195,15 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                 b.HasOne("Sockless.Port.Engines.EngineEndpoint", null)
                     .WithMany()
                     .HasForeignKey("EndpointId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
+
+        modelBuilder.Entity("Sockless.Port.Stacks.StackRepository", b =>
+            {
+                b.HasOne("Sockless.Port.Stacks.StackDefinition", null)
+                    .WithOne()
+                    .HasForeignKey("Sockless.Port.Stacks.StackRepository", "StackId")
                     .OnDelete(DeleteBehavior.Cascade)
                     .IsRequired();
             });

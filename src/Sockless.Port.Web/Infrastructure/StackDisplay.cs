@@ -50,6 +50,8 @@ public static class StackDisplay
         StackOperation.Restart => "Restart",
         StackOperation.Down => "Take down",
         StackOperation.Remove => "Remove",
+        StackOperation.Fetch => "Fetch",
+        StackOperation.Sync => "Fetch and deploy",
         _ => operation.ToString(),
     };
 
@@ -63,7 +65,19 @@ public static class StackDisplay
         StackOperation.Restart => "Restarting",
         StackOperation.Down => "Taking down",
         StackOperation.Remove => "Removing",
+        StackOperation.Fetch => "Fetching",
+        StackOperation.Sync => "Fetching and deploying",
         _ => operation.ToString(),
+    };
+
+    /// <summary>How often a git-backed stack's branch is checked: "Every 5 minutes", "Daily", "Off".</summary>
+    public static string Poll(int? minutes) => minutes switch
+    {
+        null => "Off",
+        1440 => "Daily",
+        60 => "Every hour",
+        >= 60 when minutes % 60 == 0 => $"Every {(minutes / 60).Value.ToString(CultureInfo.InvariantCulture)} hours",
+        _ => $"Every {minutes.Value.ToString(CultureInfo.InvariantCulture)} minutes",
     };
 
     /// <summary>The value the browser sends and the hub reports: <c>deploy</c>, <c>down</c>.</summary>
