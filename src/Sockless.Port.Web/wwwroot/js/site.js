@@ -12,51 +12,79 @@
   // The endpoint whose page is showing, from <div data-endpoint-id> in the page content.
   const pageEndpoint = () => document.querySelector('[data-endpoint-id]')?.dataset.endpointId ?? null;
 
-  let watched = null;
-  let refreshTimer = null;
+  // The overview's rows (<tr data-overview-row="3">): it watches every endpoint it lists.
+  const overviewEndpoints = () => [...document.querySelectorAll('[data-overview-row]')].map((el) => el.dataset.overviewRow);
 
-  const connection = new signalR.HubConnectionBuilder()
-    .withUrl('/hubs/engine')
-    .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
-    .configureLogging(signalR.LogLevel.Warning)
-    .build();
+  // Endpoints whose engine events this page wants: its own, and the overview's.
+  function wantedEndpoints() {
+    const wanted = new Set(overviewEndpoints());
+    const page = pageEndpoint();
+    if (page) wanted.add(page);
+    return wanted;
+  }
 
-  let markReady;
-  const ready = new Promise((resolve) => { markReady = resolve; });
+  let watched = new Set();
+  let syncing = false;
+  const refreshTimers = new Map();
 
   async function syncWatch() {
-    if (connection.state !== signalR.HubConnectionState.Connected) return;
-    const wanted = pageEndpoint();
-    if (wanted === watched) return;
+    if (syncing || connection.state !== signalR.HubConnectionState.Connected) return;
+    syncing = true;
     try {
-      if (watched) await connection.invoke('Unwatch', Number(watched));
-      watched = wanted;
-      if (wanted) await connection.invoke('Watch', Number(wanted));
-    } catch (err) {
-      watched = null;
-      console.warn('Sockless Port: could not watch endpoint', err);
+      // Again until nothing changed meanwhile (a swap while a call was under way).
+      for (;;) {
+        const wanted = wantedEndpoints();
+        const stale = [...watched].filter((id) => !wanted.has(id));
+        const added = [...wanted].filter((id) => !watched.has(id));
+        if (stale.length === 0 && added.length === 0) break;
+        for (const id of stale) {
+          watched.delete(id);
+          try { await connection.invoke('Unwatch', Number(id)); } catch { /* gone with the connection */ }
+        }
+        for (const id of added) {
+          watched.add(id);
+          try {
+            await connection.invoke('Watch', Number(id));
+          } catch (err) {
+            console.warn('Sockless Port: could not watch endpoint', id, err);
+          }
+        }
+      }
+    } finally {
+      syncing = false;
     }
   }
 
-  // Engine events arrive in bursts (a compose up emits dozens); refresh once per burst.
+  // Engine events arrive in bursts (a compose up emits dozens); refresh once per burst and endpoint.
+  // engine-changed is for the page's own endpoint; endpoint-changed-{id} for any watched one (overview rows).
   connection.on('engineEvent', (e) => {
-    if (String(e.endpointId) !== watched) return;
-    clearTimeout(refreshTimer);
-    refreshTimer = setTimeout(() => htmx.trigger(body(), 'engine-changed', e), REFRESH_DEBOUNCE_MS);
+    const id = String(e.endpointId);
+    if (!watched.has(id)) return;
+    clearTimeout(refreshTimers.get(id));
+    refreshTimers.set(id, setTimeout(() => {
+      refreshTimers.delete(id);
+      if (id === pageEndpoint()) htmx.trigger(body(), 'engine-changed', e);
+      htmx.trigger(body(), `endpoint-changed-${id}`, e);
+    }, REFRESH_DEBOUNCE_MS));
   });
 
   // Any endpoint: lists and the switcher. The page's own endpoint: its content too.
   connection.on('endpointState', (e) => {
+    const id = String(e.endpointId);
     htmx.trigger(body(), 'endpoints-changed', e);
-    if (String(e.endpointId) === pageEndpoint()) htmx.trigger(body(), 'endpoint-state', e);
+    htmx.trigger(body(), `endpoint-changed-${id}`, e);
+    if (id === pageEndpoint()) htmx.trigger(body(), 'endpoint-state', e);
+    // An endpoint the overview doesn't list yet: added, or newly given to this user.
+    if (document.querySelector('[data-overview]') && !overviewEndpoints().includes(id)) htmx.trigger(body(), 'overview-changed', e);
   });
 
   connection.onreconnected(() => {
-    watched = null;
+    watched = new Set();
     syncWatch();
     // Events may have been missed while disconnected.
     htmx.trigger(body(), 'endpoints-changed', {});
     htmx.trigger(body(), 'endpoint-state', {});
+    htmx.trigger(body(), 'overview-changed', {});
     document.dispatchEvent(new CustomEvent('sockless:reconnected'));
   });
 

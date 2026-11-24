@@ -28,6 +28,7 @@ public static class Navigation
     /// <summary>Main navigation. Pages are added here as each phase ships them.</summary>
     public static IReadOnlyList<NavItem> Main { get; } =
     [
+        new("Overview", "/Overview/Index", "presentation-chart-bar"),
         new("Dashboard", "/Engine/Index", "home", NavScope.Endpoint, MatchSubPages: false),
         new("Stacks", "/Engine/Stacks/Index", "rectangle-stack", NavScope.Endpoint),
         new("Templates", "/Engine/Templates/Index", "squares-plus", NavScope.Endpoint, Needs: EndpointPermission.Operate),

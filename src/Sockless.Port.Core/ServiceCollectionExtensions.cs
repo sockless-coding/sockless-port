@@ -96,6 +96,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<VolumeBrowser>();
         services.AddSingleton<TrivyCli>();
         services.AddSingleton<ImageScans>();
+        services.AddSingleton<Overview.EndpointSummaries>();
         services.AddSingleton<AcceptedRisks>();
         services.AddHostedService(sp => sp.GetRequiredService<ImageScans>());
         services.AddHostedService<ImageScanSchedule>();

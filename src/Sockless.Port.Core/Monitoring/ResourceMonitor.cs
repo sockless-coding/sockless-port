@@ -102,6 +102,21 @@ public sealed class ResourceMonitor(TimeProvider timeProvider, ILogger<ResourceM
         }
     }
 
+    /// <summary>
+    /// The endpoint's newest snapshot when something is sampling it (resource history, or a viewer)
+    /// and it isn't older than <paramref name="maxAge"/>; null otherwise. Starts nothing.
+    /// </summary>
+    public UsageSnapshot? Latest(EngineConnection connection, TimeSpan maxAge)
+    {
+        lock (_gate)
+        {
+            return _samplers.TryGetValue(connection.Id, out var sampler) && sampler.Connection == connection
+                   && sampler.Latest is { } latest && _time.GetUtcNow() - latest.Time <= maxAge
+                ? latest
+                : null;
+        }
+    }
+
     /// <summary>Endpoints with a running sampler, for tests.</summary>
     internal bool IsSampling(int endpointId)
     {

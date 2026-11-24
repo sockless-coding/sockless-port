@@ -38,6 +38,9 @@ public sealed record ContainerSummary
     public bool CanJoinNetworks => HostConfig?.NetworkMode is not ("host" or "none") && HostConfig?.NetworkMode?.StartsWith("container:", StringComparison.Ordinal) != true;
 
     public string DisplayName => Names is [var first, ..] && first.TrimStart('/') is { Length: > 0 } name ? name : Id[..Math.Min(12, Id.Length)];
+
+    /// <summary>Running with a failing health check. The list carries health only in the status text: "Up 2 hours (unhealthy)".</summary>
+    public bool IsUnhealthy => State is "running" && Status?.Contains("(unhealthy)", StringComparison.Ordinal) == true;
 }
 
 /// <summary>An item of <c>GET /images/json</c>.</summary>

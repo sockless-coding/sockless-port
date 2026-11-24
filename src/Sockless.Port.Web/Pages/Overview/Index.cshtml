@@ -1,0 +1,25 @@
+@page "/overview"
+@model Sockless.Port.Web.Pages.Overview.IndexModel
+@{
+    ViewData["Title"] = "Overview";
+}
+
+<div class="mb-6">
+    <h2 class="page-title">Overview</h2>
+    <p class="mt-1 text-secondary">Every endpoint you can see: its state, containers, available updates, critical findings and what it uses of its host.</p>
+</div>
+
+@if (Model.Connections.Count == 0)
+{
+    <section class="card">
+        <div class="empty-state">
+            <icon name="server-stack" class="h-12 w-12" stroke-width="1.5" />
+            <p class="text-base text-heading">No endpoints for you yet</p>
+            <p class="text-secondary">An administrator gives you a role on the endpoints you need.</p>
+        </div>
+    </section>
+}
+else
+{
+    <partial name="_OverviewTable" model="Model" />
+}

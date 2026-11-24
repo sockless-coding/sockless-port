@@ -21,7 +21,7 @@ public sealed record ContainerRow(ContainerSummary Summary, StatusBadge State, S
 public sealed class IndexModel(EngineConnections connections, ImageUpdates updates, ImageScans scans) : EndpointPageModel(connections)
 {
     public static readonly IReadOnlyList<(string Value, string Label)> States =
-        [("", "All"), ("running", "Running"), ("stopped", "Stopped"), ("paused", "Paused")];
+        [("", "All"), ("running", "Running"), ("stopped", "Stopped"), ("paused", "Paused"), ("unhealthy", "Unhealthy"), ("update", "Update available")];
 
     [BindProperty(SupportsGet = true)]
     public string? State { get; set; }
@@ -163,6 +163,8 @@ public sealed class IndexModel(EngineConnections connections, ImageUpdates updat
             "running" => c.State is "running",
             "stopped" => c.State is "exited" or "created" or "dead",
             "paused" => c.State is "paused",
+            "unhealthy" => c.IsUnhealthy,
+            "update" => updates.ForContainer(EndpointId, c) is UpdateAvailable,
             _ => true,
         };
         if (!stateMatches)

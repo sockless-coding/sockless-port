@@ -35,6 +35,13 @@ public static class Format
 
     public static string Count(long value) => value.ToString("N0", CultureInfo.InvariantCulture);
 
+    /// <summary>A share as resources.js shows it: <c>0.4%</c>, <c>12%</c>.</summary>
+    public static string Percent(double value) =>
+        $"{value.ToString(value is > 0 and < 10 ? "0.0" : "0", CultureInfo.InvariantCulture)}%";
+
+    /// <summary>"1 container", "3 containers".</summary>
+    public static string Plural(long count, string one, string many) => $"{Count(count)} {(count == 1 ? one : many)}";
+
     /// <summary>"3 minutes ago", "2 days ago". Pair with <see cref="Timestamp"/> in a title for the exact time.</summary>
     public static string Relative(DateTimeOffset value, DateTimeOffset? now = null)
     {

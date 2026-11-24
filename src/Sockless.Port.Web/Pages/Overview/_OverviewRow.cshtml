@@ -1,0 +1,180 @@
+@* One endpoint on the overview. The placeholder (Loaded false) loads the row at once; a loaded row
+   refreshes on its endpoint's events (site.js: endpoint-changed-{id}) and every 30 seconds for
+   the resource numbers. *@
+@model Sockless.Port.Web.Pages.Overview.OverviewRow
+@using Sockless.Port.Agents
+@using Sockless.Port.Engines
+@{
+    var connection = Model.Connection;
+    var id = connection.Id;
+    var summary = Model.Summary;
+    var trigger = $"{(Model.Loaded ? "" : "load, ")}endpoint-changed-{id} from:body, every 30s";
+    var agentVersion = connection.Agent?.Info?.Version;
+}
+<tr data-overview-row="@id" hx-get="@Url.Page("/Overview/Index", "Row", new { id })" hx-trigger="@trigger" hx-swap="outerHTML">
+    <th scope="row" class="align-top">
+        <a asp-page="/Engine/Index" asp-route-endpointId="@id" class="font-semibold hover:underline">@connection.Name</a>
+        <span class="mt-1 flex flex-wrap gap-1">
+            <partial name="_EndpointStateBadge" model="connection.State" />
+            @if (connection.IsLocal)
+            {
+                <span class="badge-stat">Local</span>
+            }
+            else
+            {
+                <span class="badge-stat">@(connection.IsEdge ? "Edge agent" : "Agent")</span>
+                @if (AgentCommands.IsOutdated(agentVersion))
+                {
+                    <span class="badge warning">Agent update available</span>
+                }
+            }
+        </span>
+        @if (connection.Engine is { } engine)
+        {
+            <span class="mt-1 block"><partial name="_EngineBadges" model="engine" /></span>
+        }
+    </th>
+
+    @if (!Model.Loaded)
+    {
+        <td colspan="5" class="align-top text-secondary">Loading…</td>
+    }
+    else if (summary is null)
+    {
+        <td colspan="5" class="align-top text-xs">
+            @if (Model.Error is { } error)
+            {
+                <p>Couldn't read the engine: @error</p>
+            }
+            else
+            {
+                @switch (connection.State)
+                {
+                    case EndpointOffline offline:
+                        <p>@offline.Reason</p>
+                        <p class="mt-1 text-secondary">Offline since @Format.Timestamp(offline.Since).</p>
+                        break;
+                    case EndpointConnecting:
+                        <p class="text-secondary">Connecting to the engine…</p>
+                        break;
+                    case EndpointEnrolling enrolling:
+                        <p class="text-secondary">@(enrolling.Problem ?? "Waiting for the agent to be installed.")</p>
+                        break;
+                }
+            }
+        </td>
+    }
+    else
+    {
+        var containers = summary.Containers;
+        var updates = summary.Updates;
+        var findings = summary.Findings;
+        var usage = summary.Usage;
+
+        <td class="align-top">
+            <a asp-page="/Engine/Containers/Index" asp-route-endpointId="@id" class="hover:underline">
+                <span class="text-success">@Format.Count(containers.Running) running</span>
+            </a>
+            <span class="block text-xs text-secondary">
+                @Format.Count(containers.Stopped) stopped@(containers.Paused > 0 ? $" · {Format.Count(containers.Paused)} paused" : "")
+            </span>
+            <span class="mt-1 flex flex-wrap gap-1">
+                @if (containers.Unhealthy.Count > 0)
+                {
+                    <a asp-page="/Engine/Containers/Index" asp-route-endpointId="@id" asp-route-state="unhealthy"
+                       class="badge danger hover:underline" title="@string.Join(", ", containers.Unhealthy)">@Format.Count(containers.Unhealthy.Count) unhealthy</a>
+                    <span class="sr-only">: @string.Join(", ", containers.Unhealthy)</span>
+                }
+                @if (containers.Failed > 0)
+                {
+                    <a asp-page="/Engine/Containers/Index" asp-route-endpointId="@id" asp-route-state="stopped"
+                       class="badge warning hover:underline">@Format.Count(containers.Failed) exited with an error</a>
+                }
+            </span>
+        </td>
+
+        <td class="align-top">
+            @if (updates.Total > 0)
+            {
+                <span class="flex flex-wrap gap-1">
+                    @if (updates.Containers > 0)
+                    {
+                        <a asp-page="/Engine/Containers/Index" asp-route-endpointId="@id" asp-route-state="update"
+                           class="badge warning hover:underline">@Format.Plural(updates.Containers, "container", "containers")</a>
+                    }
+                    @if (updates.Services > 0)
+                    {
+                        <a asp-page="/Engine/Swarm/Services/Index" asp-route-endpointId="@id"
+                           class="badge warning hover:underline">@Format.Plural(updates.Services, "service", "services")</a>
+                    }
+                </span>
+            }
+            else if (updates.CheckedAt is not null)
+            {
+                <span>None</span>
+            }
+            else
+            {
+                <span class="text-secondary">Not checked</span>
+            }
+            @if (updates.CheckedAt is { } checkedAt)
+            {
+                <span class="mt-1 block text-xs text-secondary" title="@Format.Timestamp(checkedAt)">checked @Format.Relative(checkedAt)</span>
+            }
+        </td>
+
+        <td class="align-top">
+            @if (findings.Scanned == 0)
+            {
+                <span class="text-secondary">Not scanned</span>
+            }
+            else
+            {
+                <a asp-page="/Engine/Images/Index" asp-route-endpointId="@id" class="flex flex-wrap gap-1 hover:underline">
+                    @if (findings.Critical > 0)
+                    {
+                        <span class="badge danger">@Format.Count(findings.Critical) critical</span>
+                    }
+                    else
+                    {
+                        <span class="badge success">No critical</span>
+                    }
+                    @if (findings.High > 0)
+                    {
+                        <span class="badge warning">@Format.Count(findings.High) high</span>
+                    }
+                </a>
+                <span class="mt-1 block text-xs text-secondary">
+                    @(findings.ImagesWithCritical > 0
+                        ? $"in {Format.Count(findings.ImagesWithCritical)} of {Format.Plural(findings.Scanned, "scanned image", "scanned images")}"
+                        : $"{Format.Count(findings.Scanned)} of {Format.Plural(findings.Images, "image", "images")} scanned")
+                </span>
+            }
+        </td>
+
+        @if (usage is null)
+        {
+            <td class="num align-top text-secondary"><span aria-hidden="true">—</span><span class="sr-only">Not measured</span></td>
+            <td class="num align-top text-secondary"><span aria-hidden="true">—</span><span class="sr-only">Not measured</span></td>
+        }
+        else
+        {
+            <td class="num align-top">
+                <span class="font-mono">@(usage.CpuShare is { } cpu ? Format.Percent(cpu) : Format.Percent(usage.Cpu))</span>
+                @if (usage.CpuShare is { } cpuShare)
+                {
+                    <progress class="progress usage-bar" max="100" value="@cpuShare.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)" aria-hidden="true"></progress>
+                    <span class="block text-xs text-secondary">of @Format.Plural(usage.Cpus, "CPU", "CPUs")</span>
+                }
+            </td>
+            <td class="num align-top">
+                <span class="font-mono">@Format.BinaryBytes(usage.Memory)</span>
+                @if (usage.MemoryShare is { } memoryShare)
+                {
+                    <progress class="progress usage-bar" max="100" value="@memoryShare.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)" aria-hidden="true"></progress>
+                    <span class="block text-xs text-secondary">of @Format.BinaryBytes(usage.HostMemory) (@Format.Percent(memoryShare))</span>
+                }
+            </td>
+        }
+    }
+</tr>

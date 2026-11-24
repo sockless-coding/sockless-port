@@ -1,0 +1,36 @@
+@* The overview's table. Rows are placeholders that load themselves (_OverviewRow); the table
+   reloads only when an endpoint it doesn't list changes state (site.js: overview-changed). *@
+@model Sockless.Port.Web.Pages.Overview.IndexModel
+@{
+    var connections = Model.Connections;
+}
+<div id="overview" data-overview
+     hx-get="@Url.Page("/Overview/Index", "Table")" hx-trigger="overview-changed from:body" hx-swap="outerHTML">
+    <div class="table-wrap">
+        <table class="table">
+            <caption class="sr-only">Endpoints with their containers, updates, findings and resource use</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Endpoint</th>
+                    <th scope="col">Containers</th>
+                    <th scope="col">Updates</th>
+                    <th scope="col">Findings</th>
+                    <th scope="col" class="num">CPU</th>
+                    <th scope="col" class="num">Memory</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var connection in connections)
+                {
+                    <partial name="_OverviewRow" model="new Sockless.Port.Web.Pages.Overview.OverviewRow(connection, Model.HistoryEnabled, Loaded: false, null, null)" />
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="mt-2 text-xs text-secondary">
+        Updates are from the last check of each endpoint, findings from the last scan of its images, leaving out accepted risks.
+        CPU and memory are the running containers' share of their host@(Model.HistoryEnabled
+            ? "."
+            : ", shown only while the endpoint's Resources page is open: turn on resource history in Settings to see every endpoint's use here.")
+    </p>
+</div>

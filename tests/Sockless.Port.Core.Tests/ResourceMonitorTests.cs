@@ -147,6 +147,10 @@ public sealed class ResourceMonitorTests
         Assert.Single(calls, c => c == "/v1.51/info");                         // read once, not per viewer
         Assert.DoesNotContain(calls, c => c.StartsWith("/v1.51/containers/bbb", StringComparison.Ordinal));
 
+        // The overview reads the newest snapshot without watching; another connection with the same id gets none.
+        Assert.NotNull(monitor.Latest(connection, TimeSpan.FromMinutes(1)));
+        Assert.Null(monitor.Latest(new EngineConnection(3, "other", new UnixSocketAddress("/fake.sock"), EndpointKind.Local), TimeSpan.FromMinutes(1)));
+
         // With no viewers left, the sampler lingers, then stops.
         Assert.True(monitor.IsSampling(3));
         time.Shift(ResourceMonitor.Linger + TimeSpan.FromSeconds(1));
@@ -154,6 +158,7 @@ public sealed class ResourceMonitorTests
         while (monitor.IsSampling(3) && DateTime.UtcNow < deadline)
             await Task.Delay(100, ct);
         Assert.False(monitor.IsSampling(3));
+        Assert.Null(monitor.Latest(connection, TimeSpan.FromDays(1)));
     }
 
     [Fact]
