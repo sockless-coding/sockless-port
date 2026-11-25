@@ -1,7 +1,9 @@
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using Sockless.Port.Docker.Models;
 using Sockless.Port.Docker.Streams;
+using Sockless.Port.Work;
 
 namespace Sockless.Port.Images;
 
@@ -33,7 +35,7 @@ public sealed record ImageJobView(ImageJob Job, ImageJobStatus Status, PullSnaps
 /// One pull or build running on an endpoint, independent of any browser: leaving the page doesn't
 /// stop it. Thread-safe; the runner writes, any number of watchers read.
 /// </summary>
-public sealed class ImageJob
+public sealed partial class ImageJob
 {
     /// <summary>Build output kept; older lines are dropped.</summary>
     public const int MaxLogLines = 5000;
@@ -44,6 +46,7 @@ public sealed class ImageJob
     private readonly StringBuilder _partialLine = new();
     private readonly CancellationTokenSource _cancel;
     private int _logDropped;
+    private long _reportedAt;
     private ImageJobStatus _status = new ImageJobRunning();
     private TaskCompletionSource _changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -78,6 +81,9 @@ public sealed class ImageJob
     public bool IsRunning => Status is ImageJobRunning;
 
     internal CancellationToken Token => _cancel.Token;
+
+    /// <summary>The job in the list of background work, when there is one.</summary>
+    internal WorkItem? Work { get; set; }
 
     /// <summary>Asks the job to stop. The engine aborts the pull or build when the request goes away.</summary>
     public void Cancel()
@@ -132,26 +138,59 @@ public sealed class ImageJob
 
     internal void Apply(PullProgress progress)
     {
+        PullSnapshot? snapshot = null;
         lock (_gate)
+        {
             _tracker.Apply(progress);
+            if (Work is not null && Due())
+                snapshot = _tracker.Snapshot();
+        }
+        if (snapshot is not null)
+            Work!.Report(snapshot.DownloadedBytes, snapshot.TotalBytes, WorkUnit.Bytes, PullDetail(snapshot));
         Changed();
+    }
+
+    private static string PullDetail(PullSnapshot snapshot) =>
+        snapshot.Layers.Count == 0 ? "Starting" : $"{snapshot.LayersDone} of {snapshot.Layers.Count} layers";
+
+    /// <summary>Progress goes to the work list at most four times a second.</summary>
+    private bool Due()
+    {
+        var now = Environment.TickCount64;
+        if (now - _reportedAt < 250)
+            return false;
+        _reportedAt = now;
+        return true;
     }
 
     /// <summary>Build output arrives in fragments ("Step 1/6 : FROM x", then "\n"); lines are split on newlines.</summary>
     internal void AppendOutput(string text)
     {
+        string? step = null;
         lock (_gate)
         {
             foreach (var ch in text)
             {
                 if (ch == '\n')
+                {
+                    if (Work is not null && StepLine().IsMatch(_partialLine.ToString()))
+                        step = _partialLine.ToString();
                     AddLineLocked();
+                }
                 else if (ch != '\r')
+                {
                     _partialLine.Append(ch);
+                }
             }
         }
+        // The classic builder numbers its steps: "Step 3/6 : RUN make".
+        if (step is not null && StepLine().Match(step) is { Success: true } match)
+            Work?.Report(int.Parse(match.Groups[1].ValueSpan) - 1, int.Parse(match.Groups[2].ValueSpan), WorkUnit.Items, step.Trim());
         Changed();
     }
+
+    [GeneratedRegex(@"^Step (\d{1,6})/(\d{1,6}) : ")]
+    private static partial Regex StepLine();
 
     internal void Finish(ImageJobStatus status, DateTimeOffset now)
     {
@@ -165,6 +204,20 @@ public sealed class ImageJob
                 _tracker.Complete();
             _status = status;
             FinishedAt = now;
+        }
+        switch (status)
+        {
+            case ImageJobSucceeded succeeded:
+                Work?.Succeed(succeeded.Message);
+                break;
+            case ImageJobFailed failed:
+                Work?.Fail(failed.Error);
+                break;
+            case ImageJobCanceled:
+                Work?.Canceled();
+                break;
+            case ImageJobRunning:
+                break;
         }
         Changed();
         _cancel.Dispose();

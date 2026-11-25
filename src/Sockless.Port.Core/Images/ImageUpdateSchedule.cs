@@ -51,7 +51,7 @@ internal sealed partial class ImageUpdateSchedule(ImageUpdates updates, EngineCo
             var started = time.GetUtcNow();
             try
             {
-                await updates.CheckEndpointAsync(connection, client, cancellationToken);
+                await updates.CheckEndpointAsync(connection, client, Maintenance.MaintenanceTrigger.Schedule.By, cancellationToken);
                 await sink.EngineEventAsync(connection, new DockerEvent { Type = "image", Action = "update-check" }, cancellationToken);
                 var available = updates.Available(connection.Id);
                 await RecordAsync(connection, started, Maintenance.MaintenanceOutcome.Succeeded, available.Count == 0

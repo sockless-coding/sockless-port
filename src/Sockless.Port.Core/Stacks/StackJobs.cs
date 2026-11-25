@@ -23,7 +23,7 @@ public sealed record StackJobOptions(bool RemoveVolumes = false, bool Down = tru
 /// last one ended.
 /// </summary>
 public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore store, SwarmServices services, StackGit git, TimeProvider time,
-    ILogger<StackJobs> logger, Notifications.Alerts? alerts = null) : IDisposable
+    ILogger<StackJobs> logger, Work.WorkTracker? work = null, Notifications.Alerts? alerts = null) : IDisposable
 {
     public const int MaxRunningPerEndpoint = 4;
 
@@ -114,11 +114,28 @@ public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore s
             job = new StackJob(Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(8)), connection.Id, stackName, operation, time.GetUtcNow(), _stopping.Token);
             _jobs[job.Id] = job;
         }
+        job.Work = work?.Start(Work.WorkKind.Stack, $"{Doing(operation)} {stackName}", connection.Id, connection.Name, stackName,
+            options.Automatic ? "automatic sync" : null);
 
         var directory = managed ? store.Files.Directory(connection.Id, stackName) : null;
         _ = RunAsync(job, connection, kind, directory, options);
         return job;
     }
+
+    /// <summary>What the job does, as the start of its title in the list of background work.</summary>
+    internal static string Doing(StackOperation operation) => operation switch
+    {
+        StackOperation.Deploy => "Deploying",
+        StackOperation.Update => "Updating",
+        StackOperation.Start => "Starting",
+        StackOperation.Stop => "Stopping",
+        StackOperation.Restart => "Restarting",
+        StackOperation.Down => "Taking down",
+        StackOperation.Remove => "Removing",
+        StackOperation.Fetch => "Fetching",
+        StackOperation.Sync => "Syncing",
+        _ => "Running",
+    };
 
     /// <summary>The tool is there, a swarm stack is reached through a manager, and it isn't the stack Sockless Port runs in.</summary>
     private async Task CheckDeployableAsync(EngineConnection connection, DockerClient client, string stackName, StackKind kind, StackOperation operation,
@@ -369,6 +386,9 @@ public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore s
             done = new StackJobSucceeded($"Fetched {commit}. {name} isn't deployed, so it wasn't deployed now either.");
         else if (options.Automatic && sameAsDeployed)
             done = new StackJobSucceeded($"Fetched {commit}. The files are the same as what's deployed, so nothing was redeployed.");
+        // A poll that changed nothing isn't worth listing among what's going on.
+        if (options.Automatic && done is not null)
+            job.Work?.Forget();
         return (done, current);
     }
 

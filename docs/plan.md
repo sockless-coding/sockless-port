@@ -415,6 +415,17 @@ Shown only on endpoints with the `Pods` capability. These use Podman's libpod AP
 - **Checked against real engines:** a prune of an unused network and an anonymous volume, keeping a named one, with build cache, on Docker 29.10 (in Docker) and Podman 6.2 (rootful). The test runs in a collection without parallelization, after the others, since a prune affects the whole engine.
 - **Not built:** a time of day for schedules (they run their interval after the last run), copying backups to remote storage (S3, SFTP; mount it instead), prune schedules for swarm-wide objects, a "Run now" for update checks and scans on this page (the Images pages have them), and recording the audit log's own cleanup.
 
+### Background tasks
+
+- One place that shows what's going on in the background across endpoints and pages, with progress where the work can tell.
+
+**Status: done.** Notes:
+- **Tracker** (`Work/WorkTracker`, in memory): whatever runs the work reports a `WorkItem` (kind, title, endpoint, who started it, queued/running/succeeded/failed/cancelled, a detail line, and progress in items or bytes when known). Finished work stays listed for 15 minutes, at most the newest 100. Disposing an item that's still active marks it failed, so an exception never leaves one running.
+- **Sources:** pulls (bytes downloaded of the layers known so far, and layers done) and builds (the classic builder's `Step n/m`) from `ImageJobs`; stack jobs (the last output line) from `StackJobs`, except automatic git syncs that changed nothing; scans from `ImageScans` (queued, then each phase, and bytes copied while exporting); update checks of images, containers, services and whole endpoints from `ImageUpdates` (references checked of the total); prunes from `PruneRunner` (parts done) and backups from `ScheduledBackups`; and the images page's removals (images done of those selected; they now go on if the browser leaves) and prunes.
+- **UI:** a tasks button in the top bar, on every page, with the count of running and queued tasks (or a failed mark when only failures are listed). It opens the newest 8 with a link to `/tasks`, which lists all. Each row has an icon, the title linking to the page it's about, the endpoint, a state badge with a word, a progress bar while running (indeterminate when it can't tell), and how it ended.
+- **Live:** `WorkBroadcaster` sends an empty `work` message to every browser at most every 750 ms after a change; `site.js` turns it into the `work-changed` body event, and the list fetches `/tasks?handler=Tray` (the button's count comes back out of band). The list is filtered per user: work on endpoints they have a role on; prunes and work without an endpoint (backups) only for administrators.
+- **Not built:** cancelling from the list (the image and stack pages have it), persisting the list across restarts, and tracking single quick actions (removing one image from its page, container actions).
+
 ## Risks and notes
 
 - **Socket access is root on the host.** This is documented clearly. The server and agent run as non-root users in the docker group; a read-only socket mode (via a proxy) is an option for viewer-only setups.

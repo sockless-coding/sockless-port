@@ -87,10 +87,16 @@
     if (document.querySelector('[data-overview]') && !overviewEndpoints().includes(id)) htmx.trigger(body(), 'overview-changed', e);
   });
 
+  // Background work (pulls, scans, checks…) changed somewhere: the top bar's tasks list and the
+  // tasks page refresh. The server sends these at most every 750 ms and says nothing more; the
+  // list it serves shows each user only what they may see.
+  connection.on('work', () => htmx.trigger(body(), 'work-changed', {}));
+
   connection.onreconnected(() => {
     watched = new Set();
     syncWatch();
     // Events may have been missed while disconnected.
+    htmx.trigger(body(), 'work-changed', {});
     htmx.trigger(body(), 'endpoints-changed', {});
     htmx.trigger(body(), 'endpoint-state', {});
     htmx.trigger(body(), 'overview-changed', {});

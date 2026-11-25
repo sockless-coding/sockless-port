@@ -73,7 +73,7 @@ public sealed class MaintenanceTests : IAsyncLifetime
 
     private ScheduledBackups Backups(Alerts? alerts = null) =>
         new(new DataBackup(Options, Scopes, _time, NullLogger<DataBackup>.Instance), Scopes, _protection, Options, Log(), Audit(), _time,
-            NullLogger<ScheduledBackups>.Instance, alerts);
+            NullLogger<ScheduledBackups>.Instance, alerts: alerts);
 
     private async Task<T> ReadDbAsync<T>(Func<PortDbContext, Task<T>> read)
     {
@@ -369,7 +369,7 @@ public sealed class MaintenanceTests : IAsyncLifetime
     private PruneRunner Runner(Alerts? alerts = null)
     {
         var browser = new VolumeBrowser(Options, new RegistryCredentials(Scopes, _protection, _time, NullLogger<RegistryCredentials>.Instance), _time, NullLogger<VolumeBrowser>.Instance);
-        return new PruneRunner(browser, Log(), Audit(), _time, NullLogger<PruneRunner>.Instance, alerts);
+        return new PruneRunner(browser, Log(), Audit(), _time, NullLogger<PruneRunner>.Instance, alerts: alerts);
     }
 
     /// <summary>An online endpoint 1 ("local") whose engine answers prunes with <paramref name="respond"/>; requests are listed as path, query.</summary>

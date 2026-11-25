@@ -44,7 +44,8 @@ public sealed class BackupBusyException() : Exception("A backup is already being
 /// backup-failed alert, resolved by the next backup that works.
 /// </summary>
 public sealed partial class ScheduledBackups(DataBackup backup, IServiceScopeFactory scopes, IDataProtectionProvider protection, IOptions<PortOptions> options,
-    MaintenanceLog log, AuditLog audit, TimeProvider time, ILogger<ScheduledBackups> logger, Notifications.Alerts? alerts = null)
+    MaintenanceLog log, AuditLog audit, TimeProvider time, ILogger<ScheduledBackups> logger,
+    Work.WorkTracker? work = null, Notifications.Alerts? alerts = null)
 {
     private const string IntervalKey = "backup-interval-hours";
     private const string KeepKey = "backup-keep";
@@ -196,11 +197,16 @@ public sealed partial class ScheduledBackups(DataBackup backup, IServiceScopeFac
     {
         if (!await _writing.WaitAsync(0, cancellationToken))
             throw new BackupBusyException();
+        using var item = work?.Start(Work.WorkKind.Backup, "Backing up Sockless Port", by: trigger.By);
         try
         {
             var started = time.GetUtcNow();
             var schedule = await GetAsync(cancellationToken);
             var result = await WriteAsync(schedule, cancellationToken);
+            if (result.Outcome == MaintenanceOutcome.Succeeded)
+                item?.Succeed(result.Summary);
+            else
+                item?.Fail(result.Summary);
             await log.RecordAsync(new MaintenanceRun
             {
                 Task = MaintenanceTask.Backup,

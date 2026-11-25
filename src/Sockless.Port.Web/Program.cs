@@ -25,6 +25,7 @@ builder.Services.AddSingleton<IEngineEventSink, SignalREngineEventSink>();
 builder.Services.AddPortCore(builder.Configuration);
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<TerminalSessions>();
+builder.Services.AddHostedService<WorkBroadcaster>();
 builder.Services.AddSingleton<GitForms>();
 builder.AddHttpsListener();
 

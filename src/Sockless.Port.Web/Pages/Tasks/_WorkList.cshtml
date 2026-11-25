@@ -1,0 +1,22 @@
+@* Every task the user can see. Refreshed on work-changed. *@
+@model Sockless.Port.Web.Pages.Tasks.IndexModel
+<section id="work-page-list" class="card" aria-label="Tasks"
+         hx-get="@Url.Page("/Tasks/Index", "List")" hx-trigger="work-changed from:body" hx-swap="outerHTML">
+    @if (Model.Items.Count == 0)
+    {
+        <div class="empty-state">
+            <icon name="clipboard-document-list" class="h-12 w-12" stroke-width="1.5" />
+            <p class="text-base text-heading">Nothing is running</p>
+            <p class="text-secondary">Pulls, scans, update checks and the like show here while they run.</p>
+        </div>
+    }
+    else
+    {
+        <ul class="work-list">
+            @foreach (var item in Model.Items)
+            {
+                <li><partial name="_WorkItem" model="item" /></li>
+            }
+        </ul>
+    }
+</section>

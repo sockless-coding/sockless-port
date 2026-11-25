@@ -32,7 +32,7 @@ public sealed record ScanFailed(int EndpointId, string Reason, DateTimeOffset Si
 /// are kept in memory only.
 /// </summary>
 public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scopes, IEngineEventSink sink, IOptions<PortOptions> options,
-    TimeProvider time, ILogger<ImageScans> logger, Notifications.Alerts? alerts = null) : BackgroundService
+    TimeProvider time, ILogger<ImageScans> logger, Work.WorkTracker? work = null, Notifications.Alerts? alerts = null) : BackgroundService
 {
     /// <summary>Scans waiting at most; more are refused until some finish.</summary>
     public const int MaxQueued = 500;
@@ -41,6 +41,7 @@ public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scop
 
     private readonly Channel<ScanRequest> _queue = Channel.CreateBounded<ScanRequest>(new BoundedChannelOptions(MaxQueued) { SingleReader = true });
     private readonly ConcurrentDictionary<string, ScanState> _states = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, Work.WorkItem> _work = new(StringComparer.Ordinal);
 
     private sealed record ScanRequest(EngineConnection Connection, string ImageId);
 
@@ -68,9 +69,14 @@ public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scop
             if (_states.TryAdd(imageId, queued))
                 break;
         }
+        var item = work?.Start(Work.WorkKind.Scan, $"Scanning {ShortImageId(imageId)}", connection.Id, connection.Name, imageId, queued: true);
+        if (item is not null)
+            _work[imageId] = item;
         if (_queue.Writer.TryWrite(new ScanRequest(connection, imageId)))
             return true;
         _states.TryRemove(new KeyValuePair<string, ScanState>(imageId, queued));
+        if (_work.TryRemove(imageId, out var unqueued))
+            unqueued.Forget();
         return false;
     }
 
@@ -198,6 +204,8 @@ public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scop
             if (connection.Client is not { } client)
                 throw new ScannerUnavailableException($"{connection.Name} is offline, so the image couldn't be copied from it.");
             var (image, _) = await client.InspectImageAsync(imageId, timeout.Token);
+            if (ImageName(image) is { } name)
+                WorkFor(imageId)?.Retitle($"Scanning {name}");
 
             ComposeCli.CreatePrivateDirectory(work);
             var tarball = Path.Combine(work, "image.tar");
@@ -209,12 +217,20 @@ public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scop
             var fresh = await StoreAsync(imageId, image, report, status, timeout.Token);
             _states.TryRemove(imageId, out _);
             LogScanned(logger, ImageName(image) ?? imageId, connection.Name, report.Findings.Count);
+            if (_work.TryRemove(imageId, out var done))
+            {
+                var counts = ScanCounts.Of(report.Findings);
+                done.Succeed(report.Findings.Count == 0 ? "No known vulnerabilities."
+                    : $"{report.Findings.Count} {(report.Findings.Count == 1 ? "finding" : "findings")}: {counts.Critical} critical, {counts.High} high.");
+            }
             if (alerts is not null && fresh.Count > 0)
                 await alerts.NewVulnerabilitiesAsync(connection, imageId, ImageName(image) ?? imageId[..Math.Min(19, imageId.Length)], fresh, stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
             _states.TryRemove(imageId, out _);
+            if (_work.TryRemove(imageId, out var stopped))
+                stopped.Canceled();
             throw;
         }
         catch (Exception ex) when (ex is OperationCanceledException or ScannerUnavailableException or DockerApiException or DockerApiVersionException
@@ -230,6 +246,8 @@ public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scop
                 _ => ex.Message,
             };
             _states[imageId] = new ScanFailed(connection.Id, reason, time.GetUtcNow());
+            if (_work.TryRemove(imageId, out var failed))
+                failed.Fail(reason);
             LogFailed(logger, imageId, connection.Name, reason);
         }
         finally
@@ -256,6 +274,7 @@ public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scop
                 reported = copied;
                 var total = image.Size > 0 ? $" of about {Bytes(image.Size)}" : "";
                 await PhaseAsync(connection, Normalize(image.Id), $"Copying the image from {connection.Name} ({Bytes(copied)}{total})", started, notify: false);
+                WorkFor(Normalize(image.Id))?.Report(copied, image.Size, Work.WorkUnit.Bytes);
             }
         }
     }
@@ -308,6 +327,13 @@ public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scop
     private async Task PhaseAsync(EngineConnection connection, string imageId, string phase, DateTimeOffset started, bool notify)
     {
         _states[imageId] = new ScanRunning(connection.Id, phase, started);
+        if (WorkFor(imageId) is { } item)
+        {
+            if (item.View.State is Work.WorkQueued)
+                item.Running(phase);
+            else if (notify)
+                item.Report(0, 0, Work.WorkUnit.Items, phase); // A new phase: its own progress, if any, follows.
+        }
         if (notify)
             await NotifyAsync(connection);
     }
@@ -325,6 +351,10 @@ public sealed partial class ImageScans(TrivyCli trivy, IServiceScopeFactory scop
             LogNotifyFailed(logger, ex.Message);
         }
     }
+
+    private Work.WorkItem? WorkFor(string imageId) => _work.GetValueOrDefault(imageId);
+
+    private static string ShortImageId(string imageId) => (imageId.StartsWith("sha256:", StringComparison.Ordinal) ? imageId[7..] : imageId)[..Math.Min(12, imageId.Length)];
 
     private static string? ImageName(ImageInspect image) => image.RepoTags?.FirstOrDefault(t => t != "<none>:<none>");
 

@@ -6,6 +6,7 @@ using Sockless.Port.Images;
 using Sockless.Port.Registries;
 using Sockless.Port.Vulnerabilities;
 using Sockless.Port.Web.Infrastructure;
+using Sockless.Port.Work;
 
 namespace Sockless.Port.Web.Pages.Engine.Images;
 
@@ -19,7 +20,8 @@ public sealed record ImageRow(ImageSummary Summary, IReadOnlyList<string> UsedBy
     public string Name => Summary.Tags.Count > 0 ? Summary.Tags[0] : ShortId;
 }
 
-public sealed class IndexModel(EngineConnections connections, ImageJobs jobs, ImageUpdates updates, RegistryCredentials registries, ImageScans scans)
+public sealed class IndexModel(EngineConnections connections, ImageJobs jobs, ImageUpdates updates, RegistryCredentials registries, ImageScans scans,
+    WorkTracker work, IHostApplicationLifetime stopping)
     : EndpointPageModel(connections)
 {
     public static readonly IReadOnlyList<(string Value, string Label)> Usages =
@@ -76,8 +78,13 @@ public sealed class IndexModel(EngineConnections connections, ImageJobs jobs, Im
     }
 
     /// <summary>Removes the selected images (the row buttons post a single id).</summary>
-    public async Task<IActionResult> OnPostRemoveAsync(string[] ids, bool force, CancellationToken cancellationToken)
+    /// <remarks>
+    /// Listed among the background tasks with its progress, and it goes on if the browser leaves
+    /// (only shutdown stops it): a long removal shouldn't end half done because of a click elsewhere.
+    /// </remarks>
+    public async Task<IActionResult> OnPostRemoveAsync(string[] ids, bool force, CancellationToken _)
     {
+        var cancellationToken = stopping.ApplicationStopping;
         if (ids.Length == 0)
         {
             Flash.Error(TempData, "Select one or more images first.");
@@ -89,13 +96,19 @@ public sealed class IndexModel(EngineConnections connections, ImageJobs jobs, Im
             return RedirectToPage(Filters);
         }
 
+        var targets = ids.Distinct().Take(500).ToList();
+        using var item = work.Start(WorkKind.RemoveImages, targets.Count == 1 ? "Removing an image" : $"Removing {targets.Count} images", EndpointId, Connection.Name,
+            by: User.Identity?.Name);
         var removed = new List<string>();
         var failed = new List<string>();
         long freed = 0;
         var sizes = await SizesAsync(client, cancellationToken);
-        foreach (var id in ids.Distinct().Take(500))
+        foreach (var id in targets)
         {
             var name = await NameOfAsync(client, id, cancellationToken);
+            if (targets.Count == 1)
+                item.Retitle($"Removing {name}");
+            item.Report(removed.Count + failed.Count, targets.Count, WorkUnit.Items, name);
             try
             {
                 var result = await ImageActions.RemoveAsync(client, id, force, cancellationToken);
@@ -109,10 +122,21 @@ public sealed class IndexModel(EngineConnections connections, ImageJobs jobs, Im
             }
         }
 
+        string? success = null;
         if (removed.Count > 0)
-            Flash.Success(TempData, $"Removed {(removed.Count <= 3 ? string.Join(", ", removed) : $"{removed.Count} images")}{(freed > 0 ? $", freeing about {Format.Bytes(freed)}" : "")}.");
+        {
+            success = $"Removed {(removed.Count <= 3 ? string.Join(", ", removed) : $"{removed.Count} images")}{(freed > 0 ? $", freeing about {Format.Bytes(freed)}" : "")}.";
+            Flash.Success(TempData, success);
+        }
         if (failed.Count > 0)
+        {
             Flash.Error(TempData, $"Couldn't remove {string.Join(" ", failed)}");
+            item.Fail($"{(success is null ? "" : success + " ")}Couldn't remove {string.Join(" ", failed)}");
+        }
+        else
+        {
+            item.Succeed(success ?? "Nothing was removed.");
+        }
         return RedirectToPage(Filters);
     }
 
@@ -120,13 +144,20 @@ public sealed class IndexModel(EngineConnections connections, ImageJobs jobs, Im
     public async Task<IActionResult> OnPostPruneAsync(bool all, CancellationToken cancellationToken)
     {
         ImagePruneResponse? result = null;
+        using var item = work.Start(WorkKind.PruneImages, $"Removing {(all ? "unused" : "dangling")} images", EndpointId, Connection.Name, by: User.Identity?.Name);
         await TryEngineAsync(async client => result = await client.PruneImagesAsync(all, cancellationToken));
         if (result is not null)
         {
             var deleted = ImageActions.Summarize(result.ImagesDeleted);
-            Flash.Success(TempData, deleted.Deleted.Count == 0 && deleted.Untagged.Count == 0
+            var message = deleted.Deleted.Count == 0 && deleted.Untagged.Count == 0
                 ? $"Nothing to remove: there are no {(all ? "unused" : "dangling")} images."
-                : $"Removed {(all ? "unused" : "dangling")} images: {deleted.Untagged.Count} tags and {deleted.Deleted.Count} images or layers, freeing {Format.Bytes(result.SpaceReclaimed)}.");
+                : $"Removed {(all ? "unused" : "dangling")} images: {deleted.Untagged.Count} tags and {deleted.Deleted.Count} images or layers, freeing {Format.Bytes(result.SpaceReclaimed)}.";
+            Flash.Success(TempData, message);
+            item.Succeed(message);
+        }
+        else
+        {
+            item.Fail(Flash.PeekError(TempData) ?? "The engine couldn't remove them.");
         }
         return RedirectToPage(Filters);
     }

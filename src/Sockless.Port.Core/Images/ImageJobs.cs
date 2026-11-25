@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Sockless.Port.Docker;
 using Sockless.Port.Engines;
 using Sockless.Port.Registries;
+using Sockless.Port.Work;
 
 namespace Sockless.Port.Images;
 
@@ -14,7 +15,7 @@ public sealed class ImageJobRejectedException(string message) : Exception(messag
 /// Runs pulls and builds in the background, attaching registry credentials, and keeps finished
 /// jobs for a while so a page opened later can still show how they ended.
 /// </summary>
-public sealed class ImageJobs(RegistryCredentials registries, TimeProvider time, ILogger<ImageJobs> logger) : IDisposable
+public sealed class ImageJobs(RegistryCredentials registries, TimeProvider time, ILogger<ImageJobs> logger, WorkTracker? work = null) : IDisposable
 {
     /// <summary>Running jobs per endpoint; more would only compete for the same bandwidth and disk.</summary>
     public const int MaxRunningPerEndpoint = 4;
@@ -112,6 +113,8 @@ public sealed class ImageJobs(RegistryCredentials registries, TimeProvider time,
             throw new ImageJobRejectedException($"{MaxRunningPerEndpoint} pulls or builds are already running on {connection.Name}. Wait for one to finish.");
 
         var job = new ImageJob(Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(8)), connection.Id, kind, target, time.GetUtcNow(), _stopping.Token);
+        job.Work = work?.Start(kind == ImageJobKind.Pull ? WorkKind.Pull : WorkKind.Build,
+            kind == ImageJobKind.Pull ? $"Pulling {target}" : $"Building {target}", connection.Id, connection.Name, job.Id);
         _jobs[job.Id] = job;
         return (job, client);
     }

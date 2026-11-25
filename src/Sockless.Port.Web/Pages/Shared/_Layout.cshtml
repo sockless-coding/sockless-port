@@ -1,9 +1,11 @@
 @inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
 @inject Sockless.Port.Engines.EngineConnections Connections
 @inject Sockless.Port.Settings.PortSettings Settings
+@inject Sockless.Port.Work.WorkTracker Work
 @{
     var currentPage = ViewContext.RouteData.Values["page"] as string;
     var topBar = TopBarView.For(Context, Connections);
+    var workTray = Sockless.Port.Web.Pages.Tasks.WorkTrayView.For(Context, Work);
     var csrfHeader = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string?>
     {
         ["RequestVerificationToken"] = Antiforgery.GetAndStoreTokens(Context).RequestToken,
@@ -129,7 +131,21 @@
         <div class="flex min-w-0 flex-1 flex-col">
             <header class="flex h-16 flex-none items-center justify-between gap-4 border-b border-accent/10 bg-surface px-6">
                 <h1 class="truncate text-xl font-semibold">@ViewData["Title"]</h1>
-                <partial name="_TopBarStatus" model="topBar" />
+                <div class="flex flex-none items-center gap-3">
+                    @* Background tasks across endpoints; the list refreshes when the hub says the work changed (site.js: work-changed). *@
+                    <details class="menu" data-menu>
+                        <summary class="menu-button" title="Tasks">
+                            <icon name="clipboard-document-list" class="h-4 w-4" />
+                            <span class="sr-only">Tasks</span>
+                            <partial name="/Pages/Tasks/_WorkCount.cshtml" model="workTray" />
+                        </summary>
+                        <div class="menu-panel work-panel" id="work-tray"
+                             hx-get="@Url.Page("/Tasks/Index", "Tray")" hx-trigger="work-changed from:body" hx-swap="innerHTML">
+                            <partial name="/Pages/Tasks/_WorkTray.cshtml" model="workTray" view-data='new ViewDataDictionary(ViewData) { ["Initial"] = true }' />
+                        </div>
+                    </details>
+                    <partial name="_TopBarStatus" model="topBar" />
+                </div>
             </header>
 
             <main id="main-content" tabindex="-1" class="flex-1 overflow-y-auto p-6 focus:outline-none">

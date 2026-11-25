@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using Sockless.Port.Work;
 
 namespace Sockless.Port.Stacks;
 
@@ -90,6 +91,9 @@ public sealed class StackJob
 
     internal CancellationToken Token => _cancel.Token;
 
+    /// <summary>The job in the list of background work, when there is one.</summary>
+    internal WorkItem? Work { get; set; }
+
     /// <summary>Asks the job to stop: Compose is killed, and whatever it already did stays done.</summary>
     public void Cancel()
     {
@@ -147,6 +151,8 @@ public sealed class StackJob
                 _logDropped++;
             }
         }
+        if (!string.IsNullOrWhiteSpace(line))
+            Work?.Describe(line.Length > 200 ? line[..200] + "…" : line);
         Changed();
     }
 
@@ -158,6 +164,20 @@ public sealed class StackJob
                 return;
             _status = status;
             FinishedAt = now;
+        }
+        switch (status)
+        {
+            case StackJobSucceeded succeeded:
+                Work?.Succeed(succeeded.Message);
+                break;
+            case StackJobFailed failed:
+                Work?.Fail(failed.Error);
+                break;
+            case StackJobCanceled:
+                Work?.Canceled();
+                break;
+            case StackJobRunning:
+                break;
         }
         Changed();
         _cancel.Dispose();

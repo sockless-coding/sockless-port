@@ -1,0 +1,35 @@
+@* The top bar's tasks list, and (out of band) the count on its button. Refreshed on work-changed. *@
+@model Sockless.Port.Web.Pages.Tasks.WorkTrayView
+@{
+    var shown = Model.Items.Take(WorkDisplay.TrayRows).ToList();
+    var more = Model.Items.Count - shown.Count;
+    var compact = new ViewDataDictionary(ViewData) { ["Compact"] = true };
+    var oob = ViewData["Initial"] is not true;
+}
+@if (oob)
+{
+    <partial name="/Pages/Tasks/_WorkCount.cshtml" model="Model" view-data='new ViewDataDictionary(ViewData) { ["Oob"] = true }' />
+}
+<div class="flex items-center justify-between px-3 pb-1 pt-2">
+    <p class="label-caps">Tasks</p>
+    <a asp-page="/Tasks/Index" class="text-xs hover:text-accent hover:underline">Show all</a>
+</div>
+@if (shown.Count == 0)
+{
+    <p class="px-3 pb-3 pt-1 text-secondary">Nothing is running. Pulls, scans, update checks and the like show here while they run, and for @((int)Sockless.Port.Work.WorkTracker.Retention.TotalMinutes) minutes after.</p>
+}
+else
+{
+    <ul class="work-list">
+        @foreach (var item in shown)
+        {
+            <li><partial name="/Pages/Tasks/_WorkItem.cshtml" model="item" view-data="compact" /></li>
+        }
+    </ul>
+    @if (more > 0)
+    {
+        <p class="px-3 pb-2 pt-1 text-xs text-secondary">
+            And @more more. <a asp-page="/Tasks/Index" class="hover:text-accent hover:underline">Show all</a>
+        </p>
+    }
+}

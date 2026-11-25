@@ -914,6 +914,42 @@
     background: transparent;
   }
 
+  /* ---------- Tasks (background work; the top bar's list and /tasks) ---------- */
+  .work-panel {
+    width: min(26rem, calc(100vw - 2rem));
+    max-width: none;
+    max-height: min(32rem, calc(100vh - 6rem));
+    overflow-y: auto;
+  }
+  .work-list > li + li {
+    border-top: 1px solid var(--sl-border);
+  }
+  .work-item {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.625rem 0.75rem;
+  }
+  .card .work-item {
+    padding-inline: 0;
+  }
+  .work-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding: 0 0.375rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: rgb(var(--sl-accent-rgb) / 0.15);
+    color: var(--sl-accent);
+  }
+  .work-count[data-state='danger'] {
+    background: rgb(var(--sl-danger-rgb) / 0.15);
+    color: rgb(var(--sl-danger-rgb));
+  }
+
   /* ---------- Busy (a post or navigation under way; site.js) ---------- */
   /* The bar fades in only after a moment, so quick actions don't flicker. */
   .busy-bar {

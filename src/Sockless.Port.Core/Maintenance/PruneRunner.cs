@@ -20,7 +20,7 @@ public sealed class PruneBusyException() : Exception("A prune of this endpoint i
 /// raises a task-failed alert.
 /// </summary>
 public sealed partial class PruneRunner(VolumeBrowser browser, MaintenanceLog log, AuditLog audit, TimeProvider time, ILogger<PruneRunner> logger,
-    Notifications.Alerts? alerts = null)
+    Work.WorkTracker? work = null, Notifications.Alerts? alerts = null)
 {
     /// <summary>Names listed in a summary before "and N more".</summary>
     internal const int ListedNames = 10;
@@ -35,10 +35,15 @@ public sealed partial class PruneRunner(VolumeBrowser browser, MaintenanceLog lo
     {
         if (!_running.TryAdd(connection.Id, true))
             throw new PruneBusyException();
+        using var item = work?.Start(Work.WorkKind.Prune, $"Pruning {connection.Name}", connection.Id, connection.Name, by: trigger.By);
         try
         {
             var started = time.GetUtcNow();
-            var result = await PruneAsync(connection, client, options, cancellationToken);
+            var result = await PruneAsync(connection, client, options, item, cancellationToken);
+            if (result.Outcome == MaintenanceOutcome.Succeeded)
+                item?.Succeed(result.Summary);
+            else
+                item?.Fail(result.Summary);
             await log.RecordAsync(new MaintenanceRun
             {
                 Task = MaintenanceTask.Prune,
@@ -67,14 +72,19 @@ public sealed partial class PruneRunner(VolumeBrowser browser, MaintenanceLog lo
         }
     }
 
-    private async Task<PruneResult> PruneAsync(EngineConnection connection, DockerClient client, PruneOptions options, CancellationToken cancellationToken)
+    private async Task<PruneResult> PruneAsync(EngineConnection connection, DockerClient client, PruneOptions options, Work.WorkItem? item,
+        CancellationToken cancellationToken)
     {
         List<string> removed = [];
         List<string> failures = [];
         long space = 0;
+        var steps = (options.Volumes != PruneVolumes.None ? 1 : 0) + (options.Networks ? 1 : 0) + (options.Images != PruneImages.None ? 1 : 0)
+                    + (options.BuildCache ? 1 : 0);
+        var done = 0;
 
         async Task StepAsync(string what, Func<Task> step)
         {
+            item?.Report(done, steps, Work.WorkUnit.Items, what);
             try
             {
                 await step();
@@ -83,6 +93,7 @@ public sealed partial class PruneRunner(VolumeBrowser browser, MaintenanceLog lo
             {
                 failures.Add($"{what}: {EngineErrors.ForCall(ex, connection.Address)}");
             }
+            item?.Report(++done, steps);
         }
 
         if (options.Volumes != PruneVolumes.None)

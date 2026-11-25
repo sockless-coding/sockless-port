@@ -4,6 +4,7 @@ using Sockless.Port.Docker.Engine;
 using Sockless.Port.Docker.Models;
 using Sockless.Port.Engines;
 using Sockless.Port.Registries;
+using Sockless.Port.Work;
 
 namespace Sockless.Port.Images;
 
@@ -38,7 +39,7 @@ public sealed record UpdateCheckSummary(int Checked, int Updates, int Unknown)
 /// unchecked. Swarm services are keyed by the digest their spec pins instead, since the image
 /// may not be on the manager at all.
 /// </summary>
-public sealed class ImageUpdates(RegistryCredentials registries, TimeProvider time)
+public sealed class ImageUpdates(RegistryCredentials registries, TimeProvider time, WorkTracker? work = null)
 {
     private const int Parallelism = 4;
 
@@ -93,10 +94,14 @@ public sealed class ImageUpdates(RegistryCredentials registries, TimeProvider ti
     /// Checks every tag of every image a container uses (running or not), and the reference each
     /// container was created from. Counts tags, for the images page.
     /// </summary>
-    public async Task<UpdateCheckSummary> CheckInUseAsync(EngineConnection connection, DockerClient client, CancellationToken cancellationToken = default)
+    public Task<UpdateCheckSummary> CheckInUseAsync(EngineConnection connection, DockerClient client, CancellationToken cancellationToken = default) =>
+        TrackAsync(connection, "Checking images in use for updates", item => CheckInUseAsync(connection, client, item, cancellationToken),
+            s => Outcome(s, "tag", "tags"));
+
+    private async Task<UpdateCheckSummary> CheckInUseAsync(EngineConnection connection, DockerClient client, WorkItem? item, CancellationToken cancellationToken)
     {
         var containers = await client.ListContainersAsync(all: true, cancellationToken);
-        var results = await CheckAsync(connection, client, containers, allTags: true, cancellationToken);
+        var results = await CheckAsync(connection, client, containers, allTags: true, item, cancellationToken);
         _lastChecked[connection.Id] = time.GetUtcNow();
         return UpdateCheckSummary.Of(results);
     }
@@ -105,12 +110,13 @@ public sealed class ImageUpdates(RegistryCredentials registries, TimeProvider ti
     /// Checks what the given containers run: the reference each was created from, or its image's
     /// tags when it was created from an ID. Counts containers.
     /// </summary>
-    public async Task<UpdateCheckSummary> CheckContainersAsync(EngineConnection connection, DockerClient client, IReadOnlyList<ContainerSummary> containers,
-        CancellationToken cancellationToken = default)
-    {
-        await CheckAsync(connection, client, containers, allTags: false, cancellationToken);
-        return UpdateCheckSummary.Of(containers.Select(c => ForContainer(connection.Id, c)));
-    }
+    public Task<UpdateCheckSummary> CheckContainersAsync(EngineConnection connection, DockerClient client, IReadOnlyList<ContainerSummary> containers,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(connection, "Checking containers for updates", async item =>
+        {
+            await CheckAsync(connection, client, containers, allTags: false, item, cancellationToken);
+            return UpdateCheckSummary.Of(containers.Select(c => ForContainer(connection.Id, c)));
+        }, s => Outcome(s, "container", "containers"));
 
     /// <summary>Checks one container, by its ID. Returns its result.</summary>
     public async Task<UpdateStatus?> CheckContainerAsync(EngineConnection connection, DockerClient client, string containerId, CancellationToken cancellationToken = default)
@@ -130,8 +136,13 @@ public sealed class ImageUpdates(RegistryCredentials registries, TimeProvider ti
     /// Checks swarm services: whether the registry still serves the digest each one's spec is
     /// pinned to. Counts services.
     /// </summary>
-    public async Task<UpdateCheckSummary> CheckServicesAsync(EngineConnection connection, DockerClient client, IReadOnlyList<SwarmService> services,
-        CancellationToken cancellationToken = default)
+    public Task<UpdateCheckSummary> CheckServicesAsync(EngineConnection connection, DockerClient client, IReadOnlyList<SwarmService> services,
+        CancellationToken cancellationToken = default) =>
+        TrackAsync(connection, "Checking services for updates", item => CheckServicesAsync(connection, client, services, item, cancellationToken),
+            s => Outcome(s, "service", "services"));
+
+    private async Task<UpdateCheckSummary> CheckServicesAsync(EngineConnection connection, DockerClient client, IReadOnlyList<SwarmService> services,
+        WorkItem? item, CancellationToken cancellationToken)
     {
         var images = services.Select(s => s.Spec?.TaskTemplate?.ContainerSpec?.Image).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
         foreach (var image in images.Where(i => ServiceSubject(i).Length == 0))
@@ -140,7 +151,7 @@ public sealed class ImageUpdates(RegistryCredentials registries, TimeProvider ti
                 "The service isn't pinned to a digest (it was deployed with --resolve-image never), so which image its tasks run can't be told.", time.GetUtcNow());
         }
         var work = images.Where(i => ServiceSubject(i).Length > 0).Select(image => new Work(ServiceSubject(image), null, image)).ToList();
-        await RunAsync(connection, client, work, cancellationToken);
+        await RunAsync(connection, client, work, item, cancellationToken);
         return UpdateCheckSummary.Of(services.Select(s => ForService(connection.Id, s)));
     }
 
@@ -148,11 +159,53 @@ public sealed class ImageUpdates(RegistryCredentials registries, TimeProvider ti
     /// Everything on the endpoint: what containers run and, on a swarm manager, what services are
     /// pinned to. For the scheduled check.
     /// </summary>
-    public async Task CheckEndpointAsync(EngineConnection connection, DockerClient client, CancellationToken cancellationToken = default)
+    /// <param name="by">Who asked, for the list of background work: <c>schedule</c>.</param>
+    public Task CheckEndpointAsync(EngineConnection connection, DockerClient client, string? by = null, CancellationToken cancellationToken = default) =>
+        TrackAsync(connection, $"Checking {connection.Name} for updates", async item =>
+        {
+            var summary = await CheckInUseAsync(connection, client, item, cancellationToken);
+            if (connection.Engine?.Has(EngineCapabilities.SwarmManager) == true)
+                await CheckServicesAsync(connection, client, await client.ListServicesAsync(cancellationToken: cancellationToken), item, cancellationToken);
+            return summary;
+        }, _ => Available(connection.Id) is { Count: > 0 } available
+            ? $"{available.Count} {(available.Count == 1 ? "image has an update" : "images have updates")}."
+            : "No updates found.", by);
+
+    /// <summary>Runs a check as a piece of background work, ending it with the outcome or the failure.</summary>
+    private async Task<T> TrackAsync<T>(EngineConnection connection, string title, Func<WorkItem?, Task<T>> run, Func<T, string> outcome, string? by = null)
     {
-        await CheckInUseAsync(connection, client, cancellationToken);
-        if (connection.Engine?.Has(EngineCapabilities.SwarmManager) == true)
-            await CheckServicesAsync(connection, client, await client.ListServicesAsync(cancellationToken: cancellationToken), cancellationToken);
+        using var item = work?.Start(WorkKind.UpdateCheck, title, connection.Id, connection.Name, by: by);
+        try
+        {
+            var result = await run(item);
+            item?.Succeed(outcome(result));
+            return result;
+        }
+        catch (OperationCanceledException)
+        {
+            item?.Canceled();
+            throw;
+        }
+        catch (Exception ex)
+        {
+            item?.Fail(EngineErrors.ForCall(ex, connection.Address));
+            throw;
+        }
+    }
+
+    /// <summary>"Checked 3 tags: 1 with an update, 2 up to date."</summary>
+    private static string Outcome(UpdateCheckSummary summary, string one, string many)
+    {
+        if (summary.Checked == 0)
+            return $"No {many} to check.";
+        var parts = new List<string>();
+        if (summary.Updates > 0)
+            parts.Add($"{summary.Updates} with an update");
+        if (summary.UpToDate > 0)
+            parts.Add($"{summary.UpToDate} up to date");
+        if (summary.Unknown > 0)
+            parts.Add($"{summary.Unknown} couldn't be checked");
+        return $"Checked {summary.Checked} {(summary.Checked == 1 ? one : many)}: {string.Join(", ", parts)}.";
     }
 
     /// <summary>Checks one reference of an image and remembers the result.</summary>
@@ -259,7 +312,7 @@ public sealed class ImageUpdates(RegistryCredentials registries, TimeProvider ti
 
     /// <returns>The result of every reference checked.</returns>
     private async Task<IReadOnlyCollection<UpdateStatus>> CheckAsync(EngineConnection connection, DockerClient client, IReadOnlyList<ContainerSummary> containers, bool allTags,
-        CancellationToken cancellationToken)
+        WorkItem? item, CancellationToken cancellationToken)
     {
         var images = (await client.ListImagesAsync(cancellationToken)).ToDictionary(i => i.Id, StringComparer.Ordinal);
         var work = new Dictionary<(string, string), Work>();
@@ -280,14 +333,21 @@ public sealed class ImageUpdates(RegistryCredentials registries, TimeProvider ti
                     Add(imageId, tag);
             }
         }
-        return await RunAsync(connection, client, [.. work.Values], cancellationToken);
+        return await RunAsync(connection, client, [.. work.Values], item, cancellationToken);
     }
 
-    private async Task<IReadOnlyCollection<UpdateStatus>> RunAsync(EngineConnection connection, DockerClient client, IReadOnlyList<Work> work, CancellationToken cancellationToken)
+    private async Task<IReadOnlyCollection<UpdateStatus>> RunAsync(EngineConnection connection, DockerClient client, IReadOnlyList<Work> work, WorkItem? progress,
+        CancellationToken cancellationToken)
     {
         var results = new ConcurrentBag<UpdateStatus>();
+        var done = 0;
+        progress?.Report(0, work.Count);
         await Parallel.ForEachAsync(work, new ParallelOptions { MaxDegreeOfParallelism = Parallelism, CancellationToken = cancellationToken },
-            async (item, ct) => results.Add(await CheckAsync(connection, client, item.Subject, item.RepoDigests, item.Reference, ct)));
+            async (item, ct) =>
+            {
+                results.Add(await CheckAsync(connection, client, item.Subject, item.RepoDigests, item.Reference, ct));
+                progress?.Report(Interlocked.Increment(ref done), work.Count, WorkUnit.Items, item.Reference);
+            });
         return results;
     }
 

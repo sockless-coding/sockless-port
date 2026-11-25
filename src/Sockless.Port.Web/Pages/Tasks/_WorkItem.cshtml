@@ -1,0 +1,59 @@
+@* One piece of background work: what, where, its state as a word, a progress bar while it runs, and how it ended. *@
+@model Sockless.Port.Work.WorkView
+@using Sockless.Port.Work
+@{
+    var access = Context.Access();
+    var link = WorkDisplay.Link(Model, Url, access);
+    var message = WorkDisplay.Message(Model);
+    var progress = WorkDisplay.ProgressText(Model.Progress);
+    var compact = ViewData["Compact"] is true;
+    var labelId = "work-" + Model.Id;
+}
+<div class="work-item" data-state="@(Model.State switch { WorkRunning => "running", WorkQueued => "queued", WorkSucceeded => "succeeded", WorkFailed => "failed", WorkCanceled => "canceled" })">
+    <icon name="@WorkDisplay.Icon(Model.Kind)" class="mt-0.5 h-5 w-5 flex-none text-secondary" />
+    <div class="min-w-0 flex-1">
+        <div class="flex items-start justify-between gap-2">
+            <p class="min-w-0 truncate" id="@labelId">
+                @if (link is not null)
+                {
+                    <a href="@link" class="text-heading hover:text-accent hover:underline">@Model.Title</a>
+                }
+                else
+                {
+                    <span class="text-heading">@Model.Title</span>
+                }
+            </p>
+            <partial name="_StatusBadge" model="WorkDisplay.Badge(Model.State)" />
+        </div>
+        @if (Model.State is WorkRunning)
+        {
+            @if (Model.Progress is { } p)
+            {
+                <progress class="progress mt-1.5" max="@p.Total" value="@p.Done" aria-labelledby="@labelId" aria-valuetext="@progress"></progress>
+            }
+            else
+            {
+                <progress class="progress mt-1.5" aria-labelledby="@labelId"></progress>
+            }
+        }
+        <p class="mt-1 flex flex-wrap gap-x-2 text-xs text-secondary">
+            @if (Model.EndpointName is not null)
+            {
+                <span>@Model.EndpointName</span>
+            }
+            @if (Model.State is WorkRunning && progress is not null)
+            {
+                <span>@progress</span>
+            }
+            <span title="@Format.Timestamp(Model.FinishedAt ?? Model.StartedAt)">@(Model.FinishedAt is { } finished ? "ended " + Format.Relative(finished) : "started " + Format.Relative(Model.StartedAt))</span>
+            @if (Model.By is not null)
+            {
+                <span>by @Model.By</span>
+            }
+        </p>
+        @if (!string.IsNullOrEmpty(message))
+        {
+            <p class="mt-0.5 text-xs @(Model.State is WorkFailed ? "text-danger" : "text-secondary") @(compact ? "line-clamp-2" : "break-words")">@message</p>
+        }
+    </div>
+</div>

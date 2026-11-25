@@ -1,0 +1,16 @@
+@page "/tasks"
+@model Sockless.Port.Web.Pages.Tasks.IndexModel
+@{
+    ViewData["Title"] = "Tasks";
+}
+
+<div class="mb-6">
+    <h2 class="page-title">Tasks</h2>
+    <p class="mt-1 text-secondary">
+        What's going on in the background on the endpoints you can see: pulls and builds, stack runs, vulnerability scans, update checks,
+        image removals, prunes and backups. Finished tasks stay listed for @((int)Sockless.Port.Work.WorkTracker.Retention.TotalMinutes) minutes.
+        Tasks are kept in memory, so a restart clears the list.
+    </p>
+</div>
+
+<partial name="_WorkList" model="Model" />

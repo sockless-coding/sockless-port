@@ -1,0 +1,17 @@
+@* The count of running and queued work on the top bar's tasks button. Swapped in out of band with the list. *@
+@model Sockless.Port.Web.Pages.Tasks.WorkTrayView
+@{
+    var failed = Model.Items.Count(i => i.State is Sockless.Port.Work.WorkFailed);
+}
+<span id="work-count" class="contents" hx-swap-oob="@(ViewData["Oob"] is true ? "true" : null)">
+    @if (Model.Active > 0)
+    {
+        <span class="work-count" aria-hidden="true">@Model.Active</span>
+        <span class="sr-only">, @Model.Active running</span>
+    }
+    else if (failed > 0)
+    {
+        <span class="work-count" data-state="danger" aria-hidden="true">!</span>
+        <span class="sr-only">, @failed failed</span>
+    }
+</span>
