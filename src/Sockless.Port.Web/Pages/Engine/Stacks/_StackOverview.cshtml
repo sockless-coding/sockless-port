@@ -105,6 +105,18 @@
                 </div>
             }
 
+            @if (Model.Client is not null && Model.ServicesWithSevereFindings is { Count: > 0 } vulnerable)
+            {
+                <div class="callout warning">
+                    <icon name="exclamation-triangle" class="h-5 w-5" />
+                    <p>
+                        The image of @(vulnerable.Count == 1 ? "the service" : "the services")
+                        <span class="font-mono">@string.Join(", ", vulnerable)</span>
+                        @(vulnerable.Count == 1 ? "has" : "have") critical or high vulnerabilities. Open a badge in the table to see them and which have a fix.
+                    </p>
+                </div>
+            }
+
             <section class="card" aria-labelledby="services-title">
                 <div class="mb-4 flex flex-wrap items-baseline justify-between gap-2">
                     <h3 id="services-title" class="section-title mb-0">Services</h3>
@@ -215,6 +227,13 @@
                                             <td class="break-all font-mono text-xs">
                                                 @(container.Image ?? "—")
                                                 <partial name="_UpdateFlag" model="Model.UpdateOf(container)" />
+                                                @if (Model.ScanOf(container) is { } scan)
+                                                {
+                                                    <a asp-page="/Engine/Images/Vulnerabilities" asp-route-endpointId="@Model.EndpointId" asp-route-imageId="@ImagePageModel.RouteId(container.ImageId!)"
+                                                       class="inline-flex hover:underline" aria-label="Vulnerabilities of @container.DisplayName's image">
+                                                        <partial name="_ScanFlag" model="scan" />
+                                                    </a>
+                                                }
                                             </td>
                                             <td class="font-mono text-xs">@(ports.Count > 0 ? string.Join(", ", ports) : "—")</td>
                                         </tr>
@@ -230,6 +249,7 @@
                         Image updates: @(Model.Client is not null && !Model.CanCheckUpdates
                             ? Sockless.Port.Images.ImageUpdates.Unsupported(Model.Connection)
                             : ImageDisplay.LastChecked(Model.Updates, "The images"))
+                        Vulnerabilities: from the last scan of each image. Scanning copies the image to the Sockless Port server.
                     </p>
                 }
             </section>

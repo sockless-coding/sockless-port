@@ -13,6 +13,8 @@
     var swarm = Model.IsSwarm;
     // Checking asks the registries through the engine: no Compose needed, but swarm stacks need a manager.
     var canCheck = detail is not null && Model.CanCheckUpdates && deployed && !Model.IsGone && (!swarm || Model.CanReachSwarm);
+    // Scanning works on the endpoint's images, so only for Compose stacks (swarm tasks run on other nodes).
+    var canScan = detail is not null && !swarm && deployed && !Model.IsGone && Model.Client is not null;
     // Fetching needs only git, not the engine.
     var canFetch = detail is not null && Model.IsGit && detail.GitProblem is null;
 }
@@ -51,7 +53,7 @@
         </div>
     </div>
 
-    @if (canAct || canCheck || canFetch)
+    @if (canAct || canCheck || canScan || canFetch)
     {
         <div sp-can="write" class="flex flex-wrap items-center gap-2">
             @if (canFetch)
@@ -68,6 +70,14 @@
                 <form sp-can="write" method="post" action="@Url.Page("/Engine/Stacks/Detail", "CheckUpdates", new { endpointId = Model.EndpointId, stackName = name })">
                     <button type="submit" class="btn-soft" title="Ask each image's registry whether the @(swarm ? "services run" : "containers run") its current image. Nothing is pulled.">
                         <icon name="arrow-up-circle" class="h-4 w-4" /> Check for updates
+                    </button>
+                </form>
+            }
+            @if (canScan)
+            {
+                <form sp-can="write" method="post" action="@Url.Page("/Engine/Stacks/Detail", "ScanImages", new { endpointId = Model.EndpointId, stackName = name })">
+                    <button type="submit" class="btn-soft" title="Copy each image the containers use to the Sockless Port server and check its packages for known vulnerabilities, one image at a time.">
+                        <icon name="shield-check" class="h-4 w-4" /> Scan images
                     </button>
                 </form>
             }

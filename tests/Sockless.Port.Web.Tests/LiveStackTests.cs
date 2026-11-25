@@ -124,6 +124,13 @@ public sealed partial class LiveStackTests : IAsyncLifetime
             Assert.DoesNotContain("handler=CheckUpdates", detail);
         }
 
+        // Scanning the stack's images queues its one image, and the table links to its scan.
+        Assert.Contains("handler=ScanImages", detail);
+        var scan = await PostAsync(detailUrl, $"{detailUrl}?handler=ScanImages", []);
+        Assert.Equal(HttpStatusCode.Redirect, scan.StatusCode);
+        Assert.Contains("Queued 1 scan.", await _browser.GetStringAsync(scan.Headers.Location!.OriginalString, ct));
+        Assert.Contains("/vulnerabilities\"", await _browser.GetStringAsync($"{detailUrl}?handler=Overview", ct));
+
         // Edit, review the diff, deploy what was reviewed.
         var review = await PostAsync($"{detailUrl}/editor", $"{detailUrl}/editor?handler=Review", new()
         {

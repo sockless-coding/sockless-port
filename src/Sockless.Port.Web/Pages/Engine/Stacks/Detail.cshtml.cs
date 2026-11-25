@@ -3,13 +3,14 @@ using Sockless.Port.Docker.Models;
 using Sockless.Port.Engines;
 using Sockless.Port.Images;
 using Sockless.Port.Stacks;
+using Sockless.Port.Vulnerabilities;
 using Sockless.Port.Web.Infrastructure;
 
 namespace Sockless.Port.Web.Pages.Engine.Stacks;
 
 /// <summary>A stack's services and containers, its last job, and the handlers for its actions.</summary>
 public sealed class DetailModel(EngineConnections connections, StackStore store, StackJobs jobs, ComposeCli compose, DockerCli docker, ImageUpdates updates,
-    StackGit git, GitStackTriggers triggers)
+    StackGit git, GitStackTriggers triggers, ImageScans scans)
     : StackPageModel(connections, store, jobs)
 {
     /// <summary>The stack's tabs: route suffix → (page, label). The editor and repository exist only for managed stacks.</summary>
@@ -51,6 +52,16 @@ public sealed class DetailModel(EngineConnections connections, StackStore store,
     public IReadOnlyList<string> ServicesWithUpdates => IsSwarm
         ? [.. Swarm.Services.Where(s => UpdateOf(s) is UpdateAvailable).Select(s => SwarmDisplay.InStack(s.Name, StackName))]
         : [.. Project.Services.Where(s => s.Containers.Any(c => UpdateOf(c) is UpdateAvailable)).Select(s => s.Name)];
+
+    private IReadOnlyDictionary<string, ScanSummary> _scanned = new Dictionary<string, ScanSummary>();
+
+    /// <summary>The vulnerability scan of a container's image: the stored result and any scan in progress.</summary>
+    public ScanFlag? ScanOf(ContainerSummary container) =>
+        container.ImageId is { } imageId ? new ScanFlag(_scanned.GetValueOrDefault(imageId), scans.StateOf(imageId)) : null;
+
+    /// <summary>Compose services (by name) whose image has a critical or high vulnerability.</summary>
+    public IReadOnlyList<string> ServicesWithSevereFindings => IsSwarm ? [] :
+        [.. Project.Services.Where(s => s.Containers.Any(c => ScanOf(c)?.Summary?.Counts is { } n && n.Critical + n.High > 0)).Select(s => s.Name)];
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -112,6 +123,26 @@ public sealed class DetailModel(EngineConnections connections, StackStore store,
         return Back();
     }
 
+    /// <summary>Queues a vulnerability scan of every image the stack's containers use.</summary>
+    public IActionResult OnPostScanImages()
+    {
+        if (Error is not null || IsSwarm)
+        {
+            Flash.Error(TempData, Error ?? "Swarm services run on the swarm's nodes: scan their images on the Images page of each node's endpoint.");
+            return Back();
+        }
+        int queued = 0, skipped = 0;
+        foreach (var imageId in Project.Containers.Select(c => c.ImageId).OfType<string>().Distinct(StringComparer.Ordinal))
+        {
+            if (scans.Enqueue(Connection, imageId))
+                queued++;
+            else
+                skipped++;
+        }
+        Flash.Success(TempData, ScanDisplay.QueuedMessage(queued, skipped, $"{StackName} has no containers, so there's nothing to scan."));
+        return Back();
+    }
+
     private RedirectToPageResult Back() => RedirectToPage("/Engine/Stacks/Detail", new { endpointId = EndpointId, stackName = StackName });
 
     private async Task LoadStateAsync(CancellationToken cancellationToken)
@@ -119,6 +150,8 @@ public sealed class DetailModel(EngineConnections connections, StackStore store,
         ToolProblem = !IsSwarm ? (await compose.StatusAsync(cancellationToken)).Problem
             : !CanReachSwarm ? $"{StackName} is a swarm stack, and {Connection.Name} isn't a swarm manager."
             : (await docker.StatusAsync(cancellationToken)).Problem;
+        if (!IsSwarm && Client is not null)
+            _scanned = await scans.SummariesAsync(Project.Containers.Select(c => c.ImageId).OfType<string>(), cancellationToken);
         if (Repository is { } repository)
         {
             GitProblem = (await git.Cli.StatusAsync(cancellationToken)).Problem;
