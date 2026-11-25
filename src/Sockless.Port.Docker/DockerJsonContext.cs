@@ -40,6 +40,7 @@ namespace Sockless.Port.Docker;
 [JsonSerializable(typeof(List<ImageHistoryItem>))]
 [JsonSerializable(typeof(List<ImageDeleteItem>))]
 [JsonSerializable(typeof(ImagePruneResponse))]
+[JsonSerializable(typeof(BuildCachePruneResponse))]
 [JsonSerializable(typeof(DistributionInspect))]
 [JsonSerializable(typeof(BuildProgress))]
 [JsonSerializable(typeof(AuthConfig))]

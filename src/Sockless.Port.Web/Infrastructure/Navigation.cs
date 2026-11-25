@@ -58,6 +58,7 @@ public static class Navigation
         new("Template sources", "/TemplateSources/Index", "squares-plus", AdminOnly: true),
         new("Notifications", "/Notifications/Index", "bell", AdminOnly: true),
         new("Users", "/Users/Index", "users", AdminOnly: true),
+        new("Maintenance", "/Maintenance/Index", "wrench-screwdriver", AdminOnly: true),
         new("Audit log", "/Audit/Index", "clipboard-document-list", AdminOnly: true),
         new("Settings", "/Settings/Index", "cog-6-tooth", AdminOnly: true),
     ];

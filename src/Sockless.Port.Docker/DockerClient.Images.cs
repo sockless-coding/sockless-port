@@ -130,8 +130,31 @@ public sealed partial class DockerClient
 
     /// <summary>Removes dangling images, or every image no container uses.</summary>
     public Task<ImagePruneResponse> PruneImagesAsync(bool allUnused, CancellationToken cancellationToken = default) =>
-        SendAsync(HttpMethod.Post, Path("/images/prune", Query(("filters", Filters(new Dictionary<string, string[]> { ["dangling"] = [allUnused ? "false" : "true"] })))),
+        PruneImagesAsync(allUnused, olderThan: null, cancellationToken);
+
+    /// <summary>Removes dangling images, or every image no container uses.</summary>
+    /// <param name="olderThan">Only images created at least this long ago (the <c>until</c> filter).</param>
+    public Task<ImagePruneResponse> PruneImagesAsync(bool allUnused, TimeSpan? olderThan, CancellationToken cancellationToken = default)
+    {
+        var filters = new Dictionary<string, string[]> { ["dangling"] = [allUnused ? "false" : "true"] };
+        if (olderThan is { } age)
+            filters["until"] = [Until(age)];
+        return SendAsync(HttpMethod.Post, Path("/images/prune", Query(("filters", Filters(filters)))),
             content: null, Json.ImagePruneResponse, cancellationToken, timeout: _requestTimeout * 4);
+    }
+
+    /// <summary>
+    /// Removes build cache no build is using (<c>docker builder prune --all</c>). Engines without
+    /// a build cache API (Podman's compatible API, which builds with Buildah) answer 404.
+    /// </summary>
+    /// <param name="olderThan">Only cache last used at least this long ago.</param>
+    public Task<BuildCachePruneResponse> PruneBuildCacheAsync(TimeSpan? olderThan = null, CancellationToken cancellationToken = default) =>
+        SendAsync(HttpMethod.Post, Path("/build/prune", Query(("all", "true"),
+                ("filters", olderThan is { } age ? Filters(new Dictionary<string, string[]> { ["until"] = [Until(age)] }) : null))),
+            content: null, Json.BuildCachePruneResponse, cancellationToken, timeout: _requestTimeout * 4);
+
+    /// <summary>A Go duration in whole hours, as the <c>until</c> filters take it: <c>720h</c>.</summary>
+    internal static string Until(TimeSpan age) => $"{Math.Max(0, (long)age.TotalHours).ToString(System.Globalization.CultureInfo.InvariantCulture)}h";
 
     // ---------------------------------------------------------------- pull and build
 

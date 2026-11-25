@@ -1,6 +1,7 @@
 @page "/settings"
 @model Sockless.Port.Web.Pages.Settings.IndexModel
 @using Sockless.Port.Settings
+@using Sockless.Port.Backup
 @{
     ViewData["Title"] = "Settings";
     var https = Model.Https;
@@ -279,14 +280,80 @@
             <button type="submit" class="btn-soft secondary"><icon name="arrow-down-tray" class="h-4 w-4" /> Download a backup</button>
         </form>
     </div>
+    <form method="post" asp-page-handler="BackupSchedule" class="space-y-4 border-t border-line pt-4" novalidate>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <h4 class="label-caps">Scheduled backups</h4>
+            <a asp-page="/Maintenance/Index" class="text-sm hover:underline">Last and next run, and the stored backups, in Maintenance</a>
+        </div>
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div class="field">
+                <label asp-for="BackupIntervalHours">Back up</label>
+                <select asp-for="BackupIntervalHours">
+                    @foreach (var hours in BackupSchedule.IntervalChoices)
+                    {
+                        <option value="@hours" selected="@(Model.BackupIntervalHours == hours)">@(hours switch { 0 => "Only when asked", 24 => "Every day", _ => "Every week" })</option>
+                    }
+                </select>
+                <partial name="_FieldError" model='"BackupIntervalHours"' />
+            </div>
+            <div class="field">
+                <label asp-for="BackupKeep">Keep the newest</label>
+                <input asp-for="BackupKeep" type="number" min="1" max="@BackupSchedule.MaxKeep" aria-describedby="keep-hint" />
+                <p class="hint" id="keep-hint">Older scheduled backups in the folder are deleted after each new one. Other files are left alone.</p>
+                <partial name="_FieldError" model='"BackupKeep"' />
+            </div>
+            <div class="field">
+                <label asp-for="BackupFolder">Folder</label>
+                <input asp-for="BackupFolder" class="font-mono" placeholder="backups" autocomplete="off" aria-describedby="folder-hint" />
+                <p class="hint" id="folder-hint">
+                    Empty is <span class="font-mono">@Model.DefaultBackupFolder</span>; a relative path is inside the data volume.
+                    For copies off this volume, mount another path into the container and enter it here.
+                </p>
+                <partial name="_FieldError" model='"BackupFolder"' />
+            </div>
+        </div>
+        <label class="flex items-start gap-2">
+            <input type="checkbox" name="BackupEncrypt" value="true" class="mt-1 accent-accent" checked="@Model.BackupEncrypt" />
+            <input type="hidden" name="BackupEncrypt" value="false" />
+            <span>
+                Encrypt scheduled backups with a passphrase
+                <span class="block text-xs text-secondary">
+                    AES-256-GCM. The passphrase is stored encrypted on this server; keep a copy elsewhere, since a backup can't be restored without it.
+                </span>
+            </span>
+        </label>
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div class="field">
+                <label asp-for="BackupPassphrase">@(Model.HasBackupPassphrase ? "New passphrase" : "Passphrase")</label>
+                <input asp-for="BackupPassphrase" type="password" autocomplete="new-password" minlength="@BackupCipher.MinPassphraseLength" maxlength="@BackupCipher.MaxPassphraseLength" aria-describedby="passphrase-hint" />
+                <p class="hint" id="passphrase-hint">
+                    At least @BackupCipher.MinPassphraseLength characters.@(Model.HasBackupPassphrase ? " Leave empty to keep the stored one." : "")
+                </p>
+                <partial name="_FieldError" model='"BackupPassphrase"' />
+            </div>
+            <div class="field">
+                <label asp-for="BackupPassphraseConfirm">Passphrase again</label>
+                <input asp-for="BackupPassphraseConfirm" type="password" autocomplete="new-password" maxlength="@BackupCipher.MaxPassphraseLength" />
+                <partial name="_FieldError" model='"BackupPassphraseConfirm"' />
+            </div>
+        </div>
+        <div class="flex justify-end">
+            <button type="submit" class="btn-soft secondary">Save the schedule</button>
+        </div>
+    </form>
     <form method="post" asp-page-handler="Restore" enctype="multipart/form-data" class="flex flex-wrap items-end gap-3 border-t border-line pt-4" novalidate>
         <div class="field min-w-[16rem] flex-1">
             <label asp-for="Backup">Restore from a backup</label>
-            <input asp-for="Backup" type="file" accept=".tar.gz,.tgz,application/gzip" aria-describedby="restore-hint" />
+            <input asp-for="Backup" type="file" accept=".gz,.tgz,.enc,application/gzip" aria-describedby="restore-hint" />
             <p class="hint" id="restore-hint">
                 It's checked, then applied when Sockless Port restarts: everything is replaced by the backup, and everyone signs in again.
                 Backups from newer versions of Sockless Port are refused.
             </p>
+        </div>
+        <div class="field min-w-[12rem]">
+            <label asp-for="RestorePassphrase">Passphrase</label>
+            <input asp-for="RestorePassphrase" type="password" autocomplete="off" aria-describedby="restore-passphrase-hint" />
+            <p class="hint" id="restore-passphrase-hint">Only for an encrypted backup (.enc).</p>
         </div>
         <button type="submit" class="btn-soft danger" data-confirm="Prepare to restore this backup? Nothing changes until you restart.">
             <icon name="arrow-up-tray" class="h-4 w-4" /> Check and prepare

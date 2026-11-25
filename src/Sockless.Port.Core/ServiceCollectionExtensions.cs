@@ -72,6 +72,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<AuditLog>();
         services.AddHostedService<AuditRetention>();
         services.AddSingleton<DataBackup>();
+        services.AddSingleton<Maintenance.MaintenanceLog>();
+        services.AddSingleton<ScheduledBackups>();
+        services.AddSingleton<Maintenance.PruneSchedules>();
+        services.AddSingleton<Maintenance.PruneRunner>();
+        services.AddHostedService<Maintenance.MaintenanceSchedule>();
         services.AddSingleton<HttpsCertificates>();
 
         services.TryAddSingleton(TimeProvider.System);

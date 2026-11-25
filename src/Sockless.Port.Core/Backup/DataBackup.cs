@@ -46,10 +46,17 @@ public sealed partial class DataBackup(IOptions<PortOptions> options, IServiceSc
 
     private PortOptions Port => options.Value;
 
-    public string FileName() => $"sockless-port-backup-{time.GetUtcNow():yyyyMMdd-HHmmss}.tar.gz";
+    public string FileName(bool encrypted = false) => $"{FilePrefix}{time.GetUtcNow():yyyyMMdd-HHmmss}.tar.gz{(encrypted ? BackupCipher.Extension : "")}";
+
+    /// <summary>What every backup's file name starts with.</summary>
+    public const string FilePrefix = "sockless-port-backup-";
 
     /// <summary>Writes a gzipped tar of the data volume to <paramref name="output"/>.</summary>
-    public async Task WriteAsync(Stream output, string? serverVersion, CancellationToken cancellationToken = default)
+    public Task WriteAsync(Stream output, string? serverVersion, CancellationToken cancellationToken = default) =>
+        WriteAsync(output, serverVersion, passphrase: null, cancellationToken);
+
+    /// <summary>Writes a gzipped tar of the data volume to <paramref name="output"/>, encrypted when there's a <paramref name="passphrase"/> (<see cref="BackupCipher"/>).</summary>
+    public async Task WriteAsync(Stream output, string? serverVersion, string? passphrase, CancellationToken cancellationToken = default)
     {
         Directory.CreateDirectory(Port.TempPath);
         var snapshot = Path.Combine(Port.TempPath, $"backup-{Guid.NewGuid():n}.db");
@@ -62,7 +69,9 @@ public sealed partial class DataBackup(IOptions<PortOptions> options, IServiceSc
                 await db.Database.ExecuteSqlAsync($"VACUUM INTO {snapshot}", cancellationToken);
             }
 
-            await using var gzip = new GZipStream(output, CompressionLevel.Optimal, leaveOpen: true);
+            // Disposed last, after gzip has written its end: the cipher then writes its last record.
+            await using var cipher = string.IsNullOrEmpty(passphrase) ? null : BackupCipher.Encrypt(output, passphrase, leaveOpen: true);
+            await using var gzip = new GZipStream(cipher ?? output, CompressionLevel.Optimal, leaveOpen: true);
             await using var tar = new TarWriter(gzip, TarEntryFormat.Pax, leaveOpen: true);
 
             var manifest = new BackupManifest(FormatVersion, time.GetUtcNow(), serverVersion);
@@ -101,7 +110,11 @@ public sealed partial class DataBackup(IOptions<PortOptions> options, IServiceSc
     /// under the expected folders.
     /// </summary>
     /// <exception cref="BackupRejectedException">It isn't a backup this server can restore.</exception>
-    public async Task<StagedRestore> StageAsync(Stream upload, CancellationToken cancellationToken = default)
+    public Task<StagedRestore> StageAsync(Stream upload, CancellationToken cancellationToken = default) => StageAsync(upload, passphrase: null, cancellationToken);
+
+    /// <inheritdoc cref="StageAsync(Stream, CancellationToken)"/>
+    /// <param name="passphrase">For an encrypted backup.</param>
+    public async Task<StagedRestore> StageAsync(Stream upload, string? passphrase, CancellationToken cancellationToken = default)
     {
         var staging = Port.RestorePendingPath + ".partial";
         DeleteDirectory(staging);
@@ -111,7 +124,8 @@ public sealed partial class DataBackup(IOptions<PortOptions> options, IServiceSc
             BackupManifest? manifest = null;
             var files = 0;
             long bytes = 0;
-            await using (var gzip = new GZipStream(upload, CompressionMode.Decompress, leaveOpen: true))
+            await using (var source = await BackupCipher.OpenReadAsync(upload, passphrase, cancellationToken))
+            await using (var gzip = new GZipStream(source, CompressionMode.Decompress, leaveOpen: true))
             await using (var tar = new TarReader(gzip))
             {
                 try

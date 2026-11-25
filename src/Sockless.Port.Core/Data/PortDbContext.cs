@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Sockless.Port.Access;
 using Sockless.Port.Audit;
 using Sockless.Port.Engines;
+using Sockless.Port.Maintenance;
 using Sockless.Port.Monitoring;
 using Sockless.Port.Notifications;
 using Sockless.Port.Registries;
@@ -50,6 +51,10 @@ public sealed class PortDbContext(DbContextOptions<PortDbContext> options) : Ide
     public DbSet<NotificationRule> NotificationRules => Set<NotificationRule>();
 
     public DbSet<NotificationEntry> NotificationHistory => Set<NotificationEntry>();
+
+    public DbSet<PruneSchedule> PruneSchedules => Set<PruneSchedule>();
+
+    public DbSet<MaintenanceRun> MaintenanceRuns => Set<MaintenanceRun>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -264,6 +269,32 @@ public sealed class PortDbContext(DbContextOptions<PortDbContext> options) : Ide
             entry.Property(e => e.Outcome).HasConversion<string>().HasMaxLength(16);
             entry.Property(e => e.Error).HasMaxLength(512);
             // No foreign keys: history outlives the channels, rules and endpoints it names.
+        });
+
+        builder.Entity<PruneSchedule>(schedule =>
+        {
+            schedule.ToTable("PruneSchedules");
+            schedule.HasIndex(s => s.EndpointId).IsUnique();
+            schedule.HasOne<EngineEndpoint>().WithMany().HasForeignKey(s => s.EndpointId).OnDelete(DeleteBehavior.Cascade);
+            schedule.Property(s => s.Images).HasConversion<string>().HasMaxLength(16);
+            schedule.Property(s => s.Volumes).HasConversion<string>().HasMaxLength(16);
+            schedule.Property(s => s.UpdatedAt).HasConversion(SortableUtc);
+            schedule.Ignore(s => s.Options);
+        });
+
+        builder.Entity<MaintenanceRun>(run =>
+        {
+            run.ToTable("MaintenanceRuns");
+            run.Property(r => r.Task).HasConversion<string>().HasMaxLength(32);
+            run.Property(r => r.EndpointName).HasMaxLength(64);
+            run.Property(r => r.StartedAt).HasConversion(SortableUtc);
+            run.HasIndex(r => r.StartedAt);
+            run.HasIndex(r => new { r.Task, r.EndpointId });
+            run.Property(r => r.FinishedAt).HasConversion(SortableUtc);
+            run.Property(r => r.Outcome).HasConversion<string>().HasMaxLength(16);
+            run.Property(r => r.By).HasMaxLength(256);
+            run.Property(r => r.Summary).HasMaxLength(MaintenanceRun.MaxSummary);
+            // No foreign key: history outlives the endpoints it names.
         });
 
         builder.Entity<TemplateSource>(source =>

@@ -27,8 +27,11 @@ public enum AlertKind
     /// <summary>CPU or memory stayed above a rule's threshold.</summary>
     ResourceUsage,
 
-    /// <summary>A stack job, or a scheduled update check, failed.</summary>
+    /// <summary>A stack job, a scheduled update check or a prune failed.</summary>
     TaskFailed,
+
+    /// <summary>A scheduled (or manual) backup to the backup folder failed.</summary>
+    BackupFailed,
 }
 
 public enum AlertSeverity
@@ -52,7 +55,7 @@ public sealed record Alert(AlertKind Kind, string Key, int? EndpointId, string? 
 {
     /// <summary>Clearing it means the problem is over, which is worth saying (a container that's healthy again).</summary>
     public bool Resolvable => Kind is AlertKind.ContainerExited or AlertKind.ContainerRestarting or AlertKind.ContainerUnhealthy or AlertKind.EndpointOffline
-        or AlertKind.ResourceUsage;
+        or AlertKind.ResourceUsage or AlertKind.BackupFailed;
 
     public static string Describe(AlertKind kind) => kind switch
     {
@@ -64,7 +67,8 @@ public sealed record Alert(AlertKind Kind, string Key, int? EndpointId, string? 
         AlertKind.Vulnerabilities => "A scan finds new critical or high vulnerabilities",
         AlertKind.UpdatesAvailable => "A scheduled check finds image updates",
         AlertKind.ResourceUsage => "CPU or memory stays above a threshold",
-        AlertKind.TaskFailed => "A stack job or scheduled check fails",
+        AlertKind.TaskFailed => "A stack job, scheduled check or prune fails",
+        AlertKind.BackupFailed => "A backup fails",
         _ => kind.ToString(),
     };
 }

@@ -78,6 +78,13 @@ public sealed record ImagePruneResponse
     public long SpaceReclaimed { get; init; }
 }
 
+/// <summary><c>POST /build/prune</c>.</summary>
+public sealed record BuildCachePruneResponse
+{
+    public IReadOnlyList<string>? CachesDeleted { get; init; }
+    public long SpaceReclaimed { get; init; }
+}
+
 /// <summary><c>GET /distribution/{name}/json</c>: what the registry currently serves for a reference.</summary>
 public sealed record DistributionInspect
 {

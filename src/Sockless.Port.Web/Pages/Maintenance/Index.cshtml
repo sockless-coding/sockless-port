@@ -1,0 +1,383 @@
+@page "/maintenance"
+@model Sockless.Port.Web.Pages.Maintenance.IndexModel
+@using Sockless.Port.Images
+@using Sockless.Port.Maintenance
+@{
+    ViewData["Title"] = "Maintenance";
+    var now = Model.Now;
+    static string Every(int hours) => hours switch
+    {
+        0 => "Off",
+        24 => "Every day",
+        168 => "Every week",
+        _ => $"Every {hours} hours",
+    };
+    static string TaskName(MaintenanceTask task) => task switch
+    {
+        MaintenanceTask.Backup => "Backup",
+        MaintenanceTask.Prune => "Prune",
+        MaintenanceTask.UpdateCheck => "Update check",
+        MaintenanceTask.VulnerabilityScan => "Vulnerability scans",
+        _ => task.ToString(),
+    };
+    string When(DateTimeOffset? next) => next is not { } at ? "—" : at <= now ? "Due now" : Format.Until(at, now);
+}
+
+<div class="mb-6">
+    <h2 class="page-title">Maintenance</h2>
+    <p class="mt-1 max-w-3xl text-secondary">
+        Everything Sockless Port does on a schedule: backups of its data, prunes of each endpoint, image update checks and vulnerability scans,
+        with when each last ran, how it went, and when it runs next. Failures are sent as notifications to rules that ask for them.
+    </p>
+</div>
+
+<section class="card mb-6 space-y-4" aria-labelledby="backups-title">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <h3 id="backups-title" class="section-title mb-0">Backups</h3>
+        <div class="flex flex-wrap gap-2">
+            <a asp-page="/Settings/Index" asp-fragment="backup-title" class="btn-soft"><icon name="cog-6-tooth" class="h-4 w-4" /> Change schedule</a>
+            <form method="post" asp-page-handler="BackupNow">
+                <button type="submit" class="btn-soft secondary" disabled="@Model.BackupRunning"><icon name="arrow-down-on-square" class="h-4 w-4" /> Back up now</button>
+            </form>
+        </div>
+    </div>
+    <dl class="grid grid-cols-1 gap-x-6 gap-y-2 md:grid-cols-[12rem_1fr]">
+        <dt class="label-caps">Schedule</dt>
+        <dd>@(Model.Backup.IntervalHours == 0 ? "Off: only when asked" : $"{Every(Model.Backup.IntervalHours)}, keeping the newest {Model.Backup.Keep}")</dd>
+        <dt class="label-caps">Folder</dt>
+        <dd class="break-all font-mono text-xs">@Model.BackupFolder</dd>
+        <dt class="label-caps">Encryption</dt>
+        <dd>@(Model.Backup.Encrypted ? "With the stored passphrase (AES-256-GCM)" : "None: keep the folder as safe as the server")</dd>
+        <dt class="label-caps">Last backup</dt>
+        <dd>
+            @if (Model.LastBackup is { } lastBackup)
+            {
+                <partial name="_MaintenanceOutcome" model="lastBackup" />
+            }
+            else
+            {
+                <span class="text-secondary">None yet</span>
+            }
+        </dd>
+        <dt class="label-caps">Next</dt>
+        <dd>
+            @if (Model.BackupRunning)
+            {
+                <span class="badge-stat">Running</span>
+            }
+            else if (Model.NextBackup is { } next)
+            {
+                <span title="@Format.Timestamp(next)">@When(next)</span>
+            }
+            else
+            {
+                <span class="text-secondary">Not scheduled</span>
+            }
+        </dd>
+    </dl>
+
+    @if (Model.StoredBackups.Count > 0)
+    {
+        <div class="table-wrap">
+            <table class="table">
+                <caption class="sr-only">Backups in the folder</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">File</th>
+                        <th scope="col" class="num">Size</th>
+                        <th scope="col">Written</th>
+                        <th scope="col" class="num"><span class="sr-only">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var file in Model.StoredBackups)
+                    {
+                        <tr>
+                            <th scope="row" class="break-all font-mono text-xs font-normal">
+                                @file.Name
+                                @if (file.Encrypted)
+                                {
+                                    <span class="badge-stat ml-1"><icon name="lock-closed" class="h-3 w-3" /> Encrypted</span>
+                                }
+                            </th>
+                            <td class="num">@Format.Bytes(file.Size)</td>
+                            <td title="@Format.Timestamp(file.CreatedAt)">@Format.Relative(file.CreatedAt, now)</td>
+                            <td class="num">
+                                <div class="flex justify-end gap-2">
+                                    <form method="post" asp-page-handler="Download" hx-boost="false">
+                                        <input type="hidden" name="name" value="@file.Name" />
+                                        <button type="submit" class="btn-soft" aria-label="Download @file.Name"><icon name="arrow-down-tray" class="h-4 w-4" /> Download</button>
+                                    </form>
+                                    <form method="post" asp-page-handler="Restore">
+                                        <input type="hidden" name="name" value="@file.Name" />
+                                        <button type="submit" class="btn-soft" aria-label="Restore @file.Name"
+                                                data-confirm="Prepare to restore @file.Name? Nothing changes until you restart from Settings.">
+                                            <icon name="arrow-uturn-left" class="h-4 w-4" /> Restore
+                                        </button>
+                                    </form>
+                                    <form method="post" asp-page-handler="Delete">
+                                        <input type="hidden" name="name" value="@file.Name" />
+                                        <button type="submit" class="btn-soft danger" aria-label="Delete @file.Name" data-confirm="Delete the backup @file.Name?">
+                                            <icon name="trash" class="h-4 w-4" />
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <p class="text-secondary">No backups in the folder yet.</p>
+    }
+</section>
+
+<section class="mb-6" aria-labelledby="prunes-title">
+    <div class="mb-3">
+        <h3 id="prunes-title" class="section-title mb-0">Prunes</h3>
+        <p class="mt-1 max-w-3xl text-sm text-secondary">
+            Removes what nothing uses, per endpoint: images, volumes, networks and build cache. Each run is in the audit log with what it removed.
+            Prunes run only while the endpoint is online.
+        </p>
+    </div>
+    @if (Model.Endpoints.Count == 0)
+    {
+        <p class="text-secondary">No endpoints yet.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table">
+                <caption class="sr-only">Scheduled prunes by endpoint</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Endpoint</th>
+                        <th scope="col">Removes</th>
+                        <th scope="col">Last run</th>
+                        <th scope="col">Next</th>
+                        <th scope="col" class="num"><span class="sr-only">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.Endpoints)
+                    {
+                        var connection = row.Connection;
+                        var scheduled = row.Prune is { IntervalHours: > 0, Options.IsEmpty: false };
+                        <tr>
+                            <th scope="row">
+                                <span class="font-semibold">@connection.Name</span>
+                                @if (connection.Client is null)
+                                {
+                                    <span class="badge-stat ml-1">Offline</span>
+                                }
+                            </th>
+                            <td>
+                                @if (row.Prune is { Options.IsEmpty: false } prune)
+                                {
+                                    <span>@(char.ToUpperInvariant(prune.Options.Describe()[0]) + prune.Options.Describe()[1..])</span>
+                                    <span class="block text-xs text-secondary">@Every(prune.IntervalHours)</span>
+                                }
+                                else
+                                {
+                                    <span class="text-secondary">Not scheduled</span>
+                                }
+                            </td>
+                            <td>
+                                @if (row.LastPrune is { } lastPrune)
+                                {
+                                    <partial name="_MaintenanceOutcome" model="lastPrune" />
+                                }
+                                else
+                                {
+                                    <span class="text-secondary">Never</span>
+                                }
+                            </td>
+                            <td>
+                                @if (Model.IsPruning(connection.Id))
+                                {
+                                    <span class="badge-stat">Running</span>
+                                }
+                                else if (!scheduled)
+                                {
+                                    <span class="text-secondary">—</span>
+                                }
+                                else if (connection.Client is null)
+                                {
+                                    <span class="text-secondary">When it's online</span>
+                                }
+                                else
+                                {
+                                    <span title="@(row.NextPrune is { } next ? Format.Timestamp(next) : "")">@When(row.NextPrune)</span>
+                                }
+                            </td>
+                            <td class="num">
+                                <div class="flex justify-end gap-2">
+                                    @if (row.Prune is { Options.IsEmpty: false } && connection.Client is not null)
+                                    {
+                                        <form method="post" asp-page-handler="PruneNow" asp-route-id="@connection.Id">
+                                            <button type="submit" class="btn-soft" aria-label="Prune @connection.Name now"
+                                                    data-confirm="Prune @connection.Name now? This removes @row.Prune.Options.Describe().">
+                                                <icon name="play" class="h-4 w-4" /> Run now
+                                            </button>
+                                        </form>
+                                    }
+                                    <a asp-page="/Maintenance/Prune" asp-route-id="@connection.Id" class="btn-soft" aria-label="Change the prune schedule of @connection.Name">
+                                        @(row.Prune is null ? "Schedule" : "Edit")
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<section class="mb-6" aria-labelledby="checks-title">
+    <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+            <h3 id="checks-title" class="section-title mb-0">Update checks and vulnerability scans</h3>
+            <p class="mt-1 max-w-3xl text-sm text-secondary">
+                Image update checks: @Every(Model.Settings.ImageUpdateCheckHours).ToLowerInvariant().
+                Vulnerability scans: @(Model.Settings.VulnerabilityScanHours == 0 ? "off" : $"{Every(Model.Settings.VulnerabilityScanHours).ToLowerInvariant()} for each image a container uses").
+                Both look for due work every 15 minutes. Update check results are kept in memory, so endpoints are checked again soon after a restart.
+            </p>
+        </div>
+        <a asp-page="/Settings/Index" class="btn-soft"><icon name="cog-6-tooth" class="h-4 w-4" /> Change in Settings</a>
+    </div>
+    @if (Model.Endpoints.Count > 0)
+    {
+        <div class="table-wrap">
+            <table class="table">
+                <caption class="sr-only">Update checks and scans by endpoint</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Endpoint</th>
+                        <th scope="col">Last update check</th>
+                        <th scope="col">Next update check</th>
+                        <th scope="col">Last scans queued</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.Endpoints)
+                    {
+                        var connection = row.Connection;
+                        var hours = Model.Settings.ImageUpdateCheckHours;
+                        <tr>
+                            <th scope="row" class="font-semibold">@connection.Name</th>
+                            <td>
+                                @if (row.LastUpdateCheck is { } check && (row.UpdatesCheckedAt is not { } at || check.FinishedAt >= at.AddMinutes(-1)))
+                                {
+                                    <partial name="_MaintenanceOutcome" model="check" />
+                                }
+                                else if (row.UpdatesCheckedAt is { } checkedAt)
+                                {
+                                    <span title="@Format.Timestamp(checkedAt)">@Format.Relative(checkedAt, now)</span>
+                                    <span class="block text-xs text-secondary">From the Images page</span>
+                                }
+                                else
+                                {
+                                    <span class="text-secondary">Not since the server started</span>
+                                }
+                            </td>
+                            <td>
+                                @if (hours == 0)
+                                {
+                                    <span class="text-secondary">Only when asked</span>
+                                }
+                                else if (connection.Client is null)
+                                {
+                                    <span class="text-secondary">When it's online</span>
+                                }
+                                else if (!ImageUpdates.CanCheck(connection))
+                                {
+                                    <span class="text-secondary">Not supported by this engine</span>
+                                }
+                                else
+                                {
+                                    var next = row.UpdatesCheckedAt is { } checkedLast ? checkedLast.AddHours(hours) : (DateTimeOffset?)null;
+                                    <span title="@(next is { } n ? Format.Timestamp(n) : "")">@(next is null ? "Within 15 minutes" : When(next))</span>
+                                }
+                            </td>
+                            <td>
+                                @if (row.LastScan is { } scan)
+                                {
+                                    <partial name="_MaintenanceOutcome" model="scan" />
+                                }
+                                else
+                                {
+                                    <span class="text-secondary">@(Model.Settings.VulnerabilityScanHours == 0 ? "Scans run only when asked" : "None yet")</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<section aria-labelledby="history-title">
+    <h3 id="history-title" class="section-title">History</h3>
+    @if (Model.History.Runs.Count == 0)
+    {
+        <p class="text-secondary">Nothing has run yet.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table">
+                <caption class="sr-only">Maintenance runs, newest first</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">When</th>
+                        <th scope="col">Task</th>
+                        <th scope="col">Endpoint</th>
+                        <th scope="col">By</th>
+                        <th scope="col">Outcome</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var run in Model.History.Runs)
+                    {
+                        <tr>
+                            <td class="whitespace-nowrap" title="@Format.Timestamp(run.StartedAt)">@Format.Timestamp(run.StartedAt)</td>
+                            <td>@TaskName(run.Task)</td>
+                            <td>@(run.EndpointName ?? "—")</td>
+                            <td>@run.By</td>
+                            <td>
+                                @if (run.Outcome == MaintenanceOutcome.Succeeded)
+                                {
+                                    <span class="badge success">Worked</span>
+                                }
+                                else
+                                {
+                                    <span class="badge danger">Failed</span>
+                                }
+                                <span class="mt-1 block text-xs text-secondary">@run.Summary</span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <nav class="mt-3 flex justify-between" aria-label="History pages">
+            @if (Model.History.Page > 1)
+            {
+                <a asp-page="/Maintenance/Index" asp-route-p="@(Model.History.Page - 1)" asp-fragment="history-title" class="btn-soft">Newer</a>
+            }
+            else
+            {
+                <span></span>
+            }
+            @if (Model.History.HasMore)
+            {
+                <a asp-page="/Maintenance/Index" asp-route-p="@(Model.History.Page + 1)" asp-fragment="history-title" class="btn-soft">Older</a>
+            }
+        </nav>
+    }
+</section>

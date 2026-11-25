@@ -255,6 +255,16 @@ public sealed partial class Alerts(Notifier notifier, EngineConnections connecti
         notifier.RaiseAsync(new Alert(AlertKind.TaskFailed, $"task:{connection.Id}:{Guid.NewGuid():n}", connection.Id, connection.Name, AlertSeverity.Warning,
             title, error, link), cancellationToken);
 
+    /// <summary>A backup to the backup folder failed. Fires once until a backup works again.</summary>
+    public Task BackupFailedAsync(string error, CancellationToken cancellationToken = default) =>
+        notifier.RaiseAsync(new Alert(AlertKind.BackupFailed, BackupKey, null, null, AlertSeverity.Critical, "A backup of Sockless Port failed", error, "/maintenance"),
+            cancellationToken);
+
+    /// <summary>A backup worked: a failure alert is resolved.</summary>
+    public Task BackupSucceededAsync(CancellationToken cancellationToken = default) => notifier.ClearAsync(BackupKey, announce: true, cancellationToken);
+
+    private const string BackupKey = "backup";
+
     /// <summary>One minute of resource use was recorded: checks the rules' thresholds against it.</summary>
     public async Task ResourceMinuteAsync(EngineConnection connection, ResourceTotalEntry totals, IReadOnlyCollection<ResourceUsageEntry> containers,
         CancellationToken cancellationToken = default)

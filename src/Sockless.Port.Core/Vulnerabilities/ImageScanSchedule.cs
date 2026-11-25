@@ -12,8 +12,8 @@ namespace Sockless.Port.Vulnerabilities;
 /// server). Failed scans wait an interval too. Once a day it also deletes results of images that
 /// no online endpoint has any more and that weren't scanned for <see cref="KeepUnused"/>.
 /// </summary>
-internal sealed partial class ImageScanSchedule(ImageScans scans, EngineConnections connections, PortSettings settings, TimeProvider time,
-    ILogger<ImageScanSchedule> logger) : BackgroundService
+internal sealed partial class ImageScanSchedule(ImageScans scans, EngineConnections connections, PortSettings settings, Maintenance.MaintenanceLog log,
+    TimeProvider time, ILogger<ImageScanSchedule> logger) : BackgroundService
 {
     internal static readonly TimeSpan Tick = TimeSpan.FromMinutes(15);
 
@@ -53,6 +53,7 @@ internal sealed partial class ImageScanSchedule(ImageScans scans, EngineConnecti
         {
             if (connection.Client is not { } client)
                 continue;
+            var queuedHere = 0;
             try
             {
                 var images = await client.ListImagesAsync(cancellationToken);
@@ -69,14 +70,22 @@ internal sealed partial class ImageScanSchedule(ImageScans scans, EngineConnecti
                     if (scans.StateOf(imageId) is ScanFailed failed && now - failed.Since < interval)
                         continue;
                     if (scans.Enqueue(connection, imageId))
-                        queued++;
+                        queuedHere++;
                 }
+                queued += queuedHere;
+                // Only ticks that did something: most find nothing due.
+                if (queuedHere > 0)
+                    await RecordAsync(connection, now, Maintenance.MaintenanceOutcome.Succeeded,
+                        $"Queued {queuedHere} {(queuedHere == 1 ? "scan" : "scans")} of images containers use.");
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested
                                        && ex is DockerApiException or DockerApiVersionException or HttpRequestException or IOException or TimeoutException
                                            or TaskCanceledException or ObjectDisposedException or InvalidDataException or System.Text.Json.JsonException)
             {
-                LogFailed(logger, connection.Name, EngineErrors.ForCall(ex, connection.Address));
+                var reason = EngineErrors.ForCall(ex, connection.Address);
+                LogFailed(logger, connection.Name, reason);
+                if (hours > 0)
+                    await RecordAsync(connection, now, Maintenance.MaintenanceOutcome.Failed, reason);
             }
         }
 
@@ -88,6 +97,19 @@ internal sealed partial class ImageScanSchedule(ImageScans scans, EngineConnecti
         }
         return queued;
     }
+
+    private Task RecordAsync(EngineConnection connection, DateTimeOffset started, Maintenance.MaintenanceOutcome outcome, string summary) =>
+        log.RecordAsync(new Maintenance.MaintenanceRun
+        {
+            Task = Maintenance.MaintenanceTask.VulnerabilityScan,
+            EndpointId = connection.Id,
+            EndpointName = connection.Name,
+            StartedAt = started,
+            FinishedAt = time.GetUtcNow(),
+            Outcome = outcome,
+            By = Maintenance.MaintenanceTrigger.Schedule.By,
+            Summary = summary,
+        });
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "The scheduled vulnerability scan of {Endpoint} failed: {Reason}")]
     private static partial void LogFailed(ILogger logger, string endpoint, string reason);

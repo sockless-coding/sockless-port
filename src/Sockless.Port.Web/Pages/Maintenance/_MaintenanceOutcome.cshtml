@@ -1,0 +1,13 @@
+@model Sockless.Port.Maintenance.MaintenanceRun
+@using Sockless.Port.Maintenance
+@* A run's outcome: a badge with a word, when it ran, and what it did. *@
+@if (Model.Outcome == MaintenanceOutcome.Succeeded)
+{
+    <span class="badge success">Worked</span>
+}
+else
+{
+    <span class="badge danger">Failed</span>
+}
+<span class="ml-1 text-secondary" title="@Format.Timestamp(Model.StartedAt)">@Format.Relative(Model.StartedAt)@(Model.By != MaintenanceTrigger.Schedule.By ? $", by {Model.By}" : "")</span>
+<span class="mt-1 block max-w-xl text-xs text-secondary">@Model.Summary</span>

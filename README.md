@@ -216,6 +216,12 @@ Trivy downloads its vulnerability databases into `/data/scanner` when they're du
 
 Settings downloads a backup of the data volume (database, encryption keys, internal CA and stack files) as one `.tar.gz`, taken while everything runs. Restoring one is checked on upload and applied at the next start; the compose file's `restart: unless-stopped` brings Sockless Port back by itself. A backup can decrypt the stored registry passwords and reach every agent, so keep it safe.
 
+Settings can also take backups daily or weekly into a folder (`/data/backups` by default; mount another path into the container to keep copies off the data volume), keeping the newest few, and encrypt them with a passphrase (AES-256-GCM). Keep a copy of the passphrase elsewhere: an encrypted backup can't be restored without it. A failed backup sends a notification to rules that ask for it.
+
+### Maintenance
+
+The Maintenance page (administrators) lists everything that runs on a schedule, with when it last ran, how it went, and when it runs next: backups, image update checks, vulnerability scans, and prunes. A prune is set per endpoint: dangling or all unused images (optionally only older ones), unused anonymous volumes (named volumes only when you choose so), unused networks and build cache, daily or weekly. Each run is in the audit log with what it removed.
+
 ### Security
 
 Access to the engine socket is equivalent to root on the host. Keep Sockless Port off the public internet, give people the least role they need, and read [docs/security.md](docs/security.md) for what Sockless Port protects and what it can't.

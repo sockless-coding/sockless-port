@@ -14,7 +14,7 @@ namespace Sockless.Port.Web.Pages.Settings;
 
 [RequestSizeLimit(MaxBackupBytes)]
 [RequestFormLimits(MultipartBodyLengthLimit = MaxBackupBytes)]
-public sealed class IndexModel(PortSettings settings, HttpsCertificates https, InternalCa ca, DataBackup backup,
+public sealed class IndexModel(PortSettings settings, HttpsCertificates https, InternalCa ca, DataBackup backup, ScheduledBackups backups,
     IOptions<PortOptions> options, IHostApplicationLifetime lifetime, TrivyCli scanner) : PageModel
 {
     /// <summary>Most a backup upload may be (compressed).</summary>
@@ -41,6 +41,37 @@ public sealed class IndexModel(PortSettings settings, HttpsCertificates https, I
     [BindProperty]
     public IFormFile? Backup { get; set; }
 
+    /// <summary>For an encrypted backup being restored.</summary>
+    [BindProperty]
+    public string? RestorePassphrase { get; set; }
+
+    [BindProperty]
+    public int BackupIntervalHours { get; set; }
+
+    [BindProperty]
+    public int BackupKeep { get; set; }
+
+    [BindProperty]
+    public string? BackupFolder { get; set; }
+
+    [BindProperty]
+    public bool BackupEncrypt { get; set; }
+
+    /// <summary>A new passphrase; empty keeps the stored one.</summary>
+    [BindProperty]
+    public string? BackupPassphrase { get; set; }
+
+    [BindProperty]
+    public string? BackupPassphraseConfirm { get; set; }
+
+    /// <summary>A passphrase is stored, so leaving the field empty keeps it.</summary>
+    public bool HasBackupPassphrase { get; private set; }
+
+    /// <summary>Where scheduled backups go, resolved.</summary>
+    public string BackupFolderPath { get; private set; } = "";
+
+    public string DefaultBackupFolder => backups.ResolveFolder(null);
+
     /// <summary>The scanner's version and databases; null with <see cref="ScannerProblem"/> when it can't run.</summary>
     public ScannerStatus? Scanner { get; private set; }
 
@@ -64,6 +95,7 @@ public sealed class IndexModel(PortSettings settings, HttpsCertificates https, I
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         Load(fromSettings: true);
+        await LoadBackupScheduleAsync(fromSettings: true, cancellationToken);
         (Scanner, ScannerProblem) = await scanner.TryStatusAsync(cancellationToken);
     }
 
@@ -75,11 +107,35 @@ public sealed class IndexModel(PortSettings settings, HttpsCertificates https, I
             foreach (var problem in problems)
                 ModelState.AddModelError("", problem);
             Load(fromSettings: false);
+            await LoadBackupScheduleAsync(fromSettings: true, cancellationToken);
             (Scanner, ScannerProblem) = await scanner.TryStatusAsync(cancellationToken);
             return Page();
         }
         Flash.Success(TempData, "Saved the settings. A new session timeout applies from each user's next sign-in.");
         return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostBackupScheduleAsync(CancellationToken cancellationToken)
+    {
+        AuditTrail.Action(HttpContext, "Settings: backup schedule");
+        IReadOnlyList<(string Field, string Message)> problems;
+        if (BackupEncrypt && !string.IsNullOrEmpty(BackupPassphrase) && BackupPassphrase != BackupPassphraseConfirm)
+            problems = [("BackupPassphraseConfirm", "The passphrases don't match.")];
+        else
+            problems = await backups.SaveAsync(BackupIntervalHours, BackupKeep, BackupFolder, BackupEncrypt, BackupPassphrase, cancellationToken);
+        if (problems.Count > 0)
+        {
+            foreach (var (field, message) in problems)
+                ModelState.AddModelError(field, message);
+            Load(fromSettings: true);
+            await LoadBackupScheduleAsync(fromSettings: false, cancellationToken);
+            (Scanner, ScannerProblem) = await scanner.TryStatusAsync(cancellationToken);
+            return Page();
+        }
+        Flash.Success(TempData, BackupIntervalHours == 0
+            ? "Saved. Scheduled backups are off; Maintenance can still write one to the folder."
+            : $"Saved. Backups are written {(BackupIntervalHours == 24 ? "every day" : "every week")} to {backups.ResolveFolder(BackupFolder)}{(BackupEncrypt ? ", encrypted" : "")}.");
+        return RedirectToPage(pageName: null, pageHandler: null, routeValues: null, fragment: "backup-title");
     }
 
     /// <summary>The internal CA's certificate, to install in browsers (for the built-in HTTPS) or to check agents with.</summary>
@@ -109,7 +165,7 @@ public sealed class IndexModel(PortSettings settings, HttpsCertificates https, I
         try
         {
             await using var stream = upload.OpenReadStream();
-            var staged = await backup.StageAsync(stream, cancellationToken);
+            var staged = await backup.StageAsync(stream, RestorePassphrase, cancellationToken);
             Flash.Success(TempData, $"The backup from {Format.Timestamp(staged.Manifest.CreatedAt)} is ready to restore. Restart Sockless Port to apply it.");
         }
         catch (BackupRejectedException ex)
@@ -127,7 +183,7 @@ public sealed class IndexModel(PortSettings settings, HttpsCertificates https, I
     }
 
     /// <summary>Stops the server once this response is sent; the container's restart policy starts it again.</summary>
-    public IActionResult OnPostRestart()
+    public async Task<IActionResult> OnPostRestartAsync(CancellationToken cancellationToken)
     {
         Response.OnCompleted(() =>
         {
@@ -136,7 +192,31 @@ public sealed class IndexModel(PortSettings settings, HttpsCertificates https, I
         });
         Restarting = true;
         Load(fromSettings: true);
+        await LoadBackupScheduleAsync(fromSettings: true, cancellationToken);
         return Page();
+    }
+
+    private async Task LoadBackupScheduleAsync(bool fromSettings, CancellationToken cancellationToken)
+    {
+        var schedule = await backups.GetAsync(cancellationToken);
+        HasBackupPassphrase = schedule.Encrypted;
+        if (fromSettings)
+        {
+            BackupIntervalHours = schedule.IntervalHours;
+            BackupKeep = schedule.Keep;
+            BackupFolder = schedule.Folder;
+            BackupEncrypt = schedule.Encrypted;
+        }
+        BackupPassphrase = null;
+        BackupPassphraseConfirm = null;
+        try
+        {
+            BackupFolderPath = backups.ResolveFolder(BackupFolder);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            BackupFolderPath = BackupFolder ?? "";
+        }
     }
 
     private void Load(bool fromSettings)

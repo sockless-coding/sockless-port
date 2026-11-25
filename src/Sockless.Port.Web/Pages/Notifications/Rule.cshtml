@@ -83,7 +83,8 @@
                             AlertKind.Vulnerabilities => "Critical or high findings the image's last scan didn't have; accepted risks are left out.",
                             AlertKind.UpdatesAvailable => "After a scheduled check (Settings), when the list of images with updates changes. One message per endpoint.",
                             AlertKind.ResourceUsage => "Checked once a minute on the recorded history, for each container and the endpoint's total.",
-                            AlertKind.TaskFailed => "A stack's deploy, update or other job, or a scheduled update check.",
+                            AlertKind.TaskFailed => "A stack's deploy, update or other job, a scheduled update check, or a prune (Maintenance).",
+                            AlertKind.BackupFailed => "A backup to the backup folder (Settings). For every endpoint. Says so again when a backup works.",
                             _ => "",
                         })
                     </span>

@@ -131,6 +131,8 @@ public sealed class AccessTests : IDisposable
     [InlineData("/registries")]
     [InlineData("/endpoints/add")]
     [InlineData("/endpoints/1/settings")]
+    [InlineData("/maintenance")]
+    [InlineData("/maintenance/prunes/1")]
     public async Task Administration_is_for_administrators(string path)
     {
         var (_, operatorUser) = await WithUserAsync(EndpointRole.SwarmOperator);

@@ -15,7 +15,7 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261124185710_AddAgentEdgeMode";
+    public override string LastMigrationId => "20261125191926_AddMaintenance";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -380,6 +380,99 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                     .IsUnique();
 
                 b.ToTable("Endpoints");
+            });
+
+        modelBuilder.Entity("Sockless.Port.Maintenance.MaintenanceRun", b =>
+            {
+                b.Property<long>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("By")
+                    .IsRequired()
+                    .HasMaxLength(256)
+                    .HasColumnType("TEXT");
+
+                b.Property<int?>("EndpointId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("EndpointName")
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("FinishedAt")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Outcome")
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("StartedAt")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Summary")
+                    .IsRequired()
+                    .HasMaxLength(2000)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Task")
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
+
+                b.HasKey("Id");
+
+                b.HasIndex("StartedAt");
+
+                b.HasIndex("Task", "EndpointId");
+
+                b.ToTable("MaintenanceRuns");
+            });
+
+        modelBuilder.Entity("Sockless.Port.Maintenance.PruneSchedule", b =>
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("INTEGER");
+
+                b.Property<bool>("BuildCache")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("EndpointId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("Images")
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasColumnType("TEXT");
+
+                b.Property<int>("IntervalHours")
+                    .HasColumnType("INTEGER");
+
+                b.Property<bool>("Networks")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("OlderThanDays")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("UpdatedAt")
+                    .IsRequired()
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Volumes")
+                    .IsRequired()
+                    .HasMaxLength(16)
+                    .HasColumnType("TEXT");
+
+                b.HasKey("Id");
+
+                b.HasIndex("EndpointId")
+                    .IsUnique();
+
+                b.ToTable("PruneSchedules");
             });
 
         modelBuilder.Entity("Sockless.Port.Monitoring.ResourceTotalEntry", b =>
@@ -1168,6 +1261,15 @@ partial class PortDbContextModelSnapshot : ModelSnapshot
                 b.HasOne("Sockless.Port.Data.PortUser", null)
                     .WithMany()
                     .HasForeignKey("UserId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
+
+        modelBuilder.Entity("Sockless.Port.Maintenance.PruneSchedule", b =>
+            {
+                b.HasOne("Sockless.Port.Engines.EngineEndpoint", null)
+                    .WithMany()
+                    .HasForeignKey("EndpointId")
                     .OnDelete(DeleteBehavior.Cascade)
                     .IsRequired();
             });

@@ -259,6 +259,29 @@ public sealed class ImageUnitTests
     }
 
     [Fact]
+    public async Task Prunes_can_keep_recent_images_and_build_cache()
+    {
+        var handler = Engine(r => FakeEngineHandler.Json(r.RequestUri!.AbsolutePath.EndsWith("/build/prune", StringComparison.Ordinal)
+            ? """{"CachesDeleted":["a"],"SpaceReclaimed":10}"""
+            : Fixture.Read("docker-image-prune.json")));
+        using var client = await FakeEngineHandler.ConnectAsync(handler);
+
+        await client.PruneImagesAsync(allUnused: false, TimeSpan.FromDays(7), TestContext.Current.CancellationToken);
+        var images = handler.Requests[^1];
+        var cache = await client.PruneBuildCacheAsync(TimeSpan.FromDays(2), TestContext.Current.CancellationToken);
+        var build = handler.Requests[^1];
+        await client.PruneBuildCacheAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal("""{"dangling":["true"],"until":["168h"]}""", Uri.UnescapeDataString(images.RequestUri!.Query["?filters=".Length..]));
+        Assert.Equal(HttpMethod.Post, build.Method);
+        Assert.Equal("/v1.51/build/prune", build.RequestUri!.AbsolutePath);
+        Assert.Equal("""?all=true&filters={"until":["48h"]}""", Uri.UnescapeDataString(build.RequestUri.Query));
+        Assert.Equal("?all=true", handler.Requests[^1].RequestUri!.Query);
+        Assert.Equal(["a"], cache.CachesDeleted);
+        Assert.Equal(10, cache.SpaceReclaimed);
+    }
+
+    [Fact]
     public async Task Tag_and_remove_send_the_engine_parameters()
     {
         var handler = Engine(r => r.Method == HttpMethod.Delete ? FakeEngineHandler.Json("""[{"Untagged":"ghcr.io/org/app:1"}]""") : new HttpResponseMessage(HttpStatusCode.Created));

@@ -135,6 +135,7 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AuthorizeFolder("/Registries", CurrentAccess.AdminPolicy);
     options.Conventions.AuthorizeFolder("/TemplateSources", CurrentAccess.AdminPolicy);
     options.Conventions.AuthorizeFolder("/Notifications", CurrentAccess.AdminPolicy);
+    options.Conventions.AuthorizeFolder("/Maintenance", CurrentAccess.AdminPolicy);
     options.Conventions.AuthorizePage("/Endpoints/Add", CurrentAccess.AdminPolicy);
     options.Conventions.AuthorizePage("/Endpoints/Settings", CurrentAccess.AdminPolicy);
 }).AddMvcOptions(options => options.Filters.Add<AuditFilter>(int.MinValue));
