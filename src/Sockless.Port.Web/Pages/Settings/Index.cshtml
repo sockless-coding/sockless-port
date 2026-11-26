@@ -107,6 +107,17 @@
                 </p>
             </div>
         </div>
+        <label class="flex items-start gap-2">
+            <input type="checkbox" name="AgentAutoUpdate" value="true" class="mt-1 accent-accent" checked="@Model.AgentAutoUpdate" />
+            <input type="hidden" name="AgentAutoUpdate" value="false" />
+            <span>
+                Update agents automatically
+                <span class="block text-xs text-secondary">
+                    Agents older than this server are updated to its version, one at a time, within a few minutes of being seen. A failed update puts the old
+                    agent back, raises an alert and isn't tried again for a day. Agents can always be updated from their endpoint's page.
+                </span>
+            </span>
+        </label>
         <div class="flex justify-end">
             <button type="submit" class="btn-soft secondary">Save</button>
         </div>

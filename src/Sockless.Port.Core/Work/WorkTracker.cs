@@ -18,6 +18,9 @@ public enum WorkKind
 
     /// <summary>A container moving to another endpoint.</summary>
     MoveContainer,
+
+    /// <summary>An endpoint's agent updated to the server's version. Administrators only, like endpoint management.</summary>
+    AgentUpdate,
 }
 
 /// <summary>Where a piece of work is. Switch on it exhaustively.</summary>

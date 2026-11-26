@@ -90,6 +90,8 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<EngineMonitor>();
         services.AddSingleton<AgentRenewals>();
         services.AddHostedService(sp => sp.GetRequiredService<AgentRenewals>());
+        services.AddSingleton<AgentUpdates>();
+        services.AddHostedService(sp => sp.GetRequiredService<AgentUpdates>());
 
         services.AddSingleton<Work.WorkTracker>();
         services.AddSingleton<RegistryCredentials>();

@@ -197,6 +197,13 @@ public sealed record AgentInfo
 
     /// <summary><c>direct</c> (the server connects) or <c>edge</c> (the agent dials the server).</summary>
     public string? Mode { get; init; }
+
+    /// <summary>
+    /// The ids the agent's own container may have, read from its mounts (<see cref="OwnContainer"/>),
+    /// so the server knows which container to update. Empty outside a container; missing from
+    /// agents before automatic updates.
+    /// </summary>
+    public IReadOnlyList<string>? ContainerIds { get; init; }
 }
 
 /// <summary>Agent → server: a request for a fresh key, to renew the agent's certificate.</summary>

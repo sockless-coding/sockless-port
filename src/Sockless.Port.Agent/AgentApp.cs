@@ -193,6 +193,7 @@ public static partial class AgentApp
         CertificateNotAfter = identity.CertificateNotAfter,
         CertificateSha256 = identity.CertificateThumbprint,
         Mode = options.Server is null ? "direct" : "edge",
+        ContainerIds = Docker.OwnContainer.Ids,
     };
 
     private static (int Status, string Message)? EnrolmentProblem(AgentIdentity identity, AgentOptions options, string tokenId)

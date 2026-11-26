@@ -26,6 +26,15 @@ An edge agent dials the server (`/agent/tunnel`, a WebSocket) instead of listeni
 
 Agent certificates last five years and are renewed while the agent is online, 60 days before they expire (or at once from the endpoint's settings): the agent makes a new key and request over the existing mutual TLS, and the CA signs it. Until the agent is known to serve the new certificate the server accepts both, so a renewal whose answer is lost can't lock the agent out. The agent writes the new key and certificate next to the old ones and moves them into place, finishing an interrupted move at its next start. Agents older than this version can't renew; update them, or enrol them again.
 
+## Agent updates
+
+Agents older than the server are updated to its version automatically (Settings, on by default), or from the endpoint's page. That changes what runs on the agent's host, so:
+
+- **The image is the server's choice**: the agent image matching the server's version (or `Port:AgentImage`), pulled by the agent's engine with the stored registry credentials. Nothing the agent reports picks the image.
+- **The helper that swaps the containers has the engine's socket**, like the agent itself: it's started from the new image with the agent's socket mount, user, groups and security options, no network when the engine is a socket, and no published ports. It's an exception to the rule that helpers mount read-only, since replacing a container needs the socket. It only acts on the container the server names, and is removed once the server has read how it went.
+- **The identity stays in the agent's volume**, so an update needs no enrolment and gets no new certificate; the server checks the new agent with the same pin.
+- A failed update puts the previous container back. Automatic updates are audited as `Endpoints: update agent` by "automatic updates"; ones started from the page are audited as the user's post.
+
 ## Users and roles
 
 Every page needs a signed-in user. **Administrators** manage users, endpoints, registries and settings, read the audit log, and have every role on every endpoint. Everyone else has a role per endpoint, set on the user's page:

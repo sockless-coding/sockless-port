@@ -15,8 +15,9 @@ public enum TimeDisplay
 /// <param name="ImageUpdateCheckHours">How often every online endpoint's images are compared with their registries; 0 is never.</param>
 /// <param name="VulnerabilityScanHours">How often the images containers use are scanned for known vulnerabilities; 0 is never.</param>
 /// <param name="ResourceHistoryDays">How long each endpoint's resource use is kept for trends; 0 records none.</param>
+/// <param name="AgentAutoUpdate">Whether agents older than the server are updated to its version without asking.</param>
 public sealed record AppSettings(TimeDisplay TimeDisplay, int SessionTimeoutMinutes, int AuditRetentionDays, int ImageUpdateCheckHours = 0, int VulnerabilityScanHours = 0,
-    int ResourceHistoryDays = 7)
+    int ResourceHistoryDays = 7, bool AgentAutoUpdate = true)
 {
     public static AppSettings Default { get; } = new(TimeDisplay.Local, 12 * 60, 365);
 

@@ -4,12 +4,14 @@ using Microsoft.Extensions.Options;
 using Sockless.Port.Agents;
 using Sockless.Port.Docker;
 using Sockless.Port.Engines;
+using Sockless.Port.Settings;
 using Sockless.Port.Web.Infrastructure;
 
 namespace Sockless.Port.Web.Pages.Endpoints;
 
-/// <summary>An endpoint's settings: name, the agent's install command and certificate, re-enrolment and removal.</summary>
-public sealed class SettingsModel(EngineConnections connections, EndpointRegistry registry, AgentRenewals renewals, IOptions<PortOptions> options, TimeProvider time)
+/// <summary>An endpoint's settings: name, the agent's install command, updates and certificate, re-enrolment and removal.</summary>
+public sealed class SettingsModel(EngineConnections connections, EndpointRegistry registry, AgentRenewals renewals, AgentUpdates updates,
+    PortSettings settings, IOptions<PortOptions> options, TimeProvider time)
     : PageModel
 {
     public EngineConnection Connection { get; private set; } = null!;
@@ -28,6 +30,15 @@ public sealed class SettingsModel(EngineConnections connections, EndpointRegistr
     public DateTimeOffset Now => time.GetUtcNow();
 
     public string Image => AgentCommands.DefaultImage(options.Value.AgentImage);
+
+    public bool IsUpdating => updates.IsUpdating(Connection.Id);
+
+    public AgentUpdateResult? LastUpdate => updates.LastResult(Connection.Id);
+
+    /// <summary>Why the agent can't be updated from here now, or null.</summary>
+    public string? UpdateProblem => updates.Problem(Connection);
+
+    public bool AutoUpdate => settings.Current.AgentAutoUpdate;
 
     public TcpAddress? AgentAddress => Connection.Address as TcpAddress;
 
@@ -110,6 +121,23 @@ public sealed class SettingsModel(EngineConnections connections, EndpointRegistr
             Flash.Success(TempData, Connection.Agent?.CertificateNotAfter is { } notAfter
                 ? $"Renewed the certificate of {Connection.Name}'s agent. It's valid until {Format.Timestamp(notAfter)}."
                 : $"Renewed the certificate of {Connection.Name}'s agent.");
+        return RedirectToPage(new { endpointId, variant = Variant });
+    }
+
+    public IActionResult OnPostUpdate(int endpointId)
+    {
+        if (!Load(endpointId))
+            return NotFound();
+        if (!Connection.IsAgent)
+            return BadRequest();
+        AuditTrail.Action(HttpContext, "Endpoints: update agent");
+        AuditTrail.Target(HttpContext, $"{Connection.Agent?.Info?.Version ?? "unknown"} to {updates.TargetVersion ?? updates.Image}");
+        var access = HttpContext.Access();
+        var trigger = new AgentUpdateTrigger(access?.UserName ?? User.Identity?.Name ?? "anonymous", access?.UserId, HttpContext.Connection.RemoteIpAddress?.ToString());
+        if (updates.Start(endpointId, trigger) is { } error)
+            Flash.Error(TempData, error);
+        else
+            Flash.Success(TempData, $"Updating the agent on {Connection.Name}. The endpoint goes offline for a moment while the agent is replaced; this page shows when it's back.");
         return RedirectToPage(new { endpointId, variant = Variant });
     }
 

@@ -169,6 +169,20 @@ public sealed partial class AgentPagesTests : IDisposable
         Assert.Contains("Only an enrolled agent", await browser.GetStringAsync(settings, Ct));
     }
 
+    [Fact]
+    public async Task Updating_needs_an_enrolled_agent()
+    {
+        var (browser, id) = await AddAgentAsync();
+        var settings = $"/endpoints/{id}/settings";
+        var token = await PortFactory.GetAntiforgeryTokenAsync(browser, settings);
+
+        var response = await browser.PostAsync($"{settings}?handler=Update", PortFactory.Form(token, []), Ct);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Contains("The agent isn&#x27;t enrolled yet.", await browser.GetStringAsync(settings, Ct));
+        Assert.False(_factory.Services.GetRequiredService<Agents.AgentUpdates>().IsUpdating(id));
+    }
+
     [GeneratedRegex(@"/endpoints/(\d+)/settings")]
     private static partial Regex SettingsPath();
 }

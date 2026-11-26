@@ -8,6 +8,11 @@ using Sockless.Port.Docker.Agent;
 if (args is ["healthcheck", ..])
     return await HealthCheckAsync();
 
+// `sockless-port-agent update --target … --image …` replaces the agent's container. The server
+// starts it in a helper container from the new image; see AgentUpdate.
+if (args is [AgentUpdate.Command, .. var updateArgs])
+    return await AgentUpdater.RunAsync(updateArgs);
+
 var configuration = new ConfigurationBuilder().AddEnvironmentVariables().AddCommandLine(args).Build();
 AgentOptions options;
 try

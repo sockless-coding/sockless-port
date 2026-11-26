@@ -58,75 +58,9 @@ public static class ContainerRecreator
         return newId;
     }
 
-    /// <summary>
-    /// Turns inspect output into a create body. Networks: only the primary one can be given at
-    /// create on every API version (1.41 allows one), so the others are returned to connect after.
-    /// </summary>
-    internal static (JsonObject Body, List<(string Network, JsonObject Endpoint)> ExtraNetworks) BuildCreateBody(JsonObject inspect)
-    {
-        var id = inspect["Id"]?.GetValue<string>() ?? "";
-        var shortId = id.Length >= 12 ? id[..12] : id;
-
-        var body = inspect["Config"]?.DeepClone().AsObject() ?? new JsonObject();
-        var host = inspect["HostConfig"]?.DeepClone().AsObject() ?? new JsonObject();
-
-        var mode = host["NetworkMode"]?.GetValue<string>() ?? "default";
-
-        // The engine sets the hostname to the short id unless one was given; a new container gets
-        // its own. In the host's UTS namespace (host networking) it's the host's name and setting
-        // it is an error on both Docker and Podman.
-        if (body["Hostname"]?.GetValue<string>() == shortId || mode == "host" || host["UTSMode"]?.GetValue<string>() == "host")
-        {
-            body.Remove("Hostname");
-            body.Remove("Domainname");
-        }
-        // Inspect reports the default /dev/shm size even when the container shares the host's IPC
-        // namespace, where Podman rejects setting it (and it means nothing).
-        if (host["IpcMode"]?.GetValue<string>() == "host")
-            host.Remove("ShmSize");
-        body["HostConfig"] = host;
-        var extra = new List<(string, JsonObject)>();
-        if (inspect["NetworkSettings"]?["Networks"] is JsonObject networks && !IsSpecialMode(mode))
-        {
-            var primary = mode == "default" ? "bridge" : mode;
-            var endpoints = new JsonObject();
-            foreach (var (network, settings) in networks)
-            {
-                if (settings is not JsonObject endpoint)
-                    continue;
-                var clean = CleanEndpoint(endpoint, shortId);
-                if (network == primary)
-                    endpoints[network] = clean;
-                else
-                    extra.Add((network, clean));
-            }
-            if (endpoints.Count > 0)
-                body["NetworkingConfig"] = new JsonObject { ["EndpointsConfig"] = endpoints };
-        }
-        return (body, extra);
-    }
-
-    /// <summary><c>host</c>, <c>none</c> and <c>container:…</c> take no network endpoints.</summary>
-    private static bool IsSpecialMode(string mode) =>
-        mode is "host" or "none" || mode.StartsWith("container:", StringComparison.Ordinal);
-
-    /// <summary>Keeps what the user configured (aliases, static IPs, links); drops what the engine assigned.</summary>
-    private static JsonObject CleanEndpoint(JsonObject endpoint, string shortId)
-    {
-        var clean = new JsonObject();
-        if (endpoint["Aliases"] is JsonArray aliases)
-        {
-            var kept = aliases.Select(a => a?.GetValue<string>()).Where(a => a is not null && a != shortId).ToList();
-            if (kept.Count > 0)
-                clean["Aliases"] = new JsonArray([.. kept.Select(a => (JsonNode)a!)]);
-        }
-        foreach (var key in (string[])["IPAMConfig", "Links", "DriverOpts"])
-        {
-            if (endpoint[key] is { } value)
-                clean[key] = value.DeepClone();
-        }
-        return clean;
-    }
+    /// <summary>Turns inspect output into a create body; see <see cref="ContainerCreateBody.FromInspect"/>.</summary>
+    internal static (JsonObject Body, List<(string Network, JsonObject Endpoint)> ExtraNetworks) BuildCreateBody(JsonObject inspect) =>
+        ContainerCreateBody.FromInspect(inspect);
 
     private static async Task TryAsync(Func<Task> action)
     {

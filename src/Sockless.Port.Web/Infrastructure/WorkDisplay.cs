@@ -12,11 +12,11 @@ public static class WorkDisplay
 
     /// <summary>
     /// The work the user may see: on endpoints they have a role on. Work that isn't about an
-    /// endpoint (backups) and prunes (part of maintenance) are for administrators.
+    /// endpoint (backups), prunes (part of maintenance) and agent updates (endpoint management) are for administrators.
     /// </summary>
     public static IReadOnlyList<WorkView> VisibleTo(UserAccess? access, IEnumerable<WorkView> work) => access is null
         ? []
-        : [.. work.Where(w => access.IsAdmin || w.Kind != WorkKind.Prune && w.EndpointId is { } id && access.CanView(id))];
+        : [.. work.Where(w => access.IsAdmin || w.Kind is not (WorkKind.Prune or WorkKind.AgentUpdate) && w.EndpointId is { } id && access.CanView(id))];
 
     public static string Icon(WorkKind kind) => kind switch
     {
@@ -29,6 +29,7 @@ public static class WorkDisplay
         WorkKind.PruneImages or WorkKind.Prune => "trash",
         WorkKind.Backup => "arrow-down-tray",
         WorkKind.MoveContainer => "arrow-right-start-on-rectangle",
+        WorkKind.AgentUpdate => "arrow-path",
         _ => "clipboard-document-list",
     };
 
@@ -74,6 +75,7 @@ public static class WorkDisplay
             WorkKind.MoveContainer when work.Subject is { } container => url.Page("/Engine/Containers/Detail", new { endpointId, containerId = container }),
             WorkKind.Scan when work.Subject is { } imageId => url.Page("/Engine/Images/Vulnerabilities", new { endpointId, imageId = ImagePageModel.RouteId(imageId) }),
             WorkKind.Prune => access?.IsAdmin == true ? url.Page("/Maintenance/Index") : null,
+            WorkKind.AgentUpdate => access?.IsAdmin == true ? url.Page("/Endpoints/Settings", new { endpointId }) : null,
             _ => url.Page("/Engine/Images/Index", new { endpointId }),
         };
     }

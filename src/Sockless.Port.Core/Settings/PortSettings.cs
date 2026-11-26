@@ -14,6 +14,7 @@ public sealed class PortSettings(IServiceScopeFactory scopes)
     private const string ImageUpdateCheckKey = "image-update-check-hours";
     private const string VulnerabilityScanKey = "vulnerability-scan-hours";
     private const string ResourceHistoryKey = "resource-history-days";
+    private const string AgentAutoUpdateKey = "agent-auto-update";
 
     private volatile AppSettings _current = AppSettings.Default;
 
@@ -29,7 +30,8 @@ public sealed class PortSettings(IServiceScopeFactory scopes)
             Int(stored, AuditRetentionKey) ?? defaults.AuditRetentionDays,
             Int(stored, ImageUpdateCheckKey) ?? defaults.ImageUpdateCheckHours,
             Int(stored, VulnerabilityScanKey) ?? defaults.VulnerabilityScanHours,
-            Int(stored, ResourceHistoryKey) ?? defaults.ResourceHistoryDays);
+            Int(stored, ResourceHistoryKey) ?? defaults.ResourceHistoryDays,
+            stored.TryGetValue(AgentAutoUpdateKey, out var autoUpdate) && bool.TryParse(autoUpdate, out var agentAutoUpdate) ? agentAutoUpdate : defaults.AgentAutoUpdate);
     }
 
     /// <returns>What's wrong with <paramref name="settings"/>; nothing was saved then.</returns>
@@ -48,6 +50,7 @@ public sealed class PortSettings(IServiceScopeFactory scopes)
             [ImageUpdateCheckKey] = settings.ImageUpdateCheckHours.ToString(CultureInfo.InvariantCulture),
             [VulnerabilityScanKey] = settings.VulnerabilityScanHours.ToString(CultureInfo.InvariantCulture),
             [ResourceHistoryKey] = settings.ResourceHistoryDays.ToString(CultureInfo.InvariantCulture),
+            [AgentAutoUpdateKey] = settings.AgentAutoUpdate ? "true" : "false",
         };
         var existing = await db.Settings.ToDictionaryAsync(s => s.Key, cancellationToken);
         foreach (var (key, value) in values)

@@ -10,7 +10,7 @@
 }
 <div id="endpoint-live" class="space-y-6"
      hx-get="@Url.Page("/Endpoints/Settings", "Live", new { endpointId = connection.Id, variant = Model.Variant })"
-     hx-trigger="endpoints-changed from:body" hx-swap="outerHTML">
+     hx-trigger="endpoints-changed from:body, work-changed from:body" hx-swap="outerHTML">
 
     <section class="card" aria-labelledby="status-title">
         <h3 id="status-title" class="section-title">Status</h3>
@@ -146,25 +146,78 @@
             }
         </section>
     }
-    else if (connection.IsAgent && agent?.Info?.Version is { } current && AgentCommands.IsOutdated(current) && Model.UpdateCommand is { } update)
+    else if (connection.IsAgent && agent?.Thumbprint is not null
+             && (Model.IsUpdating || Model.LastUpdate is not null || agent.Info?.Version is { } reported && AgentCommands.IsOutdated(reported)))
     {
-        <section class="card" aria-labelledby="update-title">
+        var current = agent.Info?.Version;
+        var outdated = current is not null && AgentCommands.IsOutdated(current);
+        var last = Model.LastUpdate;
+        <section class="card space-y-4" aria-labelledby="update-title">
             <h3 id="update-title" class="section-title">Update the agent</h3>
-            <p class="mb-4 max-w-3xl text-secondary">
-                The agent runs @current and this server @AgentCommands.ServerVersion. Replace its container with the new image; its identity is in the
-                <span class="font-mono">@AgentCommands.VolumeName</span> volume, so it doesn't need enrolling again.
-            </p>
-            <nav class="tabs mb-4" aria-label="Engine on the agent's host">
-                @foreach (var (variant, label) in AgentCommands.Variants)
-                {
-                    <a asp-page="/Endpoints/Settings" asp-route-endpointId="@connection.Id" asp-route-variant="@variant" class="tab"
-                       aria-current="@(variant == Model.Variant ? "page" : null)">@label</a>
-                }
-            </nav>
-            <div class="mb-2 flex justify-end">
-                <button type="button" class="btn-soft" data-copy="#update-command">Copy</button>
-            </div>
-            <pre id="update-command" class="code-block" aria-label="Update command for @update.Label">@update.Text</pre>
+            @if (Model.IsUpdating)
+            {
+                <div class="callout info" role="status">
+                    <icon name="arrow-path" class="h-5 w-5" />
+                    <p>
+                        Updating the agent to @AgentCommands.ServerVersion. The endpoint goes offline for a moment while the agent is replaced; if the new one
+                        doesn't start, the old one is put back.
+                    </p>
+                </div>
+            }
+            else if (last is not null)
+            {
+                <div class="callout @(last.Succeeded ? "success" : "danger")" role="status">
+                    <icon name="@(last.Succeeded ? "check-circle" : "exclamation-triangle")" class="h-5 w-5" />
+                    <p>
+                        <span class="badge @(last.Succeeded ? "success" : "danger")">@(last.Succeeded ? "Updated" : "Failed")</span>
+                        @last.Message
+                        <span class="block text-xs text-secondary">@Format.Timestamp(last.At), by @last.By</span>
+                    </p>
+                </div>
+            }
+            @if (outdated && !Model.IsUpdating)
+            {
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                    <p class="max-w-3xl text-secondary">
+                        The agent runs @current and this server @AgentCommands.ServerVersion.
+                        @if (Model.AutoUpdate && last is not { Succeeded: false })
+                        {
+                            <text>It's updated automatically within a few minutes (Settings), or now:</text>
+                        }
+                        else
+                        {
+                            <text>Sockless Port replaces its container with the new image on its host, or its service on a swarm, and keeps its identity, so it doesn't need enrolling again.</text>
+                        }
+                    </p>
+                    <form method="post" asp-page-handler="Update" asp-route-endpointId="@connection.Id" asp-route-variant="@Model.Variant">
+                        <button type="submit" class="btn-soft" disabled="@(Model.UpdateProblem is not null)" title="@Model.UpdateProblem"
+                                data-confirm="Update the agent on @connection.Name to @AgentCommands.ServerVersion? The endpoint goes offline for a moment.">
+                            <icon name="arrow-path" class="h-4 w-4" /> Update now
+                        </button>
+                    </form>
+                </div>
+            }
+            @if (outdated && Model.UpdateCommand is { } update)
+            {
+                <div>
+                    <h4 class="mb-2 font-semibold">Or on its host</h4>
+                    <p class="mb-4 max-w-3xl text-secondary">
+                        Replace its container with the new image; its identity is in the <span class="font-mono">@AgentCommands.VolumeName</span> volume,
+                        so it doesn't need enrolling again.
+                    </p>
+                    <nav class="tabs mb-4" aria-label="Engine on the agent's host">
+                        @foreach (var (variant, label) in AgentCommands.Variants)
+                        {
+                            <a asp-page="/Endpoints/Settings" asp-route-endpointId="@connection.Id" asp-route-variant="@variant" class="tab"
+                               aria-current="@(variant == Model.Variant ? "page" : null)">@label</a>
+                        }
+                    </nav>
+                    <div class="mb-2 flex justify-end">
+                        <button type="button" class="btn-soft" data-copy="#update-command">Copy</button>
+                    </div>
+                    <pre id="update-command" class="code-block" aria-label="Update command for @update.Label">@update.Text</pre>
+                </div>
+            }
         </section>
     }
 </div>

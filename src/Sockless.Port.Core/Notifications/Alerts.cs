@@ -19,7 +19,9 @@ namespace Sockless.Port.Notifications;
 /// jobs and the resource history. Helper containers never alert. Its own timer clears restart
 /// alerts after quiet time and raises offline ones after the grace period.
 /// </summary>
-public sealed partial class Alerts(Notifier notifier, EngineConnections connections, TimeProvider time, ILogger<Alerts> logger) : BackgroundService
+/// <param name="settings">Whether agents update automatically: then an outdated agent doesn't alert (a failed update does).</param>
+public sealed partial class Alerts(Notifier notifier, EngineConnections connections, TimeProvider time, ILogger<Alerts> logger,
+    Settings.PortSettings? settings = null) : BackgroundService
 {
     /// <summary>An endpoint must stay offline this long before it alerts: engines restart, networks blip.</summary>
     public static readonly TimeSpan OfflineGrace = TimeSpan.FromMinutes(2);
@@ -134,11 +136,11 @@ public sealed partial class Alerts(Notifier notifier, EngineConnections connecti
             case EndpointOnline:
                 _offlineSince.TryRemove(connection.Id, out _);
                 await notifier.ClearAsync($"offline:{connection.Id}", cancellationToken: cancellationToken);
-                if (connection.Agent?.Info?.Version is { } version && AgentCommands.IsOutdated(version))
+                if (connection.Agent?.Info?.Version is { } version && AgentCommands.IsOutdated(version) && settings?.Current.AgentAutoUpdate != true)
                 {
                     await notifier.RaiseAsync(new Alert(AlertKind.AgentOutdated, $"agent:{connection.Id}:{version}", connection.Id, connection.Name, AlertSeverity.Info,
                         $"The agent on {connection.Name} is out of date",
-                        $"It runs version {version}; the server is {AgentCommands.ServerVersion}. The endpoint's page shows the command that updates it.",
+                        $"It runs version {version}; the server is {AgentCommands.ServerVersion}. Update it from the endpoint's page, or turn on automatic agent updates in Settings.",
                         $"/endpoints/{connection.Id}/settings"), cancellationToken);
                 }
                 break;
