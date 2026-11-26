@@ -311,6 +311,12 @@
       all.checked = checked > 0 && checked === boxes.length;
       all.indeterminate = checked > 0 && checked < boxes.length;
     }
+    for (const group of form.querySelectorAll('[data-select-group]')) {
+      const members = [...boxes].filter((box) => box.dataset.group === group.dataset.selectGroup);
+      const on = members.filter((box) => box.checked).length;
+      group.checked = on > 0 && on === members.length;
+      group.indeterminate = on > 0 && on < members.length;
+    }
     const count = form.querySelector('[data-bulk-count]');
     if (count && checked > 0) count.textContent = `${checked} selected`;
   }
@@ -321,7 +327,12 @@
     if (box.matches('[data-select-all]')) {
       for (const other of box.form.querySelectorAll('input[name=ids]')) other.checked = box.checked;
     }
-    if (box.matches('[data-select-all], input[name=ids]')) updateBulk(box.form);
+    if (box.matches('[data-select-group]')) {
+      for (const other of box.form.querySelectorAll('input[name=ids]')) {
+        if (other.dataset.group === box.dataset.selectGroup) other.checked = box.checked;
+      }
+    }
+    if (box.matches('[data-select-all], [data-select-group], input[name=ids]')) updateBulk(box.form);
   });
 
   // Live refreshes of a list would throw away the user's selection: hold them while rows are checked.

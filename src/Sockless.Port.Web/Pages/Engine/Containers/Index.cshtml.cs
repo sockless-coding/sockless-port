@@ -16,6 +16,18 @@ public sealed record ContainerRow(ContainerSummary Summary, StatusBadge State, S
 {
     public string Name => Summary.DisplayName;
     public bool Running => Summary.State is "running";
+
+    /// <summary>State and health as the one badge the list shows.</summary>
+    public StatusBadge Badge => ContainerStatus.Combined(State, Health);
+}
+
+/// <summary>The containers of one stack, or of none (<paramref name="Stack"/> null), as the list groups them.</summary>
+public sealed record ContainerGroup(string? Stack, IReadOnlyList<ContainerRow> Rows)
+{
+    public int Running => Rows.Count(r => r.Running);
+
+    /// <summary>A key for the group's select box: the stack's name, or empty for containers without one.</summary>
+    public string Key => Stack ?? "";
 }
 
 public sealed class IndexModel(EngineConnections connections, ImageUpdates updates, ImageScans scans) : EndpointPageModel(connections)
@@ -41,6 +53,12 @@ public sealed class IndexModel(EngineConnections connections, ImageUpdates updat
     public string? Label { get; set; }
 
     public IReadOnlyList<ContainerRow> Rows { get; private set; } = [];
+
+    /// <summary>The rows by stack (stacks by name, then the containers without one).</summary>
+    public IReadOnlyList<ContainerGroup> Groups { get; private set; } = [];
+
+    /// <summary>Group headings are worth showing only when some container is in a stack.</summary>
+    public bool ShowGroups => Groups.Any(g => g.Stack is not null);
     public IReadOnlyList<string> Stacks { get; private set; } = [];
 
     /// <summary>Pods on the engine, for the filter; empty on engines without pods.</summary>
@@ -149,6 +167,10 @@ public sealed class IndexModel(EngineConnections connections, ImageUpdates updat
             var shown = all.Where(c => Matches(c, pods.Of(c.Id))).ToList();
             var scanned = await scans.SummariesAsync(shown.Select(c => c.ImageId).OfType<string>(), cancellationToken);
             Rows = [.. shown.Select(c => ToRow(c, pods.Of(c.Id), scanned)).OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)];
+            Groups = [.. Rows.GroupBy(r => r.Stack)
+                .OrderBy(g => g.Key is null)
+                .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new ContainerGroup(g.Key, [.. g]))];
         }
         catch (Exception ex) when (EngineFailures.IsFailure(ex, cancellationToken))
         {
@@ -200,7 +222,7 @@ public sealed class IndexModel(EngineConnections connections, ImageUpdates updat
     private ContainerRow ToRow(ContainerSummary c, PodMember? pod, IReadOnlyDictionary<string, ScanSummary> scanned)
     {
         var (state, health) = ContainerStatus.FromSummary(c);
-        return new ContainerRow(c, state, health, ContainerLabels.Stack(c.Labels), ContainerLabels.SwarmServiceName(c.Labels), ContainerStatus.PublishedPorts(c.Ports), pod,
+        return new ContainerRow(c, state, health, ContainerLabels.Stack(c.Labels), ContainerLabels.SwarmServiceName(c.Labels), ContainerStatus.CompactPorts(c.Ports), pod,
             updates.ForContainer(EndpointId, c),
             c.ImageId is { } imageId ? new ScanFlag(scanned.GetValueOrDefault(imageId), scans.StateOf(imageId)) : null);
     }

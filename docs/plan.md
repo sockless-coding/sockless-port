@@ -426,6 +426,32 @@ Shown only on endpoints with the `Pods` capability. These use Podman's libpod AP
 - **Live:** `WorkBroadcaster` sends an empty `work` message to every browser at most every 750 ms after a change; `site.js` turns it into the `work-changed` body event, and the list fetches `/tasks?handler=Tray` (the button's count comes back out of band). The list is filtered per user: work on endpoints they have a role on; prunes and work without an endpoint (backups) only for administrators.
 - **Not built:** cancelling from the list (the image and stack pages have it), persisting the list across restarts, and tracking single quick actions (removing one image from its page, container actions).
 
+### Phase 18: Calmer container and stack lists
+
+- Rows on one line: no stacks of badges and status text, no image names wrapping a character at a time.
+- Containers grouped by stack, so the stack badge on every row goes.
+
+**Status: done (lists).** Notes:
+- **Containers:** rows are grouped by stack in their own `tbody` with a heading row (the stack, linked, and "2 of 3 running"), stacks by name and then *Not in a stack*; headings show only when some container is in a stack. Each heading has a box that selects its group (`data-select-group` / `data-group` in `site.js`, kept in step with the rows). One badge for state and health (`ContainerStatus.Combined`: a running container's health replaces "Running"), followed by what the badge doesn't say (`ContainerStatus.Since`: "Up 45 hours", "18 months ago"); the full status text and creation time are in the cell's title. The *Created* column is gone. Images are one line: registry and namespace in secondary text, truncated first, the name and tag kept (`ImageDisplay.SplitReference`), with the update and scan badges beside them. Ports are short (`ContainerStatus.CompactPorts`: `443`, `8080→80`, `/udp` only for UDP), at most three and "+n". Row actions are icon buttons (`btn-icon`, named by `aria-label` and `title`): restart and stop, start, or resume, and logs.
+- **Stacks:** badges on the name's line; "Compose" is no longer shown (only *Swarm*), *Git failing* replaces *Git*, and *Portainer* replaces *External*. The state cell carries the unhealthy count (linking to the containers list filtered to them) and *Update available*. Services are one truncated line with the whole list in its title. *Edit* is an icon button.
+- `table-middle` centres cells on one-line rows; `table-group` styles a group's heading row.
+- **Not built:** the detail pages' headers (one main action by state, routine actions apart from destructive ones), sorting, and resource use in the list.
+
+### Phase 19: Containers and stacks across endpoints
+
+- `/containers` and `/stacks` list everything the user can see on every endpoint, with an *Endpoint* column and filter; the per-endpoint pages are the same view filtered to one.
+- Each endpoint's rows load on their own, as the overview's do: a slow or offline endpoint shows a notice row instead of holding up the page. Live through the overview's watched endpoints (`endpoint-changed-{id}`).
+- Swarm services and swarm stacks are shown once per cluster (by swarm ID), not once per node.
+- Roles are per endpoint, so row actions are checked per row; bulk forms post `endpointId:id` and the server checks each.
+
+### Phase 20: Moving stacks and containers between endpoints
+
+- **Stacks** (managed Compose): copy the files, `.env` and git source to the target, deploy there, then take the source down or leave it stopped until the move is confirmed. Compose between Docker and Podman; swarm stacks to another swarm.
+- **Containers:** recreate from the raw inspect JSON on the target (as *Duplicate* does), pulling with registry credentials; images built locally are copied with save and load. User-defined networks are created when missing.
+- **Volume data**, optional: the source's containers are stopped, a helper on each side streams the volume as a tar through the server (archive GET and PUT). The target's helper needs the volume writable, an exception to the read-only helper rule.
+- **Checks first:** the image's architecture, what the target can do (rootless ports below 1024, pods, swarm), free host ports and names, external networks and volumes; bind mounts, devices, GPUs and host networking can't move and are named.
+- Runs as a stack job and a `WorkItem`, audited; needs operator on both endpoints. If the target fails, the source is started again.
+
 ## Risks and notes
 
 - **Socket access is root on the host.** This is documented clearly. The server and agent run as non-root users in the docker group; a read-only socket mode (via a proxy) is an option for viewer-only setups.

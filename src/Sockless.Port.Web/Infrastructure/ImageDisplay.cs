@@ -32,6 +32,23 @@ public static class ImageDisplay
         return pull.TotalBytes > 0 ? $"{layers} · {Format.Bytes(pull.DownloadedBytes)} of {Format.Bytes(pull.TotalBytes)}" : layers;
     }
 
+    /// <summary>
+    /// An image reference split for one-line display: the registry and namespace (which tables
+    /// shorten first) and the name with its tag, which they keep. <c>ghcr.io/acme/web:1.2</c> is
+    /// <c>("ghcr.io/acme/", "web:1.2")</c>; an image ID is shortened to 12 characters.
+    /// </summary>
+    public static (string Prefix, string Name) SplitReference(string? reference)
+    {
+        if (string.IsNullOrEmpty(reference))
+            return ("", "");
+        if (reference.StartsWith("sha256:", StringComparison.Ordinal))
+            return ("", ImageActions.ShortId(reference));
+        // The last slash before any digest: "a/b@sha256:..." keeps the digest with the name.
+        var at = reference.IndexOf('@', StringComparison.Ordinal);
+        var slash = reference.LastIndexOf('/', at < 0 ? reference.Length - 1 : at);
+        return slash < 0 ? ("", reference) : (reference[..(slash + 1)], reference[(slash + 1)..]);
+    }
+
     /// <summary>A word for the update check, coloured only when it asks for attention.</summary>
     public static StatusBadge? UpdateBadge(UpdateStatus? status) => status switch
     {

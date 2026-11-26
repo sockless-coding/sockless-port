@@ -6,6 +6,15 @@ namespace Sockless.Port.Web.Infrastructure;
 public sealed record ScanFlag(ScanSummary? Summary, ScanState? State)
 {
     public static ScanFlag None { get; } = new(null, null);
+
+    /// <summary>The badge and its detail: a scan in progress or a failure says more than an older result.</summary>
+    public (StatusBadge? Badge, string? Detail) Display()
+    {
+        var state = State is ScanFailed && Summary is not null && Summary.ScannedAt > State.Since ? null : State;
+        var badge = ScanDisplay.StateBadge(state) ?? ScanDisplay.Badge(Summary);
+        var detail = state is not null ? ScanDisplay.StateDetail(state) : Summary is { } summary ? ScanDisplay.Detail(summary) : null;
+        return (badge, detail);
+    }
 }
 
 /// <summary>How vulnerability scans read on the page. Status is always a word, never colour alone.</summary>

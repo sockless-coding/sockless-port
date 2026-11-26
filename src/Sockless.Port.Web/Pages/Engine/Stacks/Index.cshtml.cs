@@ -27,6 +27,9 @@ public sealed record StackRow(string Name, StackDefinition? Definition, StackKin
         ? [.. Swarm.Services.Select(s => SwarmDisplay.InStack(s.Name, Name))]
         : [.. Project.Services.Select(s => s.Name)];
 
+    /// <summary>Running containers whose health check fails (Compose only; swarm replaces them itself).</summary>
+    public int Unhealthy => IsSwarm ? 0 : Project.Containers.Count(c => c.IsUnhealthy);
+
     public IEnumerable<string?> Images => IsSwarm ? Swarm.Services.Select(s => s.Image) : Project.Services.Select(s => s.Image);
 }
 

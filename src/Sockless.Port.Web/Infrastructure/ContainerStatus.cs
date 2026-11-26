@@ -69,6 +69,50 @@ public static partial class ContainerStatus
                     return $"{(ip is null ? "" : ip + ":")}{g.Key.PublicPort}→{g.Key.PrivatePort}/{g.Key.Type}";
                 })];
 
+    /// <summary>
+    /// One badge for a list row: a running container's health says more than "Running", so it
+    /// takes its place ("Healthy", "Unhealthy", "Starting"); every other state keeps its own badge.
+    /// </summary>
+    public static StatusBadge Combined(StatusBadge state, StatusBadge? health) =>
+        health is null || state.Label != "Running" ? state
+        : health.Label.StartsWith("Health:", StringComparison.Ordinal) ? health with { Label = "Starting" }
+        : health;
+
+    /// <summary>
+    /// The part of a list item's status text the badge doesn't already say: "Up 45 hours" for a
+    /// running one, "18 months ago" for an exited one, empty when there's nothing more.
+    /// </summary>
+    public static string Since(string? status)
+    {
+        var text = Parenthesized().Replace(status ?? "", "").Trim();
+        if (text.StartsWith("Up ", StringComparison.Ordinal))
+            return text;
+        var space = text.IndexOf(' ', StringComparison.Ordinal);
+        return space > 0 && text.EndsWith(" ago", StringComparison.Ordinal) ? text[(space + 1)..] : "";
+    }
+
+    /// <summary>
+    /// Published ports, short: "8080" when the host port is the container's, "8080→80" when it
+    /// isn't, "/udp" only for UDP, and the address only when it's bound to one.
+    /// </summary>
+    public static IReadOnlyList<string> CompactPorts(IReadOnlyList<ContainerPort>? ports) =>
+        ports is null
+            ? []
+            : [.. ports.Where(p => p.PublicPort > 0)
+                .GroupBy(p => (p.PublicPort, p.PrivatePort, Type: p.Type ?? "tcp"))
+                .OrderBy(g => g.Key.PublicPort)
+                .Select(g =>
+                {
+                    var ip = g.Select(p => p.Ip).FirstOrDefault(ip => ip is { Length: > 0 } and not ("0.0.0.0" or "::"));
+                    var mapping = g.Key.PublicPort == g.Key.PrivatePort
+                        ? g.Key.PublicPort.ToString(CultureInfo.InvariantCulture)
+                        : $"{g.Key.PublicPort}→{g.Key.PrivatePort}";
+                    return $"{(ip is null ? "" : ip + ":")}{mapping}{(g.Key.Type == "tcp" ? "" : "/" + g.Key.Type)}";
+                })];
+
     [GeneratedRegex(@"Exited \((\d+)\)")]
     private static partial Regex ExitCode();
+
+    [GeneratedRegex(@"\s*\([^)]*\)")]
+    private static partial Regex Parenthesized();
 }

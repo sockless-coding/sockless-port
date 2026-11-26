@@ -265,6 +265,10 @@
   .btn-soft.secondary {
     --btn-rgb: var(--sl-accent-2-rgb);
   }
+  /* A soft button with only an icon (table row actions): square, named by aria-label and title. */
+  .btn-soft.btn-icon {
+    padding: 0.375rem;
+  }
 
   /* ---------- Cards ---------- */
   .card {
@@ -477,6 +481,25 @@
   .table .num {
     text-align: right;
     white-space: nowrap;
+  }
+  /* One-line rows (lists of containers, stacks): centre cells on the row instead of the top. */
+  .table.table-middle tbody th,
+  .table.table-middle tbody td {
+    vertical-align: middle;
+  }
+  /* A group's heading row (e.g. a stack's containers): the header's fill, no hover tint. */
+  .table tbody tr.table-group > * {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    background: var(--sl-surface);
+    border-bottom: 1px solid var(--sl-border);
+    vertical-align: middle;
+  }
+  .table tbody + tbody tr.table-group > * {
+    border-top: 1px solid var(--sl-border);
+  }
+  .table tbody tr.table-group:hover {
+    background: transparent;
   }
   /* Sortable headings: the heading's text is the button; aria-sort on the th says the order. */
   .sort-button {
