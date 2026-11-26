@@ -26,6 +26,9 @@ public enum StackOperation
 
     /// <summary>A git-backed stack: fetch, then deploy (automatic syncs only deploy a deployed stack whose files changed).</summary>
     Sync,
+
+    /// <summary>Move the stack to another endpoint: a job of the target's stack that also keeps the source's busy (<see cref="StackJob.SourceEndpointId"/>).</summary>
+    Move,
 }
 
 /// <summary>Where a stack job is. Switch on it exhaustively.</summary>
@@ -77,6 +80,9 @@ public sealed class StackJob
     public string StackName { get; }
 
     public StackOperation Operation { get; }
+
+    /// <summary>For a move: the endpoint the stack comes from. The job belongs to the target's stack.</summary>
+    public int? SourceEndpointId { get; internal init; }
 
     public DateTimeOffset StartedAt { get; }
 

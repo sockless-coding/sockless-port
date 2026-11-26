@@ -155,6 +155,83 @@ public sealed class StackStore(IServiceScopeFactory scopes, IOptions<PortOptions
         return true;
     }
 
+    /// <summary>
+    /// For a move: the stack as it's saved on <paramref name="fromEndpoint"/> (its files, kind,
+    /// template, and repository settings with their secrets) becomes a stack of the same name on
+    /// <paramref name="toEndpoint"/>, not deployed. A git-backed stack's checkout isn't copied: its
+    /// first deploy checks out the fetched commit again. The webhook stays with the source until
+    /// <see cref="MoveWebhookAsync"/>, since a webhook's address belongs to one stack.
+    /// </summary>
+    /// <exception cref="StackRejectedException">The source isn't managed here, or the name is taken on the target.</exception>
+    public async Task<StackDefinition> CopyAsync(int fromEndpoint, int toEndpoint, string name, CancellationToken cancellationToken = default)
+    {
+        var source = await GetAsync(fromEndpoint, name, cancellationToken)
+                     ?? throw new StackRejectedException($"Sockless Port doesn't manage a stack named {name} there.");
+        var content = await Files.ReadAsync(fromEndpoint, name, cancellationToken)
+                      ?? throw new StackRejectedException($"The files of {name} are missing from {Files.Directory(fromEndpoint, name)}.");
+        var copy = await CreateAsync(toEndpoint, name, content, source.Adopted, source.Kind, cancellationToken, source.Template);
+        try
+        {
+            if (await GetRepositoryAsync(source.Id, cancellationToken) is { } repository)
+            {
+                await using var scope = scopes.CreateAsyncScope();
+                var db = scope.ServiceProvider.GetRequiredService<PortDbContext>();
+                db.StackRepositories.Add(new StackRepository
+                {
+                    StackId = copy.Id,
+                    Url = repository.Url,
+                    Branch = repository.Branch,
+                    ComposePath = repository.ComposePath,
+                    EnvPath = repository.EnvPath,
+                    Auth = repository.Auth,
+                    Username = repository.Username,
+                    ProtectedSecret = repository.ProtectedSecret,
+                    PublicKey = repository.PublicKey,
+                    KnownHosts = repository.KnownHosts,
+                    PollMinutes = repository.PollMinutes,
+                    FetchedCommit = repository.FetchedCommit,
+                    FetchedSubject = repository.FetchedSubject,
+                    FetchedCommitAt = repository.FetchedCommitAt,
+                    FetchedAt = repository.FetchedAt,
+                    CheckedAt = repository.CheckedAt,
+                });
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            return copy;
+        }
+        catch
+        {
+            await DeleteAsync(toEndpoint, name, CancellationToken.None);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// After a move that removes the source: its webhook (address and secret) moves to the copy, so
+    /// the git host's hook keeps working. Nothing happens when the source has none.
+    /// </summary>
+    public async Task MoveWebhookAsync(int fromEndpoint, int toEndpoint, string name, CancellationToken cancellationToken = default)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<PortDbContext>();
+        var from = await db.Stacks.FirstOrDefaultAsync(s => s.EndpointId == fromEndpoint && s.Name == name, cancellationToken);
+        var to = await db.Stacks.FirstOrDefaultAsync(s => s.EndpointId == toEndpoint && s.Name == name, cancellationToken);
+        if (from is null || to is null)
+            return;
+        var source = await db.StackRepositories.FirstOrDefaultAsync(r => r.StackId == from.Id, cancellationToken);
+        var target = await db.StackRepositories.FirstOrDefaultAsync(r => r.StackId == to.Id, cancellationToken);
+        if (source?.WebhookId is not { } webhookId || target is null)
+            return;
+        var secret = source.ProtectedWebhookSecret;
+        // Two saves: the address is unique, so the source lets go of it first.
+        source.WebhookId = null;
+        source.ProtectedWebhookSecret = null;
+        await db.SaveChangesAsync(cancellationToken);
+        target.WebhookId = webhookId;
+        target.ProtectedWebhookSecret = secret;
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
     // ---------------------------------------------------------------- git-backed stacks
 
     public async Task<StackRepository?> GetRepositoryAsync(int stackId, CancellationToken cancellationToken = default)

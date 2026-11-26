@@ -75,6 +75,17 @@ public sealed class StackHarness : IAsyncDisposable
             StackGit, TimeProvider.System, NullLogger<StackJobs>.Instance);
     }
 
+    /// <summary>Adds another endpoint (local kind, at an address nothing listens on), and returns its ID.</summary>
+    public async Task<int> AddEndpointAsync(string name)
+    {
+        await using var scope = _services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<PortDbContext>();
+        var endpoint = new EngineEndpoint { Name = name, Address = $"unix:///nonexistent/{name}.sock", Kind = EndpointKind.Local };
+        db.Endpoints.Add(endpoint);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return endpoint.Id;
+    }
+
     /// <summary>Skips the test when Compose isn't installed here.</summary>
     public async Task RequireComposeAsync()
     {

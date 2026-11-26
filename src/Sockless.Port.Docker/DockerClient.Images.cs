@@ -104,6 +104,31 @@ public sealed partial class DockerClient
         }
     }
 
+    /// <summary>
+    /// Loads a <c>docker save</c> tarball (as <see cref="ExportImageAsync"/> gives it), as
+    /// <c>docker load</c> does. Streamed, with no request timeout. A tarball the engine can't read
+    /// arrives as an <c>error</c> line and is thrown as <see cref="DockerApiException"/>.
+    /// </summary>
+    /// <returns>What the engine said it loaded ("Loaded image: web:1"), one entry per line.</returns>
+    public async Task<IReadOnlyList<string>> LoadImageAsync(Stream tar, CancellationToken cancellationToken = default)
+    {
+        var content = new StreamContent(tar);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/x-tar");
+        using var request = new HttpRequestMessage(HttpMethod.Post, Path("/images/load", Query(("quiet", "1")))) { Content = content };
+        using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        await EnsureSuccessAsync(response, "/images/load", cancellationToken);
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        var loaded = new List<string>();
+        await foreach (var line in JsonLines.ReadAsync(stream, Json.BuildProgress, cancellationToken))
+        {
+            if ((line.Error ?? line.ErrorDetail?.Message) is { } error)
+                throw new DockerApiException(HttpStatusCode.InternalServerError, error, "/images/load");
+            if (line.Stream?.Trim() is { Length: > 0 } text)
+                loaded.Add(text);
+        }
+        return loaded;
+    }
+
     /// <summary>An OCI platform as the engine reads it: <c>{"os":"linux","architecture":"arm64","variant":"v8"}</c>.</summary>
     internal static string PlatformJson(string os, string architecture, string? variant)
     {

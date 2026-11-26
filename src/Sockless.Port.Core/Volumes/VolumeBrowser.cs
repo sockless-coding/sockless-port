@@ -332,6 +332,22 @@ public sealed class VolumeBrowser : IAsyncDisposable
         }
     }
 
+    /// <summary>How long a copy's helpers' own <c>sleep</c> runs; they're removed as soon as the copy ends.</summary>
+    internal static readonly TimeSpan CopyLifetime = TimeSpan.FromHours(12);
+
+    /// <summary>
+    /// A helper for copying a volume to another endpoint (a move, from a POST): read-only on the
+    /// source, writable on the target, mounted at <see cref="MountPath"/>, with no network. Not
+    /// tracked or reused like the browser's own: the caller removes it with <see cref="RemoveCopyHelperAsync"/>.
+    /// </summary>
+    internal async Task<string> StartCopyHelperAsync(DockerClient client, string volume, bool readOnly, CancellationToken cancellationToken)
+    {
+        await EnsureImageAsync(client, cancellationToken);
+        return await StartHelperAsync(client, volume, readOnly, CopyLifetime, cancellationToken);
+    }
+
+    internal Task RemoveCopyHelperAsync(DockerClient client, string containerId) => RemoveAsync(client, containerId);
+
     /// <summary>Creates and starts a helper that mounts the volume, has no network and ends after <paramref name="lifetime"/>.</summary>
     private async Task<string> StartHelperAsync(DockerClient client, string volume, bool readOnly, TimeSpan lifetime, CancellationToken cancellationToken)
     {
@@ -378,7 +394,7 @@ public sealed class VolumeBrowser : IAsyncDisposable
         catch (Exception ex) when (ex is DockerApiException or HttpRequestException or IOException)
         {
             throw new VolumeBrowseException(
-                $"Browsing files needs the helper image {HelperImage}, and pulling it failed: {EngineErrors.Sentence(ex.Message)} " +
+                $"Reading a volume's files needs the helper image {HelperImage}, and pulling it failed: {EngineErrors.Sentence(ex.Message)} " +
                 "Pull it on the engine, or set Port:HelperImage to an image there that has find and stat.");
         }
     }

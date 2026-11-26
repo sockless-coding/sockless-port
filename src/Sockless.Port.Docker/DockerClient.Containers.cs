@@ -254,11 +254,13 @@ public sealed partial class DockerClient
     /// <c>docker cp</c> does. The directory must exist. Entries keep the owner and mode in their
     /// headers (no <c>copyUIDGID</c>, which would hand them to the container's user instead).
     /// </summary>
-    public Task PutArchiveAsync(string containerId, string directory, Stream tar, CancellationToken cancellationToken = default)
+    /// <param name="timeout">How long the whole upload may take; the client's request timeout when null.
+    /// <see cref="Timeout.InfiniteTimeSpan"/> for large streams (a volume's contents).</param>
+    public Task PutArchiveAsync(string containerId, string directory, Stream tar, CancellationToken cancellationToken = default, TimeSpan? timeout = null)
     {
         var content = new StreamContent(tar);
         content.Headers.ContentType = new MediaTypeHeaderValue("application/x-tar");
-        return SendAsync(HttpMethod.Put, Path($"/containers/{Escape(containerId)}/archive", Query(("path", directory))), content, cancellationToken);
+        return SendAsync(HttpMethod.Put, Path($"/containers/{Escape(containerId)}/archive", Query(("path", directory))), content, cancellationToken, timeout);
     }
 
     // ---------------------------------------------------------------- helpers

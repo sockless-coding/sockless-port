@@ -47,14 +47,14 @@ public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore s
     {
         Prune();
         return _jobs.Values
-            .Where(j => j.EndpointId == endpointId && j.StackName == stackName)
+            .Where(j => j.StackName == stackName && (j.EndpointId == endpointId || j.SourceEndpointId == endpointId))
             .OrderByDescending(j => j.IsRunning)
             .ThenByDescending(j => j.StartedAt)
             .FirstOrDefault();
     }
 
     public bool IsBusy(int endpointId, string stackName) =>
-        _jobs.Values.Any(j => j.IsRunning && j.EndpointId == endpointId && j.StackName == stackName);
+        _jobs.Values.Any(j => j.IsRunning && j.StackName == stackName && (j.EndpointId == endpointId || j.SourceEndpointId == endpointId));
 
     /// <summary>
     /// Starts <paramref name="operation"/> on the stack. A stack Sockless Port manages runs from its
@@ -122,6 +122,44 @@ public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore s
         return job;
     }
 
+    /// <summary>
+    /// Starts a move of <paramref name="stackName"/> from <paramref name="source"/> to
+    /// <paramref name="target"/> as a job of the target's stack, which also keeps the source's busy.
+    /// <paramref name="run"/> does the work (see <c>Moves.StackMoves</c>); its checks come first.
+    /// </summary>
+    /// <exception cref="StackJobRejectedException">Either side is busy, or the target runs too many jobs.</exception>
+    internal StackJob StartMove(EngineConnection source, EngineConnection target, string stackName, Func<StackJob, Task<StackJobStatus>> run)
+    {
+        StackJob job;
+        lock (_startGate)
+        {
+            Prune();
+            if (IsBusy(source.Id, stackName) || IsBusy(target.Id, stackName))
+                throw new StackJobRejectedException($"Something is already running on {stackName}. Wait for it to finish.");
+            if (_jobs.Values.Count(j => j.IsRunning && j.EndpointId == target.Id) >= MaxRunningPerEndpoint)
+                throw new StackJobRejectedException($"{MaxRunningPerEndpoint} stack jobs are already running on {target.Name}. Wait for one to finish.");
+            job = new StackJob(Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(8)), target.Id, stackName, StackOperation.Move, time.GetUtcNow(), _stopping.Token)
+            {
+                SourceEndpointId = source.Id,
+            };
+            _jobs[job.Id] = job;
+        }
+        job.Work = work?.Start(Work.WorkKind.Stack, $"Moving {stackName} to {target.Name}", target.Id, target.Name, stackName, $"from {source.Name}");
+        _ = RunJobAsync(job, target, "Cancelled. What was already done stays done: check both endpoints.", () => run(job));
+        return job;
+    }
+
+    /// <summary>
+    /// Within a move's job: runs <paramref name="operation"/> on one side, as its own job would,
+    /// from the stack's files there when Sockless Port manages it.
+    /// </summary>
+    internal Task<StackJobStatus> RunWithinAsync(StackJob job, EngineConnection connection, StackKind kind, StackOperation operation,
+        StackJobOptions? options = null)
+    {
+        var directory = store.Files.Exists(connection.Id, job.StackName) ? store.Files.Directory(connection.Id, job.StackName) : null;
+        return RunStepsAsync(job, connection, kind, directory, options ?? new StackJobOptions(), operation);
+    }
+
     /// <summary>What the job does, as the start of its title in the list of background work.</summary>
     internal static string Doing(StackOperation operation) => operation switch
     {
@@ -134,6 +172,7 @@ public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore s
         StackOperation.Remove => "Removing",
         StackOperation.Fetch => "Fetching",
         StackOperation.Sync => "Syncing",
+        StackOperation.Move => "Moving",
         _ => "Running",
     };
 
@@ -214,17 +253,24 @@ public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore s
     private static string[] Down(StackJobOptions options) =>
         options.RemoveVolumes ? ["down", "--remove-orphans", "--volumes"] : ["down", "--remove-orphans"];
 
-    private async Task RunAsync(StackJob job, EngineConnection connection, StackKind kind, string? directory, StackJobOptions options)
+    private Task RunAsync(StackJob job, EngineConnection connection, StackKind kind, string? directory, StackJobOptions options) =>
+        RunJobAsync(job, connection,
+            kind == StackKind.Swarm ? "Cancelled. What was already sent to the swarm stays done." : "Cancelled. What Compose already did stays done.",
+            () => RunStepsAsync(job, connection, kind, directory, options, job.Operation));
+
+    /// <summary>Runs a job's body to its outcome: failures become a failed job (and an alert), never an exception.</summary>
+    /// <param name="cancelled">What the log says when the job is cancelled.</param>
+    private async Task RunJobAsync(StackJob job, EngineConnection connection, string cancelled, Func<Task<StackJobStatus>> body)
     {
         await Task.Yield();
         StackJobStatus outcome;
         try
         {
-            outcome = await RunStepsAsync(job, connection, kind, directory, options);
+            outcome = await body();
         }
         catch (OperationCanceledException) when (job.Token.IsCancellationRequested)
         {
-            job.AppendLine(kind == StackKind.Swarm ? "Cancelled. What was already sent to the swarm stays done." : "Cancelled. What Compose already did stays done.");
+            job.AppendLine(cancelled);
             outcome = new StackJobCanceled();
         }
         catch (ComposeUnavailableException ex)
@@ -257,7 +303,8 @@ public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore s
         }
     }
 
-    private async Task<StackJobStatus> RunStepsAsync(StackJob job, EngineConnection connection, StackKind kind, string? directory, StackJobOptions options)
+    private async Task<StackJobStatus> RunStepsAsync(StackJob job, EngineConnection connection, StackKind kind, string? directory, StackJobOptions options,
+        StackOperation operation)
     {
         var name = job.StackName;
         var definition = directory is null ? null : await store.GetAsync(connection.Id, name, job.Token);
@@ -265,11 +312,11 @@ public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore s
         StackSource? source = null;
         if (repository is not null)
         {
-            var (done, current) = await PrepareCheckoutAsync(job, connection, definition!, repository, options);
+            var (done, current) = await PrepareCheckoutAsync(job, connection, definition!, repository, options, operation);
             if (done is not null)
                 return done;
             repository = current;
-            if (job.Operation is StackOperation.Deploy or StackOperation.Update or StackOperation.Sync)
+            if (operation is StackOperation.Deploy or StackOperation.Update or StackOperation.Sync)
             {
                 source = store.Source(connection.Id, name, current);
                 if (!File.Exists(source.ComposeFile))
@@ -284,13 +331,13 @@ public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore s
 
         if (kind == StackKind.Swarm)
         {
-            if (await RunSwarmAsync(job, connection, directory, source, content, options) is { } failed)
+            if (await RunSwarmAsync(job, connection, directory, source, content, options, operation) is { } failed)
                 return failed;
         }
         else
         {
             var tool = await compose.FindAsync(job.Token);
-            foreach (var step in Steps(job.Operation, options))
+            foreach (var step in Steps(operation, options))
             {
                 job.AppendLine($"$ {tool.DisplayName} {string.Join(' ', step)}");
                 var result = await compose.RunAsync(new ComposeRequest(name, step, connection.Address, directory, source), job.AppendLine, job.Token);
@@ -299,7 +346,7 @@ public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore s
             }
         }
 
-        switch (job.Operation)
+        switch (operation)
         {
             case StackOperation.Deploy or StackOperation.Update or StackOperation.Sync when content is not null:
                 await store.MarkDeployedAsync(connection.Id, name, content, CancellationToken.None,
@@ -316,7 +363,7 @@ public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore s
 
         var swarm = kind == StackKind.Swarm;
         var at = source is null ? "" : $" at {GitSource.Short(repository!.FetchedCommit)}";
-        return new StackJobSucceeded(job.Operation switch
+        return new StackJobSucceeded(operation switch
         {
             StackOperation.Deploy or StackOperation.Sync => swarm ? $"Deployed {name}{at}. Its services now converge on the nodes." : $"Deployed {name}{at}.",
             StackOperation.Update => swarm ? $"Deployed {name}, with every image resolved again." : $"Pulled the images of {name} and recreated what changed.",
@@ -329,7 +376,7 @@ public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore s
                 : swarm ? $"Removed {name} from the swarm and deleted the stack. Volumes stay on the nodes."
                 : options.RemoveVolumes ? $"Took {name} down, removed its volumes and deleted the stack."
                 : $"Took {name} down and deleted the stack. Its volumes are kept.",
-            _ => throw new ArgumentOutOfRangeException(nameof(job), job.Operation, null),
+            _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, null),
         });
     }
 
@@ -343,12 +390,12 @@ public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore s
     /// nothing to do). Otherwise the repository as it is now, to deploy from.
     /// </returns>
     private async Task<(StackJobStatus? Done, StackRepository Repository)> PrepareCheckoutAsync(StackJob job, EngineConnection connection,
-        StackDefinition definition, StackRepository repository, StackJobOptions options)
+        StackDefinition definition, StackRepository repository, StackJobOptions options, StackOperation operation)
     {
         var name = job.StackName;
         var checkout = store.CheckoutDirectory(connection.Id, name);
-        var fetching = job.Operation is StackOperation.Fetch or StackOperation.Sync;
-        var rebuild = job.Operation is StackOperation.Deploy or StackOperation.Update && !Directory.Exists(Path.Combine(checkout, ".git"));
+        var fetching = operation is StackOperation.Fetch or StackOperation.Sync;
+        var rebuild = operation is StackOperation.Deploy or StackOperation.Update && !Directory.Exists(Path.Combine(checkout, ".git"));
         if (!fetching && !rebuild)
             return (null, repository);
 
@@ -376,7 +423,7 @@ public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore s
         var commit = $"{GitSource.Short(current.FetchedCommit)} ({current.FetchedSubject})";
         var sameAsDeployed = deployed is not null && saved == deployed;
         StackJobStatus? done = null;
-        if (job.Operation == StackOperation.Fetch)
+        if (operation == StackOperation.Fetch)
         {
             done = new StackJobSucceeded(definition.DeployedAt is null ? $"Fetched {commit}. Deploy {name} to run it."
                 : sameAsDeployed ? $"Fetched {commit}. The files are the same as what's deployed."
@@ -394,10 +441,10 @@ public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore s
 
     /// <returns>The failure, or null when every step succeeded.</returns>
     private async Task<StackJobFailed?> RunSwarmAsync(StackJob job, EngineConnection connection, string? directory, StackSource? source, StackContent? content,
-        StackJobOptions options)
+        StackJobOptions options, StackOperation operation)
     {
         var name = job.StackName;
-        if (job.Operation == StackOperation.Restart)
+        if (operation == StackOperation.Restart)
             return await RestartServicesAsync(job, connection, name);
 
         var tool = await docker.FindAsync(job.Token);
@@ -405,7 +452,7 @@ public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore s
         var file = source?.ComposeFile ?? (directory is null ? null : Path.Combine(directory, StackFiles.ComposeFile));
         directory = source?.Directory ?? directory;
         var variables = StackEnv.Parse(content?.Env);
-        foreach (var step in SwarmSteps(job.Operation, name, file, options))
+        foreach (var step in SwarmSteps(operation, name, file, options))
         {
             job.AppendLine($"$ {tool.FileName} {string.Join(' ', step.Select(a => a == file ? StackFiles.ComposeFile : a))}");
             var result = await docker.RunAsync(new DockerCliRequest(step, connection.Address, directory, variables), job.AppendLine, job.Token);
@@ -471,6 +518,7 @@ public sealed class StackJobs(ComposeCli compose, DockerCli docker, StackStore s
         StackOperation.Remove => "remove",
         StackOperation.Fetch => "fetch",
         StackOperation.Sync => "fetch and deploy",
+        StackOperation.Move => "move",
         _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, null),
     };
 

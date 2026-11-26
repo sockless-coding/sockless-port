@@ -52,6 +52,7 @@ public static class StackDisplay
         StackOperation.Remove => "Remove",
         StackOperation.Fetch => "Fetch",
         StackOperation.Sync => "Fetch and deploy",
+        StackOperation.Move => "Move",
         _ => operation.ToString(),
     };
 
@@ -67,6 +68,7 @@ public static class StackDisplay
         StackOperation.Remove => "Removing",
         StackOperation.Fetch => "Fetching",
         StackOperation.Sync => "Fetching and deploying",
+        StackOperation.Move => "Moving",
         _ => operation.ToString(),
     };
 

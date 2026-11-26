@@ -1,0 +1,191 @@
+@page "/endpoints/{endpointId:int}/stacks/{stackName}/move"
+@model Sockless.Port.Web.Pages.Engine.Stacks.MoveModel
+@using Sockless.Port.Moves
+@{
+    ViewData["Title"] = $"Move {Model.StackName}";
+    var name = Model.StackName;
+    var plan = Model.Plan;
+    var target = Model.Target;
+    var copyable = plan?.Volumes.Where(v => v.Copyable).ToList() ?? [];
+    var compose = !Model.IsSwarm;
+}
+
+<div data-endpoint-id="@Model.EndpointId">
+    <nav aria-label="Breadcrumb" class="mb-3 font-mono text-xs text-secondary">
+        <a asp-page="/Engine/Stacks/Index" asp-route-endpointId="@Model.EndpointId" class="hover:underline">Stacks</a>
+        <span class="text-line-accent" aria-hidden="true">/</span>
+        <a asp-page="/Engine/Stacks/Detail" asp-route-endpointId="@Model.EndpointId" asp-route-stackName="@name" class="hover:underline">@name</a>
+        <span class="text-line-accent" aria-hidden="true">/</span>
+        <span aria-current="page">Move</span>
+    </nav>
+
+    <div class="mb-6">
+        <h2 class="page-title break-all">Move @name</h2>
+        <p class="mt-1 text-secondary">
+            To another endpoint: its files@(compose ? ", the data of its volumes if you want," : "") and a deploy there. Nothing changes until you start the move.
+        </p>
+    </div>
+
+    @if (!Model.IsManaged)
+    {
+        <div class="callout warning" role="alert">
+            <icon name="exclamation-triangle" class="h-5 w-5" />
+            <p>Sockless Port doesn't manage @name, so it has no files to move. <a asp-page="/Engine/Stacks/Create" asp-route-endpointId="@Model.EndpointId" asp-route-adopt="@name" class="hover:underline">Adopt it</a> first.</p>
+        </div>
+    }
+    else if (Model.Targets.Count == 0)
+    {
+        <section class="card">
+            <div class="empty-state">
+                <icon name="server-stack" class="h-12 w-12" stroke-width="1.5" />
+                <p class="text-base text-heading">No other endpoint to move it to</p>
+                <p class="text-secondary">You need the @(Model.IsSwarm ? "swarm operator" : "operator") role on another endpoint.</p>
+            </div>
+        </section>
+    }
+    else
+    {
+        <section class="card mb-6" aria-labelledby="target-title">
+            <h3 id="target-title" class="section-title">Where to</h3>
+            <form method="get" class="flex flex-wrap items-end gap-3">
+                <div class="field min-w-[16rem]">
+                    <label for="move-to">Endpoint</label>
+                    <select id="move-to" name="to">
+                        <option value="">Choose one</option>
+                        @foreach (var endpoint in Model.Targets)
+                        {
+                            <option value="@endpoint.Id" selected="@(endpoint.Id == target?.Id)">@endpoint.Name@(endpoint.Client is null ? " (offline)" : "")</option>
+                        }
+                    </select>
+                </div>
+                <button type="submit" class="btn-soft"><icon name="magnifying-glass" class="h-4 w-4" /> Check</button>
+            </form>
+        </section>
+
+        @if (plan is not null && target is not null)
+        {
+            <section class="card mb-6" aria-labelledby="checks-title">
+                <h3 id="checks-title" class="section-title">What the checks found</h3>
+                @if (plan.Findings.Count == 0)
+                {
+                    <p class="text-secondary">Nothing stands in the way.</p>
+                }
+                else
+                {
+                    <ul class="space-y-2">
+                        @foreach (var finding in plan.Findings.OrderByDescending(f => f.Severity))
+                        {
+                            <li class="flex items-start gap-3">
+                                @switch (finding.Severity)
+                                {
+                                    case MoveSeverity.Blocker:
+                                        <span class="badge danger shrink-0">Blocks the move</span>
+                                        break;
+                                    case MoveSeverity.Warning:
+                                        <span class="badge warning shrink-0">Check first</span>
+                                        break;
+                                    default:
+                                        <span class="badge-stat shrink-0">Note</span>
+                                        break;
+                                }
+                                <span>@finding.Message</span>
+                            </li>
+                        }
+                    </ul>
+                }
+
+                @if (plan.Volumes.Count > 0)
+                {
+                    <h4 class="label-caps mt-6 mb-2">Volumes</h4>
+                    <div class="table-wrap">
+                        <table class="table table-middle">
+                            <caption class="sr-only">Volumes the stack uses</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Volume</th>
+                                    <th scope="col">Data</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var volume in plan.Volumes)
+                                {
+                                    <tr>
+                                        <th scope="row" class="font-mono text-xs">@volume.Name</th>
+                                        <td>
+                                            @if (volume.Copyable)
+                                            {
+                                                <span class="text-secondary">Can be copied</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-secondary">@volume.Problem</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
+                @if (plan.Images.Count > 0)
+                {
+                    <h4 class="label-caps mt-6 mb-2">Images</h4>
+                    <p class="mb-2 text-xs text-secondary">
+                        @(compose
+                            ? $"Pulled on {target.Name} before the deploy; an image no registry there has is copied from {Model.Connection.Name}."
+                            : "The swarm's nodes pull them as the services start.")
+                    </p>
+                    <ul class="flex flex-wrap gap-2">
+                        @foreach (var image in plan.Images)
+                        {
+                            <li class="badge-stat">@image</li>
+                        }
+                    </ul>
+                }
+            </section>
+
+            @if (plan.CanMove)
+            {
+                var stops = compose && plan.Deployed && copyable.Count > 0;
+                <form method="post" class="card" aria-labelledby="move-title">
+                    <input type="hidden" name="to" value="@target.Id" />
+                    <h3 id="move-title" class="section-title">Move to @target.Name</h3>
+
+                    @if (stops)
+                    {
+                        <label class="mb-4 flex items-start gap-2">
+                            <input type="checkbox" name="copyVolumes" value="true" class="mt-1 accent-accent" checked />
+                            <span>
+                                Copy the data of @(copyable.Count == 1 ? "its volume" : $"its {copyable.Count} volumes")
+                                <span class="block text-xs text-secondary">@name is stopped on @Model.Connection.Name while @(copyable.Count == 1 ? "it's" : "they're") copied, so the data doesn't change underway. The @(copyable.Count == 1 ? "volume there is" : "volumes there are") kept.</span>
+                            </span>
+                        </label>
+                    }
+
+                    <fieldset class="mb-4">
+                        <legend class="mb-2">Then, on @Model.Connection.Name</legend>
+                        @foreach (var after in plan.Afters)
+                        {
+                            var (label, detail) = after switch
+                            {
+                                MoveSourceAfter.Remove => ("Remove it", plan.Deployed ? "Take it down and delete its files there. Its volumes are kept." : "Delete its files there."),
+                                MoveSourceAfter.Stop => ("Leave it stopped", "Keep it there, stopped, until you're sure the move worked."),
+                                _ => ("Keep it running", plan.Deployed ? "It runs on both endpoints: a copy rather than a move. Mind what both copies write to." : "Keep its files there too."),
+                            };
+                            <label class="mb-2 flex items-start gap-2">
+                                <input type="radio" name="after" value="@after" class="mt-1 accent-accent" checked="@(after == MoveSourceAfter.Remove)" />
+                                <span>@label <span class="block text-xs text-secondary">@detail</span></span>
+                            </label>
+                        }
+                    </fieldset>
+
+                    <button type="submit" class="btn-primary"
+                            data-confirm="Move @name from @Model.Connection.Name to @target.Name?@(stops ? $" It stops on {Model.Connection.Name} while the volumes are copied, if you chose to copy them." : "")">
+                        <icon name="arrow-right-start-on-rectangle" class="h-4 w-4" /> Move @name
+                    </button>
+                </form>
+            }
+        }
+    }
+</div>

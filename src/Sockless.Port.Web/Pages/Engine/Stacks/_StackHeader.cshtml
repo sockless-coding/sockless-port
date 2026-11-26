@@ -175,6 +175,13 @@
                         @if (Model.IsManaged)
                         {
                             <div class="space-y-2 border-t border-line pt-3">
+                                <p class="label-caps">Move</p>
+                                <p class="text-xs text-secondary">To another endpoint, with the data of its volumes if you want. The checks run first.</p>
+                                <a asp-page="/Engine/Stacks/Move" asp-route-endpointId="@Model.EndpointId" asp-route-stackName="@name" class="btn-soft">
+                                    <icon name="arrow-right-start-on-rectangle" class="h-4 w-4" /> Move to another endpoint
+                                </a>
+                            </div>
+                            <div class="space-y-2 border-t border-line pt-3">
                                 <p class="label-caps">Remove stack</p>
                                 <p class="text-xs text-secondary">Deletes the files from Sockless Port.</p>
                                 <form sp-can="write" method="post" action="@runUrl">
