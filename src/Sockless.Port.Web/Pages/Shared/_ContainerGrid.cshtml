@@ -1,0 +1,192 @@
+@* The containers table, grouped by stack: an endpoint's list, and the list across endpoints, where
+   each group names its endpoint. Sits in a bulk form (boxes are name="ids"); row buttons post
+   through the form "row-actions" so they don't also send the selection. Model: ContainerTableView. *@
+@model Sockless.Port.Web.Infrastructure.ContainerTableView
+@{
+    var anyWrite = Model.AnyWrite;
+    var columns = 5;
+}
+<div class="table-wrap">
+    <table class="table table-middle">
+        <caption class="sr-only">Containers@(Model.ShowGroups ? Model.AcrossEndpoints ? ", grouped by stack and endpoint" : ", grouped by stack" : "")</caption>
+        <thead>
+            <tr>
+                @if (anyWrite)
+                {
+                    <th scope="col" class="w-8"><input type="checkbox" data-select-all aria-label="Select all shown containers" /></th>
+                }
+                <th scope="col">Name</th>
+                <th scope="col">State</th>
+                <th scope="col">Image</th>
+                <th scope="col">Ports</th>
+                <th scope="col" class="num"><span class="sr-only">Actions</span></th>
+            </tr>
+        </thead>
+        @foreach (var group in Model.Groups)
+        {
+            var endpoint = group.Endpoint;
+            var endpointId = group.Rows[0].EndpointId;
+            var where = endpoint is null ? "" : $" on {endpoint.Name}";
+            <tbody>
+                @if (Model.ShowGroups)
+                {
+                    <tr class="table-group">
+                        @if (anyWrite)
+                        {
+                            <td>
+                                @if (group.Rows.Any(r => r.CanWrite))
+                                {
+                                    <input type="checkbox" data-select-group="@group.Key"
+                                           aria-label="@(group.Stack is null ? $"Select the containers not in a stack{where}" : $"Select the containers of {group.Stack}{where}")" />
+                                }
+                            </td>
+                        }
+                        <th scope="rowgroup" colspan="@columns">
+                            <span class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                @if (group.Stack is { } stack)
+                                {
+                                    <span class="flex items-center gap-2">
+                                        <icon name="rectangle-stack" class="h-4 w-4 text-secondary" />
+                                        <a asp-page="/Engine/Stacks/Detail" asp-route-endpointId="@endpointId" asp-route-stackName="@stack"
+                                           class="font-mono font-semibold hover:underline" title="Open the stack">@stack</a>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="flex items-center gap-2 text-secondary">
+                                        <icon name="cube" class="h-4 w-4" /> Not in a stack
+                                    </span>
+                                }
+                                @if (endpoint is not null)
+                                {
+                                    <span class="flex items-center gap-1 text-xs font-normal text-secondary">
+                                        on
+                                        <a asp-page="/Engine/Containers/Index" asp-route-endpointId="@endpointId" class="flex items-center gap-1 font-semibold hover:text-accent hover:underline"
+                                           title="Open this endpoint's containers">
+                                            <icon name="server" class="h-4 w-4" /> @endpoint.Name
+                                        </a>
+                                    </span>
+                                }
+                                <span class="text-xs font-normal text-secondary">@group.Running of @group.Rows.Count running</span>
+                            </span>
+                        </th>
+                    </tr>
+                }
+                @foreach (var row in group.Rows)
+                {
+                    var created = Format.FromUnix(row.Summary.Created);
+                    var since = ContainerStatus.Since(row.Summary.Status);
+                    var (prefix, image) = ImageDisplay.SplitReference(row.Summary.Image);
+                    var update = ImageDisplay.UpdateBadge(row.Update) is { Kind: "warning" } updateBadge ? updateBadge : null;
+                    var (scanBadge, scanDetail) = row.Scan?.Display() ?? (null, null);
+                    var named = row.Name + where;
+                    <tr>
+                        @if (anyWrite)
+                        {
+                            <td>
+                                @if (row.CanWrite)
+                                {
+                                    <input type="checkbox" name="ids" value="@Model.SelectValue(row)" data-name="@named" data-group="@group.Key" aria-label="Select @named" />
+                                }
+                            </td>
+                        }
+                        <th scope="row">
+                            <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <a asp-page="/Engine/Containers/Detail" asp-route-endpointId="@row.EndpointId" asp-route-containerId="@row.Summary.Id"
+                                   class="break-words font-semibold hover:underline">@row.Name</a>
+                                @if (row.Pod is { } member)
+                                {
+                                    <a asp-page="/Engine/Pods/Detail" asp-route-endpointId="@row.EndpointId" asp-route-podId="@member.Pod.Id"
+                                       class="badge-stat hover:underline" title="In this Podman pod">Pod: @member.Pod.Name</a>
+                                    @if (member.IsInfra)
+                                    {
+                                        <span class="badge-stat" title="Holds the namespaces the pod's containers share. Starting, stopping or removing the pod handles it.">Pod infra</span>
+                                    }
+                                }
+                                @if (row.SwarmService is not null)
+                                {
+                                    <span class="badge-stat" title="Managed by this swarm service">Swarm: @row.SwarmService</span>
+                                }
+                                @if (Sockless.Port.Containers.ContainerLabels.IsHelper(row.Summary.Labels))
+                                {
+                                    <span class="badge-stat" title="Started by Sockless Port to read a volume's files. It's removed when the file browser closes.">File browser helper</span>
+                                }
+                            </span>
+                        </th>
+                        <td class="whitespace-nowrap" title="@row.Summary.Status · created @Format.Timestamp(created)">
+                            <span class="flex items-center gap-2">
+                                <partial name="_StatusBadge" model="row.Badge" />
+                                @if (since.Length > 0)
+                                {
+                                    <span class="text-xs text-secondary">@since</span>
+                                }
+                            </span>
+                        </td>
+                        <td class="max-w-[24rem]">
+                            <span class="flex min-w-0 items-center gap-2">
+                                <span class="flex min-w-0 font-mono text-xs" title="@row.Summary.Image">
+                                    @if (prefix.Length > 0)
+                                    {
+                                        <span class="truncate text-secondary">@prefix</span>
+                                    }
+                                    <span class="truncate">@image</span>
+                                </span>
+                                @if (update is not null)
+                                {
+                                    <span class="badge warning shrink-0 whitespace-nowrap" title="@ImageDisplay.UpdateDetail(row.Update)">@update.Label</span>
+                                }
+                                @if (scanBadge is not null)
+                                {
+                                    <span class="shrink-0 whitespace-nowrap" title="@scanDetail"><partial name="_StatusBadge" model="scanBadge" /></span>
+                                    <span class="sr-only">@scanDetail</span>
+                                }
+                            </span>
+                        </td>
+                        <td class="font-mono text-xs">
+                            @if (row.Ports.Count > 0)
+                            {
+                                <span title="@string.Join(", ", row.Ports)">@string.Join(", ", row.Ports.Take(3))@(row.Ports.Count > 3 ? $" +{row.Ports.Count - 3}" : "")</span>
+                            }
+                        </td>
+                        <td class="num">
+                            <span class="inline-flex items-center gap-1">
+                                @if (row.CanWrite)
+                                {
+                                    @if (row.Summary.State is "paused")
+                                    {
+                                        <button type="submit" form="row-actions" class="btn-soft btn-icon" aria-label="Resume @named" title="Resume"
+                                                formaction="@Model.ActionUrl(row, "unpause")">
+                                            <icon name="play" class="h-4 w-4" />
+                                        </button>
+                                    }
+                                    else if (row.Running)
+                                    {
+                                        <button type="submit" form="row-actions" class="btn-soft btn-icon" aria-label="Restart @named" title="Restart"
+                                                formaction="@Model.ActionUrl(row, "restart")">
+                                            <icon name="arrow-path" class="h-4 w-4" />
+                                        </button>
+                                        <button type="submit" form="row-actions" class="btn-soft btn-icon" aria-label="Stop @named" title="Stop"
+                                                formaction="@Model.ActionUrl(row, "stop")">
+                                            <icon name="stop" class="h-4 w-4" />
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="submit" form="row-actions" class="btn-soft btn-icon" aria-label="Start @named" title="Start"
+                                                formaction="@Model.ActionUrl(row, "start")">
+                                            <icon name="play" class="h-4 w-4" />
+                                        </button>
+                                    }
+                                }
+                                <a asp-page="/Engine/Containers/Logs" asp-route-endpointId="@row.EndpointId" asp-route-containerId="@row.Summary.Id"
+                                   class="btn-soft btn-icon" aria-label="Logs of @named" title="Logs">
+                                    <icon name="document-text" class="h-4 w-4" />
+                                </a>
+                            </span>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        }
+    </table>
+</div>

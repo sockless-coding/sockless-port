@@ -15,9 +15,12 @@
   // The overview's rows (<tr data-overview-row="3">): it watches every endpoint it lists.
   const overviewEndpoints = () => [...document.querySelectorAll('[data-overview-row]')].map((el) => el.dataset.overviewRow);
 
-  // Endpoints whose engine events this page wants: its own, and the overview's.
+  // The lists across endpoints mark each endpoint they show (<span hidden data-watch-endpoint="3">).
+  const listedEndpoints = () => [...document.querySelectorAll('[data-watch-endpoint]')].map((el) => el.dataset.watchEndpoint);
+
+  // Endpoints whose engine events this page wants: its own, the overview's and the lists'.
   function wantedEndpoints() {
-    const wanted = new Set(overviewEndpoints());
+    const wanted = new Set([...overviewEndpoints(), ...listedEndpoints()]);
     const page = pageEndpoint();
     if (page) wanted.add(page);
     return wanted;

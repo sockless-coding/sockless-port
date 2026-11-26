@@ -1,39 +1,14 @@
 using Microsoft.AspNetCore.Mvc;
 using Sockless.Port.Containers;
-using Sockless.Port.Docker.Models;
 using Sockless.Port.Engines;
 using Sockless.Port.Images;
-using Sockless.Port.Pods;
-using Sockless.Port.Vulnerabilities;
 using Sockless.Port.Web.Infrastructure;
 
 namespace Sockless.Port.Web.Pages.Engine.Containers;
 
-/// <param name="Pod">The Podman pod it's in, if any.</param>
-/// <param name="Update">The last update check's result for what it runs, if it was checked.</param>
-public sealed record ContainerRow(ContainerSummary Summary, StatusBadge State, StatusBadge? Health, string? Stack, string? SwarmService, IReadOnlyList<string> Ports,
-    PodMember? Pod = null, UpdateStatus? Update = null, ScanFlag? Scan = null)
+public sealed class IndexModel(EngineConnections connections, ContainerListing listing, ImageUpdates updates) : EndpointPageModel(connections)
 {
-    public string Name => Summary.DisplayName;
-    public bool Running => Summary.State is "running";
-
-    /// <summary>State and health as the one badge the list shows.</summary>
-    public StatusBadge Badge => ContainerStatus.Combined(State, Health);
-}
-
-/// <summary>The containers of one stack, or of none (<paramref name="Stack"/> null), as the list groups them.</summary>
-public sealed record ContainerGroup(string? Stack, IReadOnlyList<ContainerRow> Rows)
-{
-    public int Running => Rows.Count(r => r.Running);
-
-    /// <summary>A key for the group's select box: the stack's name, or empty for containers without one.</summary>
-    public string Key => Stack ?? "";
-}
-
-public sealed class IndexModel(EngineConnections connections, ImageUpdates updates, ImageScans scans) : EndpointPageModel(connections)
-{
-    public static readonly IReadOnlyList<(string Value, string Label)> States =
-        [("", "All"), ("running", "Running"), ("stopped", "Stopped"), ("paused", "Paused"), ("unhealthy", "Unhealthy"), ("update", "Update available")];
+    public static IReadOnlyList<(string Value, string Label)> States => ContainerListing.States;
 
     [BindProperty(SupportsGet = true)]
     public string? State { get; set; }
@@ -57,8 +32,6 @@ public sealed class IndexModel(EngineConnections connections, ImageUpdates updat
     /// <summary>The rows by stack (stacks by name, then the containers without one).</summary>
     public IReadOnlyList<ContainerGroup> Groups { get; private set; } = [];
 
-    /// <summary>Group headings are worth showing only when some container is in a stack.</summary>
-    public bool ShowGroups => Groups.Any(g => g.Stack is not null);
     public IReadOnlyList<string> Stacks { get; private set; } = [];
 
     /// <summary>Pods on the engine, for the filter; empty on engines without pods.</summary>
@@ -66,9 +39,15 @@ public sealed class IndexModel(EngineConnections connections, ImageUpdates updat
     public int Total { get; private set; }
     public string? Error { get; private set; }
 
-    public bool Filtered => !string.IsNullOrEmpty(State) || !string.IsNullOrWhiteSpace(Q) || !string.IsNullOrEmpty(Stack) || !string.IsNullOrEmpty(Pod) || !string.IsNullOrWhiteSpace(Label);
+    private ContainerFilter Filter => new(State, Q, Stack, Pod, Label);
+
+    public bool Filtered => Filter.IsSet;
 
     public object Filters => new { endpointId = EndpointId, State, Q, Stack, Pod, Label };
+
+    /// <summary>The table, with row buttons that post to this page's bulk handler.</summary>
+    public ContainerTableView Table => new(Groups, AcrossEndpoints: false,
+        (row, action) => Url.Page("/Engine/Containers/Index", "Bulk", new { endpointId = EndpointId, State, Q, Stack, Pod, Label, ids = row.Summary.Id, action })!);
 
     public async Task OnGetAsync(CancellationToken cancellationToken) => await LoadRowsAsync(cancellationToken);
 
@@ -88,32 +67,15 @@ public sealed class IndexModel(EngineConnections connections, ImageUpdates updat
             Flash.Error(TempData, ids.Length == 0 ? "Select one or more containers first." : "Unknown action.");
             return RedirectToPage(Filters);
         }
-
-        var done = new List<string>();
-        var failed = new List<string>();
         if (Client is not { } client)
         {
             Flash.Error(TempData, "The engine is offline, so nothing was changed.");
             return RedirectToPage(Filters);
         }
 
-        // One at a time: parallel stops of dependent containers race, and the engine serialises anyway.
-        foreach (var id in ids.Distinct().Take(500))
-        {
-            var name = await NameOfAsync(id, cancellationToken);
-            try
-            {
-                await ContainerActions.RunAsync(client, verb, id, removeVolumes, cancellationToken);
-                done.Add(name);
-            }
-            catch (Exception ex) when (EngineFailures.IsFailure(ex, cancellationToken))
-            {
-                failed.Add($"{name}: {EngineFailures.Describe(ex, Connection)}");
-            }
-        }
-
+        var (done, failed) = await ContainerBulk.RunAsync(Connection, client, verb, ids, removeVolumes, cancellationToken);
         if (done.Count > 0)
-            Flash.Success(TempData, $"{ContainerActions.Done(verb)} {Describe(done)}.");
+            Flash.Success(TempData, $"{ContainerActions.Done(verb)} {ContainerBulk.Describe(done)}.");
         if (failed.Count > 0)
             Flash.Error(TempData, $"Couldn't {verb.ToString().ToLowerInvariant()} {string.Join(" ", failed)}");
         return RedirectToPage(Filters);
@@ -138,92 +100,22 @@ public sealed class IndexModel(EngineConnections connections, ImageUpdates updat
     internal static string Describe(UpdateCheckSummary summary) =>
         ImageDisplay.CheckMessage(summary, "container", "containers", "No container to check.", "each container's page");
 
-    private async Task<string> NameOfAsync(string id, CancellationToken cancellationToken)
-    {
-        try
-        {
-            return (await Client!.InspectContainerAsync(id, cancellationToken)).Container.DisplayName;
-        }
-        catch (Exception ex) when (EngineFailures.IsFailure(ex, cancellationToken))
-        {
-            return id.Length > 12 ? id[..12] : id;
-        }
-    }
-
-    private static string Describe(List<string> names) =>
-        names.Count <= 3 ? string.Join(", ", names) : $"{names.Count} containers";
-
     private async Task LoadRowsAsync(CancellationToken cancellationToken)
     {
         if (Client is not { } client)
             return;
         try
         {
-            var all = await client.ListContainersAsync(all: true, cancellationToken);
-            var pods = await PodMembership.LoadAsync(client, Connection.Engine, cancellationToken);
-            Total = all.Count;
-            Stacks = [.. all.Select(c => ContainerLabels.Stack(c.Labels)).OfType<string>().Distinct().Order(StringComparer.OrdinalIgnoreCase)];
-            PodChoices = [.. pods.Pods.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase)];
-            var shown = all.Where(c => Matches(c, pods.Of(c.Id))).ToList();
-            var scanned = await scans.SummariesAsync(shown.Select(c => c.ImageId).OfType<string>(), cancellationToken);
-            Rows = [.. shown.Select(c => ToRow(c, pods.Of(c.Id), scanned)).OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)];
-            Groups = [.. Rows.GroupBy(r => r.Stack)
-                .OrderBy(g => g.Key is null)
-                .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
-                .Select(g => new ContainerGroup(g.Key, [.. g]))];
+            var list = await listing.LoadAsync(Connection, client, Filter, cancellationToken);
+            Total = list.Total;
+            Stacks = list.Stacks;
+            PodChoices = list.Pods;
+            Rows = [.. list.Rows.Select(r => r with { CanWrite = CanWrite })];
+            Groups = ContainerGroup.Of(Rows);
         }
         catch (Exception ex) when (EngineFailures.IsFailure(ex, cancellationToken))
         {
             Error = EngineFailures.Describe(ex, Connection);
         }
-    }
-
-    private bool Matches(ContainerSummary c, PodMember? pod)
-    {
-        var stateMatches = State switch
-        {
-            "running" => c.State is "running",
-            "stopped" => c.State is "exited" or "created" or "dead",
-            "paused" => c.State is "paused",
-            "unhealthy" => c.IsUnhealthy,
-            "update" => updates.ForContainer(EndpointId, c) is UpdateAvailable,
-            _ => true,
-        };
-        if (!stateMatches)
-            return false;
-
-        if (!string.IsNullOrWhiteSpace(Q))
-        {
-            var q = Q.Trim();
-            if (!c.DisplayName.Contains(q, StringComparison.OrdinalIgnoreCase)
-                && c.Image?.Contains(q, StringComparison.OrdinalIgnoreCase) != true
-                && !c.Id.StartsWith(q, StringComparison.OrdinalIgnoreCase))
-                return false;
-        }
-
-        if (!string.IsNullOrEmpty(Stack) && ContainerLabels.Stack(c.Labels) != Stack)
-            return false;
-
-        if (!string.IsNullOrEmpty(Pod) && pod?.Pod.Id != Pod)
-            return false;
-
-        if (!string.IsNullOrWhiteSpace(Label))
-        {
-            var equals = Label.IndexOf('=', StringComparison.Ordinal);
-            var key = (equals < 0 ? Label : Label[..equals]).Trim();
-            if (c.Labels?.TryGetValue(key, out var value) != true)
-                return false;
-            if (equals >= 0 && value != Label[(equals + 1)..].Trim())
-                return false;
-        }
-        return true;
-    }
-
-    private ContainerRow ToRow(ContainerSummary c, PodMember? pod, IReadOnlyDictionary<string, ScanSummary> scanned)
-    {
-        var (state, health) = ContainerStatus.FromSummary(c);
-        return new ContainerRow(c, state, health, ContainerLabels.Stack(c.Labels), ContainerLabels.SwarmServiceName(c.Labels), ContainerStatus.CompactPorts(c.Ports), pod,
-            updates.ForContainer(EndpointId, c),
-            c.ImageId is { } imageId ? new ScanFlag(scanned.GetValueOrDefault(imageId), scans.StateOf(imageId)) : null);
     }
 }

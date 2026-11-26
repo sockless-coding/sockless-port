@@ -1,0 +1,38 @@
+@model Sockless.Port.Web.Pages.All.StacksModel
+@{
+    var refreshUrl = Url.Page("/All/Stacks", "Table", Model.Filters);
+    // Live: any listed endpoint's engine events or state (site.js watches the data-watch-endpoint
+    // markers), any endpoint's state, and stack jobs ending.
+    var trigger = string.Join(", ", Model.Shown.Select(c => $"endpoint-changed-{c.Id} from:body").Prepend("endpoints-changed from:body, stack-job-ended from:body"));
+}
+<div id="all-stacks" hx-get="@refreshUrl" hx-trigger="@trigger" hx-swap="outerHTML">
+    @foreach (var endpoint in Model.Shown)
+    {
+        <span hidden data-watch-endpoint="@endpoint.Id"></span>
+    }
+    <partial name="_EndpointProblems" model="Model.Problems" />
+
+    @if (Model.Rows.Count == 0)
+    {
+        <section class="card">
+            <div class="empty-state">
+                <icon name="rectangle-stack" class="h-12 w-12" stroke-width="1.5" />
+                @if (Model.Filtered && Model.Total > 0)
+                {
+                    <p class="text-base text-heading">No stacks match</p>
+                    <p class="text-secondary"><a asp-page="/All/Stacks" class="hover:underline">Clear the filters</a> to see all @Model.Total.</p>
+                }
+                else
+                {
+                    <p class="text-base text-heading">No stacks yet</p>
+                    <p class="text-secondary">Create one from an endpoint's Stacks page. Projects started with docker compose show up here too.</p>
+                }
+            </div>
+        </section>
+    }
+    else
+    {
+        <p class="mb-3 text-secondary">@Model.Rows.Count of @Model.Total shown</p>
+        <partial name="_StackGrid" model="Model.Table" />
+    }
+</div>

@@ -29,6 +29,8 @@ public static class Navigation
     public static IReadOnlyList<NavItem> Main { get; } =
     [
         new("Overview", "/Overview/Index", "presentation-chart-bar"),
+        new("All stacks", "/All/Stacks", "rectangle-stack"),
+        new("All containers", "/All/Containers", "cube"),
         new("Dashboard", "/Engine/Index", "home", NavScope.Endpoint, MatchSubPages: false),
         new("Stacks", "/Engine/Stacks/Index", "rectangle-stack", NavScope.Endpoint),
         new("Templates", "/Engine/Templates/Index", "squares-plus", NavScope.Endpoint, Needs: EndpointPermission.Operate),

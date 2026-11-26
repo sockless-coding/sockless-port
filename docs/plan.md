@@ -444,6 +444,15 @@ Shown only on endpoints with the `Pods` capability. These use Podman's libpod AP
 - Swarm services and swarm stacks are shown once per cluster (by swarm ID), not once per node.
 - Roles are per endpoint, so row actions are checked per row; bulk forms post `endpointId:id` and the server checks each.
 
+**Status: done.** Notes:
+- **Pages** (every signed-in user; sidebar "All stacks" and "All containers", below Overview): `/containers` and `/stacks`, filtered by search, endpoint, and for containers state, stack and label. The endpoints' own lists link to them ("See every endpoint"). Creating stays on an endpoint's page.
+- **Reading** (`EndpointReads.ReadAsync`): every endpoint the user can see, in parallel, each with a 10 s limit. An endpoint that's offline, connecting, enrolling, failing or slow is named with its reason in a callout above the list (`_EndpointProblems`) instead of holding it up. Stacks still read offline endpoints for the stacks Sockless Port manages there (state "Unknown while offline"). The whole list is one read rather than rows loading themselves, so it can be grouped and sorted across endpoints.
+- **Shared with the endpoints' pages:** `ContainerListing` and `StackListing` read one endpoint (filters, update and scan flags); `_ContainerGrid` and `_StackGrid` render the tables for both. Containers are grouped by stack and endpoint (the same stack on several endpoints next to each other; *Not in a stack* per endpoint last), each heading naming its endpoint. Stacks have an *Endpoint* column.
+- **Swarm:** every manager of a swarm lists its stacks, so `StackListing.OnePerSwarm` keeps one row per swarm (`EngineDescriptor.SwarmClusterId`) and name, the managed one when there is one.
+- **Access:** rows carry what the user may do on their endpoint (`ContainerRow.CanWrite`: operator; `StackRow.CanEdit`: operator, or swarm operator for swarm stacks); without it a row has no boxes or action buttons. The bulk handler splits `endpointId:containerId` by endpoint (`EndpointReads.ByEndpoint`), treats endpoints the user can't see as unknown, refuses endpoints without the operator role, and writes one audit entry per endpoint (`Containers: stop`, with the endpoint), skipping the page's own.
+- **Live:** `site.js` also watches endpoints marked `data-watch-endpoint`; the lists reload on `endpoint-changed-{id}` of any endpoint they show and on `endpoints-changed` (one added, or given to the user); stacks also on `stack-job-ended`. Container lists hold their refresh while rows are selected.
+- **Not built:** bulk stack actions, checking updates across endpoints, sorting by column, and an endpoint column for containers (the group headings say it).
+
 ### Phase 20: Moving stacks and containers between endpoints
 
 - **Stacks** (managed Compose): copy the files, `.env` and git source to the target, deploy there, then take the source down or leave it stopped until the move is confirmed. Compose between Docker and Podman; swarm stacks to another swarm.

@@ -1,0 +1,72 @@
+@model Sockless.Port.Web.Pages.All.ContainersModel
+@{
+    var refreshUrl = Url.Page("/All/Containers", "Table", Model.Filters);
+    // Live: any listed endpoint's engine events or state (site.js watches the data-watch-endpoint
+    // markers), and any endpoint's state, for one added or given to the user.
+    var trigger = string.Join(", ", Model.Shown.Select(c => $"endpoint-changed-{c.Id} from:body").Prepend("endpoints-changed from:body"));
+}
+@* Not while rows are selected (data-pause-when-selected). *@
+<div id="all-containers" hx-get="@refreshUrl" hx-trigger="@trigger" hx-swap="outerHTML" data-pause-when-selected>
+    @foreach (var endpoint in Model.Shown)
+    {
+        <span hidden data-watch-endpoint="@endpoint.Id"></span>
+    }
+    <partial name="_EndpointProblems" model="Model.Problems" />
+
+    @if (Model.Groups.Count == 0)
+    {
+        <section class="card">
+            <div class="empty-state">
+                <icon name="cube" class="h-12 w-12" stroke-width="1.5" />
+                @if (Model.Filtered && Model.Total > 0)
+                {
+                    <p class="text-base text-heading">No containers match these filters</p>
+                    <p class="text-secondary"><a asp-page="/All/Containers" class="hover:underline">Clear the filters</a> to see all @Model.Total.</p>
+                }
+                else if (Model.Problems.Count > 0 && Model.Problems.Count == Model.Shown.Count)
+                {
+                    <p class="text-base text-heading">No endpoint answered</p>
+                    <p class="text-secondary">The list fills in as they come back.</p>
+                }
+                else
+                {
+                    <p class="text-base text-heading">No containers yet</p>
+                    <p class="text-secondary">Create one from an endpoint's Containers page.</p>
+                }
+            </div>
+        </section>
+    }
+    else
+    {
+        @* Row buttons submit through this form so they don't also send the bulk selection. *@
+        <form id="row-actions" method="post" asp-page="/All/Containers" asp-page-handler="Bulk"></form>
+
+        <form id="bulk-form" method="post" asp-page="/All/Containers" asp-page-handler="Bulk"
+              asp-route-state="@Model.State" asp-route-q="@Model.Q" asp-route-stack="@Model.Stack" asp-route-label="@Model.Label" asp-route-endpoint="@Model.Endpoint">
+            <div class="mb-3 flex flex-wrap items-center gap-2" data-bulk-toolbar>
+                <span class="text-secondary" data-bulk-count aria-live="polite">
+                    @Model.Count of @Model.Total shown, on @Model.Shown.Count(c => !Model.Problems.Any(p => p.Connection.Id == c.Id)) @(Model.Shown.Count == 1 ? "endpoint" : "endpoints")
+                </span>
+                <span class="flex-1"></span>
+                @if (Model.CanWriteAny)
+                {
+                    <button type="submit" name="action" value="start" class="btn-soft" data-bulk-action disabled>
+                        <icon name="play" class="h-4 w-4" /> Start
+                    </button>
+                    <button type="submit" name="action" value="stop" class="btn-soft" data-bulk-action disabled>
+                        <icon name="stop" class="h-4 w-4" /> Stop
+                    </button>
+                    <button type="submit" name="action" value="restart" class="btn-soft" data-bulk-action disabled>
+                        <icon name="arrow-path" class="h-4 w-4" /> Restart
+                    </button>
+                    <button type="submit" name="action" value="remove" class="btn-soft danger" data-bulk-action disabled
+                            data-confirm-bulk="Remove {list}? Running containers are stopped first. Named volumes are kept.">
+                        <icon name="trash" class="h-4 w-4" /> Remove
+                    </button>
+                }
+            </div>
+
+            <partial name="_ContainerGrid" model="Model.Table" />
+        </form>
+    }
+</div>

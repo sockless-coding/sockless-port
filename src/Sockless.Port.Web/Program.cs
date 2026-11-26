@@ -27,6 +27,8 @@ builder.Services.AddSignalR();
 builder.Services.AddSingleton<TerminalSessions>();
 builder.Services.AddHostedService<WorkBroadcaster>();
 builder.Services.AddSingleton<GitForms>();
+builder.Services.AddSingleton<ContainerListing>();
+builder.Services.AddSingleton<StackListing>();
 builder.AddHttpsListener();
 
 var authentication = builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme);

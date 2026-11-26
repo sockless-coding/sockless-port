@@ -9,7 +9,7 @@
     <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
             <h2 class="page-title">Containers</h2>
-            <p class="mt-1 text-secondary">Everything running or stopped on @Model.Connection.Name.</p>
+            <p class="mt-1 text-secondary">Everything running or stopped on @Model.Connection.Name. <a asp-page="/All/Containers" class="text-accent hover:underline">See every endpoint</a></p>
         </div>
         @if (Model.Client is not null)
         {

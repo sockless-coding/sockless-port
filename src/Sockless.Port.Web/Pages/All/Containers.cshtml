@@ -1,0 +1,69 @@
+@page "/containers"
+@model Sockless.Port.Web.Pages.All.ContainersModel
+@{
+    ViewData["Title"] = "All containers";
+    var tableUrl = Url.Page("/All/Containers", "Table");
+}
+
+<div class="mb-6">
+    <h2 class="page-title">All containers</h2>
+    <p class="mt-1 text-secondary">Every endpoint you can see, grouped by stack. To create a container, open an endpoint's Containers page.</p>
+</div>
+
+@if (Model.Endpoints.Count == 0)
+{
+    <section class="card">
+        <div class="empty-state">
+            <icon name="server-stack" class="h-12 w-12" stroke-width="1.5" />
+            <p class="text-base text-heading">No endpoints for you yet</p>
+            <p class="text-secondary">An administrator gives you a role on the endpoints you need.</p>
+        </div>
+    </section>
+}
+else
+{
+    <form method="get" role="search" aria-label="Filter containers" class="mb-4 flex flex-wrap items-end gap-3"
+          hx-get="@tableUrl" hx-target="#all-containers" hx-swap="outerHTML"
+          hx-trigger="change, input changed delay:300ms from:find input[type=search], submit">
+        <div class="field min-w-[14rem] flex-1">
+            <label for="filter-q">Search</label>
+            <input id="filter-q" type="search" name="q" value="@Model.Q" placeholder="Name, image or ID" autocomplete="off" />
+        </div>
+        <div class="field">
+            <label for="filter-endpoint">Endpoint</label>
+            <select id="filter-endpoint" name="endpoint">
+                <option value="">All</option>
+                @foreach (var endpoint in Model.Endpoints)
+                {
+                    <option value="@endpoint.Id" selected="@(endpoint.Id == Model.Endpoint)">@endpoint.Name</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label for="filter-state">State</label>
+            <select id="filter-state" name="state">
+                @foreach (var (value, label) in Sockless.Port.Web.Infrastructure.ContainerListing.States)
+                {
+                    <option value="@value" selected="@(value == (Model.State ?? ""))">@label</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label for="filter-stack">Stack</label>
+            <select id="filter-stack" name="stack">
+                <option value="">All</option>
+                @foreach (var stack in Model.Stacks)
+                {
+                    <option value="@stack" selected="@(stack == Model.Stack)">@stack</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label for="filter-label">Label</label>
+            <input id="filter-label" name="label" value="@Model.Label" placeholder="key or key=value" class="font-mono" autocomplete="off" />
+        </div>
+        <noscript><button type="submit" class="btn-soft">Filter</button></noscript>
+    </form>
+
+    <partial name="_AllContainersTable" model="Model" />
+}

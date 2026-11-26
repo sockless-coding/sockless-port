@@ -1,0 +1,46 @@
+@page "/stacks"
+@model Sockless.Port.Web.Pages.All.StacksModel
+@{
+    ViewData["Title"] = "All stacks";
+    var tableUrl = Url.Page("/All/Stacks", "Table");
+}
+
+<div class="mb-6">
+    <h2 class="page-title">All stacks</h2>
+    <p class="mt-1 text-secondary">Every endpoint you can see. To create a stack, open an endpoint's Stacks page.</p>
+</div>
+
+@if (Model.Endpoints.Count == 0)
+{
+    <section class="card">
+        <div class="empty-state">
+            <icon name="server-stack" class="h-12 w-12" stroke-width="1.5" />
+            <p class="text-base text-heading">No endpoints for you yet</p>
+            <p class="text-secondary">An administrator gives you a role on the endpoints you need.</p>
+        </div>
+    </section>
+}
+else
+{
+    <form method="get" role="search" aria-label="Filter stacks" class="mb-4 flex flex-wrap items-end gap-3"
+          hx-get="@tableUrl" hx-target="#all-stacks" hx-swap="outerHTML"
+          hx-trigger="change, input changed delay:300ms from:find input[type=search], submit">
+        <div class="field min-w-[14rem] flex-1">
+            <label for="filter-q">Search</label>
+            <input id="filter-q" type="search" name="q" value="@Model.Q" placeholder="Stack, service or image" autocomplete="off" />
+        </div>
+        <div class="field">
+            <label for="filter-endpoint">Endpoint</label>
+            <select id="filter-endpoint" name="endpoint">
+                <option value="">All</option>
+                @foreach (var endpoint in Model.Endpoints)
+                {
+                    <option value="@endpoint.Id" selected="@(endpoint.Id == Model.Endpoint)">@endpoint.Name</option>
+                }
+            </select>
+        </div>
+        <noscript><button type="submit" class="btn-soft">Filter</button></noscript>
+    </form>
+
+    <partial name="_AllStacksTable" model="Model" />
+}

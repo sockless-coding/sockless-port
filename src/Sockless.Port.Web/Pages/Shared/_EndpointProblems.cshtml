@@ -1,0 +1,20 @@
+@* On the lists across endpoints: the endpoints whose things aren't shown, and why. Model: IReadOnlyList<EndpointProblem>. *@
+@model IReadOnlyList<Sockless.Port.Web.Infrastructure.EndpointProblem>
+@if (Model.Count > 0)
+{
+    <div class="callout warning mb-4" role="status">
+        <icon name="signal-slash" class="h-5 w-5" />
+        <div>
+            <p>@(Model.Count == 1 ? "One endpoint can't" : $"{Model.Count} endpoints can't") be read now, so the list leaves out what runs there:</p>
+            <ul class="mt-1 space-y-1">
+                @foreach (var problem in Model)
+                {
+                    <li>
+                        <a asp-page="/Engine/Index" asp-route-endpointId="@problem.Connection.Id" class="font-semibold hover:underline">@problem.Connection.Name</a>:
+                        @problem.Reason
+                    </li>
+                }
+            </ul>
+        </div>
+    </div>
+}
