@@ -2,6 +2,8 @@
 @model Sockless.Port.Web.Pages.Engine.Pods.IndexModel
 @{
     ViewData["Title"] = "Pods";
+    // A list: tables use the width there is.
+    ViewData["Wide"] = true;
     var tableUrl = Url.Page("/Engine/Pods/Index", "Table", new { endpointId = Model.EndpointId });
 }
 

@@ -2,6 +2,8 @@
 @model Sockless.Port.Web.Pages.All.ContainersModel
 @{
     ViewData["Title"] = "All containers";
+    // A list: tables use the width there is.
+    ViewData["Wide"] = true;
     var tableUrl = Url.Page("/All/Containers", "Table");
 }
 

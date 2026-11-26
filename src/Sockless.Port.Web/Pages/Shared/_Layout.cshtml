@@ -149,7 +149,8 @@
             </header>
 
             <main id="main-content" tabindex="-1" class="flex-1 overflow-y-auto p-6 focus:outline-none">
-                <div class="mx-auto max-w-5xl">
+                @* Lists (ViewData["Wide"]) use the screen's width for their tables; forms and details keep a readable measure. *@
+                <div class="mx-auto @(ViewData["Wide"] is true ? "max-w-screen-2xl" : "max-w-5xl")">
                     <partial name="_Flash" />
                     @RenderBody()
                 </div>
@@ -187,6 +188,7 @@
     <script src="~/lib/xterm/addon-fit.js" defer></script>
     <script src="~/lib/codemirror/codemirror.js" defer></script>
     <script src="~/js/site.js" defer></script>
+    <script src="~/js/table-scroll.js" defer></script>
     <script src="~/js/logs.js" defer></script>
     <script src="~/js/charts.js" defer></script>
     <script src="~/js/stats.js" defer></script>

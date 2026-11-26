@@ -2,6 +2,8 @@
 @model Sockless.Port.Web.Pages.Engine.Networks.IndexModel
 @{
     ViewData["Title"] = "Networks";
+    // A list: tables use the width there is.
+    ViewData["Wide"] = true;
     var tableUrl = Url.Page("/Engine/Networks/Index", "Table", new { endpointId = Model.EndpointId });
 }
 

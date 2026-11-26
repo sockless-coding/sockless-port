@@ -4,6 +4,8 @@
 @using Sockless.Port.Monitoring
 @{
     ViewData["Title"] = "Resources";
+    // A list: tables use the width there is.
+    ViewData["Wide"] = true;
     var engine = Model.Connection.Engine;
     // Rows are built in the browser; these are their link patterns, with a placeholder the script replaces.
     var containerUrl = Url.Page("/Engine/Containers/Stats", new { endpointId = Model.EndpointId, containerId = "__id__" });

@@ -441,6 +441,29 @@
   .card .table-wrap {
     border-radius: var(--sl-radius-sm);
   }
+  /* A wide table's stand-in scrollbar (table-scroll.js): it sticks to the bottom of the content
+     area while the table is on screen, so it's never a scroll away. The table's own bar is
+     hidden then, so there's only one. */
+  .table-scroll.is-overflowing > .table-wrap {
+    scrollbar-width: none;
+  }
+  .table-scroll.is-overflowing > .table-wrap::-webkit-scrollbar {
+    display: none;
+  }
+  .table-scrollbar {
+    position: sticky;
+    /* Flush with the content area's bottom edge: sticking stops at its padding (main's p-6) otherwise. */
+    bottom: calc(-1 * var(--sl-space-lg));
+    z-index: 5;
+    overflow-x: scroll;
+    overflow-y: hidden;
+    background: var(--sl-bg);
+    border-top: 1px solid var(--sl-border);
+    scrollbar-color: var(--sl-text-secondary) var(--sl-surface);
+  }
+  .table-scrollbar-width {
+    height: 1px;
+  }
   .table {
     width: 100%;
     border-collapse: collapse;

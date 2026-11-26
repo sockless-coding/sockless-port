@@ -2,6 +2,8 @@
 @model Sockless.Port.Web.Pages.Engine.Swarm.Nodes.IndexModel
 @{
     ViewData["Title"] = "Nodes";
+    // A list: tables use the width there is.
+    ViewData["Wide"] = true;
 }
 
 <div data-endpoint-id="@Model.EndpointId">

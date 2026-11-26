@@ -2,6 +2,8 @@
 @model Sockless.Port.Web.Pages.Engine.Images.IndexModel
 @{
     ViewData["Title"] = "Images";
+    // A list: tables use the width there is.
+    ViewData["Wide"] = true;
     var tableUrl = Url.Page("/Engine/Images/Index", "Table", new { endpointId = Model.EndpointId });
 }
 

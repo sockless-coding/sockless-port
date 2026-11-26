@@ -3,6 +3,8 @@
 @using Sockless.Port.Templates
 @{
     ViewData["Title"] = "Template sources";
+    // A list: tables use the width there is.
+    ViewData["Wide"] = true;
     static string FormatName(TemplateFeedFormat? format) => format switch
     {
         TemplateFeedFormat.Portainer => "Portainer",

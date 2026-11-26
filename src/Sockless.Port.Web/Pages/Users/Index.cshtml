@@ -3,6 +3,8 @@
 @using Sockless.Port.Web.Pages.Users
 @{
     ViewData["Title"] = "Users";
+    // A list: tables use the width there is.
+    ViewData["Wide"] = true;
     var me = HttpContext.Access()?.UserId;
 }
 

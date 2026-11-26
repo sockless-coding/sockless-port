@@ -101,6 +101,8 @@ Rules to follow without re-reading:
 - Destructive buttons carry `data-confirm="Remove web?"` (or `data-confirm-bulk="Remove {list}?"` in bulk forms). `site.js` shows the styled dialog.
 - CSP: no inline `style` attributes anywhere. `<style>` elements created by libraries get the per-response nonce from `csp-nonce.js`. htmx is configured not to settle the `style` attribute.
 - Tailwind scans `wwwroot/js` too. Component classes used only from JS are kept, but only if they appear literally in a scanned file.
+- Content is `max-w-5xl`, as the guideline says, except on lists: a page whose main content is a table sets `ViewData["Wide"] = true` and gets `max-w-screen-2xl`. Forms and detail pages stay narrow.
+- Tables go in `.table-wrap`. One wider than its column gets a stand-in scrollbar from `table-scroll.js` that sticks to the bottom of the content area while the table is on screen; don't add scrolling of your own.
 - Use the `hidden` attribute to hide things. A global `[hidden] { display: none !important }` keeps component display rules from defeating it.
 - Charts: series colours are `accent` then `info` (copper-light, gaslight). That pair passes colour-vision checks; `success` is reserved for status.
 

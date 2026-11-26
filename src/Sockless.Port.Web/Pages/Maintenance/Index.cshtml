@@ -4,6 +4,8 @@
 @using Sockless.Port.Maintenance
 @{
     ViewData["Title"] = "Maintenance";
+    // A list: tables use the width there is.
+    ViewData["Wide"] = true;
     var now = Model.Now;
     static string Every(int hours) => hours switch
     {

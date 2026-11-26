@@ -3,6 +3,8 @@
 @using Sockless.Port.Notifications
 @{
     ViewData["Title"] = "Notifications";
+    // A list: tables use the width there is.
+    ViewData["Wide"] = true;
     static string Kinds(IReadOnlySet<AlertKind> kinds) => kinds.Count == Enum.GetValues<AlertKind>().Length
         ? "Everything" : string.Join(", ", kinds.Order().Select(k => Alert.Describe(k).ToLowerInvariant()));
     static string Quiet(int minutes) => minutes switch

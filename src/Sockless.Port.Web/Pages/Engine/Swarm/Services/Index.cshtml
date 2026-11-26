@@ -2,6 +2,8 @@
 @model Sockless.Port.Web.Pages.Engine.Swarm.Services.IndexModel
 @{
     ViewData["Title"] = "Services";
+    // A list: tables use the width there is.
+    ViewData["Wide"] = true;
     var tableUrl = Url.Page("/Engine/Swarm/Services/Index", "Table", new { endpointId = Model.EndpointId });
 }
 

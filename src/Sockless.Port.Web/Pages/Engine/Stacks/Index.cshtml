@@ -2,6 +2,8 @@
 @model Sockless.Port.Web.Pages.Engine.Stacks.IndexModel
 @{
     ViewData["Title"] = "Stacks";
+    // A list: tables use the width there is.
+    ViewData["Wide"] = true;
     var tableUrl = Url.Page("/Engine/Stacks/Index", "Table", new { endpointId = Model.EndpointId });
 }
 
