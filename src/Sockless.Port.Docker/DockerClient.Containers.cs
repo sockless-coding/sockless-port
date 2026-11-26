@@ -169,11 +169,15 @@ public sealed partial class DockerClient
         }
     }
 
+    /// <summary>How long <see cref="RunExecAsync"/> waits, after the output ends, for the engine to record the exit code.</summary>
+    internal static readonly TimeSpan ExitCodeWait = TimeSpan.FromSeconds(5);
+
     /// <summary>
     /// Runs a command in a running container without a TTY and collects its output (a non-hijacked
     /// exec: the engine streams multiplexed frames in the response and closes it when the command ends).
     /// </summary>
     /// <param name="maxOutputBytes">Stop reading once stdout and stderr together reach this; the result is then <see cref="ExecResult.Truncated"/>.</param>
+    /// <remarks>The exit code is null when the output was truncated, or when the engine didn't record it within <see cref="ExitCodeWait"/>.</remarks>
     public async Task<ExecResult> RunExecAsync(string containerId, IReadOnlyList<string> command, int maxOutputBytes = 4 * 1024 * 1024,
         TimeSpan? timeout = null, CancellationToken cancellationToken = default)
     {
@@ -204,9 +208,12 @@ public sealed partial class DockerClient
             }
         }
 
-        // The stream ends when the process does, but the engine records the exit code a moment later.
+        // The stream ends when the process does, but the engine records the exit code a moment
+        // later: on a busy engine (a swarm in CI) that can take well over half a second.
         int? exitCode = null;
-        for (var attempt = 0; attempt < 20 && !truncated; attempt++)
+        var waitUntil = DateTimeOffset.UtcNow + ExitCodeWait;
+        var delay = TimeSpan.FromMilliseconds(25);
+        while (!truncated)
         {
             var inspect = await InspectExecAsync(execId, cts.Token);
             if (!inspect.Running && inspect.ExitCode is { } code)
@@ -214,7 +221,10 @@ public sealed partial class DockerClient
                 exitCode = code;
                 break;
             }
-            await Task.Delay(25, cts.Token);
+            if (DateTimeOffset.UtcNow >= waitUntil)
+                break;
+            await Task.Delay(delay, cts.Token);
+            delay = TimeSpan.FromMilliseconds(Math.Min(delay.TotalMilliseconds * 2, 250));
         }
         return new ExecResult(Encoding.UTF8.GetString(stdout.GetBuffer(), 0, (int)stdout.Length),
             Encoding.UTF8.GetString(stderr.GetBuffer(), 0, (int)stderr.Length), exitCode, truncated);

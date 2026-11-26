@@ -189,7 +189,9 @@ public sealed class VolumeBrowser : IAsyncDisposable
                 {
                     throw new VolumeBrowseException(stat.Stderr.Contains("No such file", StringComparison.Ordinal)
                         ? $"{path} doesn't exist in {volume} any more."
-                        : $"Couldn't read {path}: {FirstLine(stat.Stderr) ?? "the helper printed nothing."}");
+                        : $"Couldn't read {path}: {FirstLine(stat.Stderr) ?? (stat.ExitCode is null
+                            ? "the engine didn't say how the helper's command ended. Try again."
+                            : "the helper printed nothing.")}");
                 }
                 if (fields[0] is not ("regular file" or "regular empty file")
                     || !int.TryParse(fields[1], System.Globalization.CultureInfo.InvariantCulture, out var uid)
