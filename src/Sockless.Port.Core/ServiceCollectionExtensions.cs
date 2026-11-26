@@ -115,7 +115,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<GitCli>();
         services.AddSingleton<StackGit>();
         services.AddSingleton<StackJobs>();
+        services.AddSingleton<Moves.MoveTransfers>();
         services.AddSingleton<Moves.StackMoves>();
+        services.AddSingleton<Moves.ContainerMoves>();
         services.AddSingleton<GitStackTriggers>();
         services.AddHostedService(sp => sp.GetRequiredService<GitStackTriggers>());
 

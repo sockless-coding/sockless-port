@@ -28,6 +28,7 @@ public static class WorkDisplay
         WorkKind.RemoveImages => "trash",
         WorkKind.PruneImages or WorkKind.Prune => "trash",
         WorkKind.Backup => "arrow-down-tray",
+        WorkKind.MoveContainer => "arrow-right-start-on-rectangle",
         _ => "clipboard-document-list",
     };
 
@@ -69,6 +70,8 @@ public static class WorkDisplay
             WorkKind.Build when access?.Can(endpointId, EndpointPermission.Operate) == true && work.Subject is { } job =>
                 url.Page("/Engine/Images/Build", new { endpointId, job }),
             WorkKind.Stack when work.Subject is { } stack => url.Page("/Engine/Stacks/Detail", new { endpointId, stackName = stack }),
+            // The container keeps its name on the target, and the engine finds it by name.
+            WorkKind.MoveContainer when work.Subject is { } container => url.Page("/Engine/Containers/Detail", new { endpointId, containerId = container }),
             WorkKind.Scan when work.Subject is { } imageId => url.Page("/Engine/Images/Vulnerabilities", new { endpointId, imageId = ImagePageModel.RouteId(imageId) }),
             WorkKind.Prune => access?.IsAdmin == true ? url.Page("/Maintenance/Index") : null,
             _ => url.Page("/Engine/Images/Index", new { endpointId }),

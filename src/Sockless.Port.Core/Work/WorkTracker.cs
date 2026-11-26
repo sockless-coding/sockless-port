@@ -15,6 +15,9 @@ public enum WorkKind
     PruneImages,
     Prune,
     Backup,
+
+    /// <summary>A container moving to another endpoint.</summary>
+    MoveContainer,
 }
 
 /// <summary>Where a piece of work is. Switch on it exhaustively.</summary>

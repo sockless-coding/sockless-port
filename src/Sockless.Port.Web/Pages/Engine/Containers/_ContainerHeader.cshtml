@@ -107,6 +107,15 @@
                                 <icon name="plus" class="h-4 w-4" /> Duplicate
                             </a>
                         </div>
+                        @* Stack members move with their stack; pods can't be recreated elsewhere through Docker's API. *@
+                        @if (Model.Pod is null && Model.Stack is null && !Sockless.Port.Containers.ContainerLabels.IsHelper(container.Config?.Labels))
+                        {
+                            <div class="mb-3">
+                                <a asp-page="/Engine/Containers/Move" asp-route-endpointId="@Model.EndpointId" asp-route-containerId="@Model.ContainerId" class="btn-soft">
+                                    <icon name="arrow-right-start-on-rectangle" class="h-4 w-4" /> Move to another endpoint
+                                </a>
+                            </div>
+                        }
                     }
                     <div>
                         <p class="label-caps mb-1">Remove</p>

@@ -134,7 +134,7 @@ public sealed class StackMoveTests : IAsyncLifetime
     [InlineData("", null)]
     [InlineData(null, null)]
     public void Architectures_are_named_as_images_name_them(string? name, string? expected) =>
-        Assert.Equal(expected, StackMoves.Architecture(name));
+        Assert.Equal(expected, MoveTransfers.Architecture(name));
 
     [Theory]
     [InlineData(0, "0 B")]
@@ -142,7 +142,29 @@ public sealed class StackMoveTests : IAsyncLifetime
     [InlineData(1_500, "1.5 kB")]
     [InlineData(256_000_000, "256 MB")]
     [InlineData(1_234_000_000, "1.2 GB")]
-    public void Sizes_read_like_the_engines(long bytes, string expected) => Assert.Equal(expected, StackMoves.Bytes(bytes));
+    public void Sizes_read_like_the_engines(long bytes, string expected) => Assert.Equal(expected, MoveTransfers.Bytes(bytes));
+
+    [Fact]
+    public async Task A_container_on_an_offline_endpoint_cant_be_moved()
+    {
+        var moves = new ContainerMoves(Transfers(), NullLogger<ContainerMoves>.Instance);
+
+        var plan = await moves.CheckAsync(Offline(1, "local"), Offline(2, "nas"), "web", TestContext.Current.CancellationToken);
+
+        Assert.False(plan.CanMove);
+        Assert.Contains(plan.Findings, f => f.Message.Contains("local is offline", StringComparison.Ordinal));
+        var refused = await Assert.ThrowsAsync<ContainerMoveRejectedException>(() =>
+            moves.StartAsync(Offline(1, "local"), Offline(2, "nas"), "web", new MoveOptions(true, MoveSourceAfter.Remove), cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Contains("local is offline", refused.Message);
+        Assert.False(moves.IsMoving(1, "web"));
+    }
+
+    [Theory]
+    [InlineData("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", true)]
+    [InlineData("web_data", false)]
+    [InlineData("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF", false)]
+    public void Anonymous_volumes_are_told_by_their_generated_names(string name, bool anonymous) =>
+        Assert.Equal(anonymous, MoveTransfers.IsAnonymous(name));
 
     [Fact]
     public async Task A_counting_stream_counts_what_passes()
@@ -156,9 +178,10 @@ public sealed class StackMoveTests : IAsyncLifetime
         Assert.Equal(10_000, seen[^1]);
     }
 
-    private StackMoves Moves() => new(_harness.Store, _harness.Jobs, _harness.Compose, _harness.Docker,
-        new VolumeBrowser(Options.Create(_harness.Options), _harness.Registries, TimeProvider.System, NullLogger<VolumeBrowser>.Instance),
-        _harness.Registries, NullLogger<StackMoves>.Instance);
+    private StackMoves Moves() => new(_harness.Store, _harness.Jobs, _harness.Compose, _harness.Docker, Transfers(), NullLogger<StackMoves>.Instance);
+
+    private MoveTransfers Transfers() =>
+        new(new VolumeBrowser(Options.Create(_harness.Options), _harness.Registries, TimeProvider.System, NullLogger<VolumeBrowser>.Instance), _harness.Registries);
 
     private static EngineConnection Offline(int id, string name) =>
         new(id, name, DockerAddress.Parse($"unix:///nonexistent/{name}.sock"), EndpointKind.Local);
